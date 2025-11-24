@@ -1,5 +1,9 @@
 @import '@xyflow/react/dist/style.css';
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
@@ -156,6 +160,10 @@ body {
 
 .p-md {
   padding: var(--spacing-md);
+}
+
+.shadow-medium {
+  box-shadow: 3px 3px 0px 0px rgba(0, 0, 0, 1);
 }
 
 .p-sm {
