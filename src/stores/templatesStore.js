@@ -1,0 +1,156 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import {
+    addEdge,
+    addNode,
+    createTemplate,
+    moveNode,
+    patchLayerParameters,
+    patchNode,
+    removeEdge,
+    removeNode,
+} from '../domain/architecture/index.js';
+
+const STORAGE_KEY = 'deepflow:templates';
+
+/**
+ * Templates store. Each template is a named, reusable subgraph that can be
+ * instantiated as a SuperNodeInstance in any architecture or other template.
+ * Editing a template propagates to every instance.
+ */
+export const useTemplatesStore = create(
+    persist(
+        (set, get) => ({
+            /** @type {Object<string, import('../domain/architecture/types.js').ArchitectureTemplate>} */
+            templates: {},
+
+            createTemplate: ({ name, description, graph, id }) => {
+                const tpl = createTemplate({ name, description, graph, id });
+                set((state) => ({ templates: { ...state.templates, [tpl.id]: tpl } }));
+                return tpl.id;
+            },
+
+            getTemplate: (id) => get().templates[id],
+
+            patchTemplate: (id, patch) =>
+                set((state) =>
+                    state.templates[id]
+                        ? { templates: { ...state.templates, [id]: { ...state.templates[id], ...patch } } }
+                        : state,
+                ),
+
+            removeTemplate: (id) =>
+                set((state) => {
+                    const { [id]: _gone, ...rest } = state.templates;
+                    return { templates: rest };
+                }),
+
+            // ---- internal-graph operations ----
+
+            addNodeToTemplate: (templateId, node) =>
+                set((state) => {
+                    const tpl = state.templates[templateId];
+                    if (!tpl) return state;
+                    return {
+                        templates: { ...state.templates, [templateId]: { ...tpl, graph: addNode(tpl.graph, node) } },
+                    };
+                }),
+
+            removeNodeFromTemplate: (templateId, nodeId) =>
+                set((state) => {
+                    const tpl = state.templates[templateId];
+                    if (!tpl) return state;
+                    return {
+                        templates: { ...state.templates, [templateId]: { ...tpl, graph: removeNode(tpl.graph, nodeId) } },
+                    };
+                }),
+
+            patchTemplateNode: (templateId, nodeId, patch) =>
+                set((state) => {
+                    const tpl = state.templates[templateId];
+                    if (!tpl) return state;
+                    return {
+                        templates: { ...state.templates, [templateId]: { ...tpl, graph: patchNode(tpl.graph, nodeId, patch) } },
+                    };
+                }),
+
+            patchTemplateLayerParameters: (templateId, nodeId, parameterPatch) =>
+                set((state) => {
+                    const tpl = state.templates[templateId];
+                    if (!tpl) return state;
+                    return {
+                        templates: {
+                            ...state.templates,
+                            [templateId]: { ...tpl, graph: patchLayerParameters(tpl.graph, nodeId, parameterPatch) },
+                        },
+                    };
+                }),
+
+            moveTemplateNode: (templateId, nodeId, position) =>
+                set((state) => {
+                    const tpl = state.templates[templateId];
+                    if (!tpl) return state;
+                    return {
+                        templates: { ...state.templates, [templateId]: { ...tpl, graph: moveNode(tpl.graph, nodeId, position) } },
+                    };
+                }),
+
+            addEdgeToTemplate: (templateId, edge) =>
+                set((state) => {
+                    const tpl = state.templates[templateId];
+                    if (!tpl) return state;
+                    return {
+                        templates: { ...state.templates, [templateId]: { ...tpl, graph: addEdge(tpl.graph, edge) } },
+                    };
+                }),
+
+            removeEdgeFromTemplate: (templateId, edgeId) =>
+                set((state) => {
+                    const tpl = state.templates[templateId];
+                    if (!tpl) return state;
+                    return {
+                        templates: { ...state.templates, [templateId]: { ...tpl, graph: removeEdge(tpl.graph, edgeId) } },
+                    };
+                }),
+
+            // ---- free parameters ----
+
+            addFreeParameter: (templateId, paramSpec) =>
+                set((state) => {
+                    const tpl = state.templates[templateId];
+                    if (!tpl) return state;
+                    const free = tpl.freeParameters ?? [];
+                    if (free.some((p) => p.name === paramSpec.name)) return state;
+                    return {
+                        templates: {
+                            ...state.templates,
+                            [templateId]: { ...tpl, freeParameters: [...free, paramSpec] },
+                        },
+                    };
+                }),
+
+            patchFreeParameter: (templateId, name, patch) =>
+                set((state) => {
+                    const tpl = state.templates[templateId];
+                    if (!tpl) return state;
+                    const free = (tpl.freeParameters ?? []).map((p) =>
+                        p.name === name ? { ...p, ...patch } : p,
+                    );
+                    return {
+                        templates: { ...state.templates, [templateId]: { ...tpl, freeParameters: free } },
+                    };
+                }),
+
+            removeFreeParameter: (templateId, name) =>
+                set((state) => {
+                    const tpl = state.templates[templateId];
+                    if (!tpl) return state;
+                    const free = (tpl.freeParameters ?? []).filter((p) => p.name !== name);
+                    return {
+                        templates: { ...state.templates, [templateId]: { ...tpl, freeParameters: free } },
+                    };
+                }),
+        }),
+        { name: STORAGE_KEY },
+    ),
+);

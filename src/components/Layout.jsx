@@ -1,88 +1,74 @@
-import React, { useCallback } from 'react';
-import { useNodesState, useEdgesState } from '@xyflow/react';
-import Navbar from './Navbar';
-import Sidebar from './Sidebar';
-import RightSidebar from './RightSidebar';
-import Canvas from './Canvas';
-
-const initialNodes = [
-    {
-        id: '1',
-        type: 'nnBlock',
-        position: { x: 250, y: 50 },
-        data: { type: 'Input' }
-    },
-    {
-        id: '2',
-        type: 'nnBlock',
-        position: { x: 250, y: 200 },
-        data: { type: 'Dense', neurons: 128, activation: 'ReLU' }
-    },
-    {
-        id: '3',
-        type: 'nnBlock',
-        position: { x: 250, y: 350 },
-        data: { type: 'Output' }
-    },
-];
-
-const initialEdges = [];
+import React, { useState } from 'react';
+import Navbar from './Navbar.jsx';
+import ToolbarStrip from './ToolbarStrip.jsx';
+import ArchitectureCanvas from './architecture/ArchitectureCanvas.jsx';
+import BlockPalette from './architecture/BlockPalette.jsx';
+import Breadcrumb from './architecture/Breadcrumb.jsx';
+import SelectionToolbar from './architecture/SelectionToolbar.jsx';
+import TemplateInspector from './architecture/TemplateInspector.jsx';
+import TrainingCanvas from './training/TrainingCanvas.jsx';
+import TrainingPalette from './training/TrainingPalette.jsx';
+import CodePanel from './CodePanel.jsx';
 
 const Layout = () => {
-    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-    const handleDeleteNode = useCallback((id) => {
-        setNodes((nds) => nds.filter((node) => node.id !== id));
-    }, [setNodes]);
-
-    // Inject onDelete handler into node data
-    const nodesWithHandlers = nodes.map(node => ({
-        ...node,
-        data: { ...node.data, onDelete: handleDeleteNode }
-    }));
-
-    const handleAddNode = useCallback((type, position) => {
-        const newNode = {
-            id: `${Date.now()}`,
-            type: 'nnBlock',
-            position,
-            data: {
-                type: type,
-                neurons: 64,
-                activation: 'ReLU',
-                onDelete: handleDeleteNode
-            },
-        };
-        setNodes((nds) => nds.concat(newNode));
-    }, [setNodes, handleDeleteNode]);
+    const [activeTab, setActiveTab] = useState('architecture');
+    const [codeOpen, setCodeOpen] = useState(false);
 
     return (
-        <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: 'var(--color-bg)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {/* Navbar */}
+        <div
+            style={{
+                position: 'relative',
+                width: '100%',
+                height: '100%',
+                backgroundColor: 'var(--color-bg)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+            }}
+        >
             <Navbar />
+            <ToolbarStrip
+                activeTab={activeTab}
+                onChange={setActiveTab}
+                onShowCode={() => setCodeOpen(true)}
+            />
 
-            {/* Canvas and Sidebars Container */}
             <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
-                {/* Canvas takes full space */}
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}>
-                    <Canvas
-                        nodes={nodesWithHandlers}
-                        edges={edges}
-                        onNodesChange={onNodesChange}
-                        onEdgesChange={onEdgesChange}
-                        setEdges={setEdges}
-                        onDeleteNode={handleDeleteNode}
-                        onAddNode={handleAddNode}
-                    />
+                <div
+                    key={activeTab}
+                    style={{ position: 'absolute', inset: 0, zIndex: 0, animation: 'tabFade 220ms ease' }}
+                >
+                    {activeTab === 'architecture' && <ArchitectureCanvas />}
+                    {activeTab === 'training'     && <TrainingCanvas />}
+                    {activeTab === 'data' && (
+                        <div className="w-full h-full flex items-center justify-center text-text-secondary text-sm">
+                            <span className="border-2 border-black rounded-md px-3 py-1 bg-white shadow-medium">
+                                Data canvas — coming in a later phase
+                            </span>
+                        </div>
+                    )}
                 </div>
 
-                {/* Left Sidebar */}
-                <Sidebar />
+                {activeTab === 'architecture' && (
+                    <>
+                        <Breadcrumb />
+                        <TemplateInspector />
+                        <BlockPalette />
+                        <SelectionToolbar />
+                    </>
+                )}
 
-                {/* Right Sidebar (Block Palette) */}
-                <RightSidebar onAddNode={handleAddNode} />
+                {activeTab === 'training' && <TrainingPalette />}
+
+                <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
             </div>
+
+            <style>{`
+                @keyframes tabFade {
+                    from { opacity: 0; transform: translateY(4px); }
+                    to   { opacity: 1; transform: translateY(0); }
+                }
+            `}</style>
         </div>
     );
 };

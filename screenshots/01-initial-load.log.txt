@@ -1,0 +1,22 @@
+=== URL: http://localhost:5174/
+=== Page errors (1):
+TypeError: Cannot read properties of null (reading 'errors')
+    at ValidationStatus (http://localhost:5174/src/components/architecture/ValidationStatus.jsx:12:47)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:12424:43)
+    at renderRootSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:12408:13)
+    at performWorkOnRoot (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:11827:37)
+=== Console entries (4):
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[warning] %s
+
+%s
+ An error occurred in the <ValidationStatus> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.

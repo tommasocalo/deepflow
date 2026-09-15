@@ -1,0 +1,33 @@
+=== URL: http://localhost:5174/
+=== Page errors (0):
+=== Console entries (10):
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[error] [useValidation] validate() threw TypeError: topo is not iterable
+    at validate (http://localhost:5174/src/validation/validator.js:79:22)
+    at useValidation (http://localhost:5174/src/hooks/useValidation.js?t=1777130723162:51:26)
+    at ValidationStatus (http://localhost:5174/src/components/architecture/ValidationStatus.jsx?t=1777130725948:9:22)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:12424:43)
+[warning] [React Flow]: It seems that you haven't loaded the styles. Please import '@xyflow/react/dist/style.css' or base.css to make sure everything is working properly. Help: https://reactflow.dev/error#013
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[error] [useValidation] validate() threw TypeError: topo is not iterable
+    at validate (http://localhost:5174/src/validation/validator.js:79:22)
+    at useValidation (http://localhost:5174/src/hooks/useValidation.js?t=1777130723162:51:26)
+    at ValidationStatus (http://localhost:5174/src/components/architecture/ValidationStatus.jsx?t=1777130725948:9:22)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=5e62fb0c:12424:43)
+[warning] [React Flow]: It seems that you haven't loaded the styles. Please import '@xyflow/react/dist/style.css' or base.css to make sure everything is working properly. Help: https://reactflow.dev/error#013
