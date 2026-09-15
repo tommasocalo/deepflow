@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useArchitectureStore } from '../stores/architectureStore.js';
 import { useTemplatesStore } from '../stores/templatesStore.js';
 import { validate } from '../validation/index.js';
+import { createValidationCache } from '../validation/cache.js';
 import { resolveGraphLevel } from '../domain/architecture/index.js';
 
 const EMPTY_REPORT = Object.freeze({
@@ -12,6 +13,19 @@ const EMPTY_REPORT = Object.freeze({
     warnings: {},
     globalErrors: [],
     ok: true,
+});
+
+const cachedValidate = createValidationCache((graph, options) => {
+    try {
+        return validate(graph, options);
+    } catch (err) {
+        console.error('[useValidation] validate() threw', err);
+        return {
+            ...EMPTY_REPORT,
+            ok: false,
+            globalErrors: ['Validation could not complete. Review the graph and try again.'],
+        };
+    }
 });
 
 /**
@@ -44,15 +58,6 @@ export function useValidation() {
 
     return useMemo(() => {
         if (!viewGraph) return EMPTY_REPORT;
-        try {
-            return validate(viewGraph, { templates, scope });
-        } catch (err) {
-            console.error('[useValidation] validate() threw', err);
-            return {
-                ...EMPTY_REPORT,
-                ok: false,
-                globalErrors: ['Validation could not complete. Review the graph and try again.'],
-            };
-        }
+        return cachedValidate(viewGraph, templates, scope);
     }, [viewGraph, templates, scope]);
 }
