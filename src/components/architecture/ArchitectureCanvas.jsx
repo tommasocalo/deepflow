@@ -245,7 +245,7 @@ const Inner = ({ children, overlay }) => {
                 ref={wrapperRef}
                 data-architecture-canvas
                 className={showPanCursor ? 'deepflow-mode-pan' : 'deepflow-mode-select'}
-                style={{ flex: 1, minWidth: 0, height: '100%', backgroundColor: '#f8fafc', position: 'relative' }}
+                style={{ flex: 1, minWidth: 0, height: '100%', backgroundColor: '#fff', position: 'relative' }}
             >
                 <GraphStatusPanel />
                 <ReactFlow

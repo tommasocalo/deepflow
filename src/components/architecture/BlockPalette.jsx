@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Check, ChevronDown, ChevronRight, Layers3, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from 'lucide-react';
+import { Boxes, Check, ChevronDown, ChevronRight, Layers3, Plus, Search, X } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { PYTORCH_BLOCKS, getEntry } from '../../domain/library/index.js';
+import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { styleFor } from './categoryStyle.js';
@@ -10,7 +11,7 @@ import './palette.css';
 
 const TEMPLATE_ONLY = new Set(['deepflow.template.Input', 'deepflow.template.Output']);
 const CATEGORIES = ['IO', 'Linear', 'Attention', 'Normalization', 'Activation', 'Regularization', 'Convolution', 'Pooling', 'Reshape', 'Recurrent', 'Element-wise', 'Combine'];
-const LABELS = { IO: 'Inputs & outputs', Linear: 'Linear & embedding', 'Element-wise': 'Math operations', Combine: 'Merge & split', Reshape: 'Tensor shape' };
+const FAVORITES = ['torch.nn.Linear', 'torch.nn.Conv2d', 'torch.nn.ReLU', 'torch.nn.LayerNorm'];
 const normalize = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const matches = (entry, query) => query.trim().split(/\s+/).every((word) => normalize(`${entry.name} ${entry.category} ${entry.description} ${entry.key}`).includes(normalize(word)));
 
@@ -22,7 +23,7 @@ function containsTemplate(templateId, targetId, templates, visited = new Set()) 
 }
 
 function LibraryRow({ entry, onAdd, template = false, disabled = false }) {
-    const accent = template ? '#7c3aed' : styleFor(entry.category).accent;
+    const accent = template ? '#a855f7' : styleFor(entry.category).accent;
     return (
         <button type="button" className="df-library-row" data-library-key={entry.key} disabled={disabled} draggable={!disabled}
             onDragStart={(event) => {
@@ -31,43 +32,36 @@ function LibraryRow({ entry, onAdd, template = false, disabled = false }) {
             }}
             onClick={() => onAdd(entry, template)} title={disabled ? 'This template would contain itself.' : entry.description}
             aria-label={`Add ${entry.name}${template ? ' template' : ''}`}>
-            <span className="df-library-symbol" style={{ '--entry-accent': accent }}>{template ? <Boxes size={16} /> : <Layers3 size={15} />}</span>
-            <span className="df-library-copy"><span className="df-library-name">{entry.name}</span><span className="df-library-description">{entry.description || 'Reusable graph template'}</span></span>
-            <Plus className="df-library-add" size={15} aria-hidden="true" />
+            <span className="df-library-dot" style={{ background: accent }} />
+            {template ? <Boxes size={11} aria-hidden="true" /> : <Layers3 size={11} aria-hidden="true" />}
+            <span className="df-library-name">{entry.name}</span>
+            <Plus className="df-library-add" size={11} aria-hidden="true" />
         </button>
     );
 }
 
 export default function BlockPalette() {
     const [query, setQuery] = useState('');
-    const [tab, setTab] = useState('layers');
     const [collapsed, setCollapsed] = useState(false);
-    const [openGroups, setOpenGroups] = useState(['IO', 'Linear', 'Attention']);
+    const [openGroups, setOpenGroups] = useState([]);
     const [notice, setNotice] = useState('');
     const panelRef = useRef(null);
     const searchRef = useRef(null);
     const noticeTimer = useRef(null);
     const { screenToFlowPosition, getNodes } = useReactFlow();
     const templates = useTemplatesStore((s) => s.templates);
-    const recentKeys = useArchitectureStore((s) => s.recentLibraryKeys);
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const rootGraph = useArchitectureStore((s) => s.graph);
     const addLayer = useArchitectureStore((s) => s.addLayerByLibraryKey);
     const addTemplate = useArchitectureStore((s) => s.addSuperNodeInstance);
     const selectOnly = useArchitectureStore((s) => s.selectOnly);
     const setExpanded = useArchitectureStore((s) => s.setExpanded);
+    const editingTemplateId = resolveGraphLevel(rootGraph, currentPath, templates).templateId;
     const groups = useMemo(() => CATEGORIES.map((category) => ({ category, items: PYTORCH_BLOCKS.filter((entry) => entry.category === category && !TEMPLATE_ONLY.has(entry.key) && matches(entry, query)) })).filter((group) => group.items.length), [query]);
     const entries = groups.flatMap((group) => group.items);
-    const templateEntries = Object.values(templates).map((template) => ({ key: template.id, name: template.name, category: 'Template', description: template.description || `${Object.keys(template.graph.nodes).length} nodes · ${template.freeParameters?.length ?? 0} parameters` })).filter((entry) => matches(entry, query));
-    const recentEntries = recentKeys.map(getEntry).filter((entry) => entry && !TEMPLATE_ONLY.has(entry.key)).slice(0, 4);
-    let currentGraph = rootGraph;
-    let editingTemplateId = null;
-    for (const id of currentPath) {
-        const node = currentGraph.nodes[id];
-        if (!node?.templateId || !templates[node.templateId]) break;
-        editingTemplateId = node.templateId;
-        currentGraph = templates[node.templateId].graph;
-    }
+    const templateEntries = Object.values(templates).map((template) => ({ key: template.id, name: template.name, category: 'Template', description: template.description || 'Reusable graph template' })).filter((entry) => matches(entry, query));
+    const favorites = FAVORITES.map(getEntry).filter(Boolean);
+    const templateDisabled = (entry) => !!editingTemplateId && containsTemplate(entry.key, editingTemplateId, templates);
 
     useEffect(() => {
         const focusSearch = (event) => {
@@ -83,17 +77,18 @@ export default function BlockPalette() {
     }, []);
 
     function addEntry(entry, isTemplate) {
-        const bounds = panelRef.current?.parentElement?.querySelector('[data-architecture-canvas]')?.getBoundingClientRect();
+        const bounds = panelRef.current?.closest('[data-architecture-canvas]')?.getBoundingClientRect();
         if (!bounds) return;
-        const point = screenToFlowPosition({ x: bounds.left + bounds.width * 0.5, y: bounds.top + bounds.height * 0.42 });
+        // Place new blocks in the visible canvas, clear of the floating palette.
+        const availableWidth = Math.max(0, bounds.width - 272);
+        const point = screenToFlowPosition({ x: bounds.left + availableWidth * 0.5, y: bounds.top + bounds.height * 0.42 });
         const topLeft = screenToFlowPosition({ x: bounds.left + 28, y: bounds.top + 70 });
-        const bottomRight = screenToFlowPosition({ x: bounds.right - 28, y: bounds.bottom - 70 });
+        const bottomRight = screenToFlowPosition({ x: bounds.left + availableWidth - 28, y: bounds.bottom - 70 });
         const clamp = (candidate) => ({
-            x: Math.max(topLeft.x, Math.min(candidate.x, bottomRight.x - 340)),
+            x: Math.max(topLeft.x, Math.min(candidate.x, bottomRight.x - 320)),
             y: Math.max(topLeft.y, Math.min(candidate.y, bottomRight.y - 200)),
         });
-        let position = { x: Math.round(point.x - 140), y: Math.round(point.y - 65) };
-        position = clamp(position);
+        let position = clamp({ x: Math.round(point.x - 120), y: Math.round(point.y - 65) });
         const nodes = getNodes();
         for (let attempt = 0; attempt < 12; attempt++) {
             if (!nodes.some((node) => Math.abs(node.position.x - position.x) < 220 && Math.abs(node.position.y - position.y) < 130)) break;
@@ -112,41 +107,33 @@ export default function BlockPalette() {
         if (event.key === 'Escape') { if (query) setQuery(''); else searchRef.current?.blur(); }
         if (event.key === 'ArrowDown') { event.preventDefault(); panelRef.current?.querySelector('.df-library-row:not(:disabled)')?.focus(); }
         if (event.key === 'Enter' && query.trim()) {
-            const first = tab === 'layers' ? entries[0] : templateEntries.find((entry) => !editingTemplateId || !containsTemplate(entry.key, editingTemplateId, templates));
-            if (first) addEntry(first, tab === 'templates');
+            const first = entries[0] ?? templateEntries.find((entry) => !templateDisabled(entry));
+            if (first) addEntry(first, !entries.length);
         }
     }
 
-    if (collapsed) return <aside className="df-library-rail" aria-label="Block library"><button className="df-icon-button" onClick={() => { setCollapsed(false); requestAnimationFrame(() => searchRef.current?.focus()); }} title="Open block library (⌘K / Ctrl+K)" aria-label="Open block library"><PanelLeftOpen size={19} /></button><span className="df-library-rail-label">Blocks</span></aside>;
+    function toggleGroup(category) {
+        setOpenGroups((previous) => previous.includes(category) ? previous.filter((item) => item !== category) : [...previous, category]);
+    }
+
+    if (collapsed) return <aside className="df-library df-library-collapsed df-panel-subtle" aria-label="Block library"><button className="df-library-header" onClick={() => { setCollapsed(false); requestAnimationFrame(() => searchRef.current?.focus()); }} title="Open block library (⌘K / Ctrl+K)" aria-label="Open block library"><Layers3 size={12} /><span>Architecture</span><ChevronDown size={13} /></button></aside>;
 
     return (
-        <aside className="df-library" ref={panelRef} aria-label="Block library">
-            <header className="df-library-header"><div><h2><Layers3 size={18} /> Blocks</h2><p>The building blocks of your model</p></div><button className="df-icon-button" onClick={() => setCollapsed(true)} aria-label="Collapse block library" title="Collapse library"><PanelLeftClose size={17} /></button></header>
-            <div className="df-library-tabs" role="tablist" aria-label="Library type" onKeyDown={(event) => {
-                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-                event.preventDefault();
-                const next = event.key === 'Home' ? 'layers' : event.key === 'End' ? 'templates' : tab === 'layers' ? 'templates' : 'layers';
-                setTab(next);
-                setQuery('');
-                panelRef.current?.querySelector(`#${next}-tab`)?.focus();
-            }}>
-                <button role="tab" tabIndex={tab === 'layers' ? 0 : -1} aria-selected={tab === 'layers'} aria-controls="library-content" id="layers-tab" onClick={() => { setTab('layers'); setQuery(''); }}>Layers <span>{PYTORCH_BLOCKS.filter((entry) => !TEMPLATE_ONLY.has(entry.key)).length}</span></button>
-                <button role="tab" tabIndex={tab === 'templates' ? 0 : -1} aria-selected={tab === 'templates'} aria-controls="library-content" id="templates-tab" onClick={() => { setTab('templates'); setQuery(''); }}>Templates <span>{Object.keys(templates).length}</span></button>
-            </div>
-            <div className="df-library-search"><Search size={16} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={onSearchKeyDown} placeholder={tab === 'layers' ? 'Find a layer…' : 'Find a template…'} aria-label={tab === 'layers' ? 'Search layers' : 'Search templates'} autoComplete="off" spellCheck={false} />{query ? <button onClick={() => { setQuery(''); searchRef.current?.focus(); }} className="df-search-clear" aria-label="Clear search"><X size={14} /></button> : <kbd>/</kbd>}</div>
-            <div className="df-library-scroll" id="library-content" role="tabpanel" aria-labelledby={tab === 'layers' ? 'layers-tab' : 'templates-tab'}>
+        <aside className="df-library df-panel-subtle nodrag nopan nowheel" ref={panelRef} aria-label="Block library">
+            <header className="df-library-header"><h2>Architecture</h2><span className="df-library-kind">blocks</span><button className="df-library-collapse" onClick={() => setCollapsed(true)} aria-label="Collapse block library" title="Collapse library"><ChevronDown size={13} /></button></header>
+            <div className="df-library-search"><Search size={12} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={onSearchKeyDown} placeholder="Search blocks…" aria-label="Search blocks" autoComplete="off" spellCheck={false} />{query ? <button onClick={() => { setQuery(''); searchRef.current?.focus(); }} className="df-search-clear" aria-label="Clear search"><X size={12} /></button> : <kbd>/</kbd>}</div>
+            <div className="df-library-scroll">
                 {currentPath.length > 0 && <TemplateInspector embedded />}
-                {tab === 'layers' && !query && recentEntries.length > 0 && <section className="df-library-group df-library-recent"><div className="df-library-section-label">Recently used</div>{recentEntries.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} />)}</section>}
-                {query && <div className="df-library-result-count" role="status">{tab === 'layers' ? entries.length : templateEntries.length} results</div>}
-                {tab === 'layers' && groups.map(({ category, items }) => {
+                {!query && <section className="df-library-group"><div className="df-library-section-label">Frequently used</div>{favorites.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} />)}</section>}
+                {groups.map(({ category, items }) => {
                     const open = !!query || openGroups.includes(category);
                     const groupId = `library-${category.toLowerCase().replace(/[^a-z]/g, '-')}`;
-                    return <section key={category} className="df-library-group"><button className="df-library-category" aria-expanded={open} aria-controls={groupId} onClick={() => setOpenGroups((previous) => previous.includes(category) ? previous.filter((item) => item !== category) : [...previous, category])}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}<span>{LABELS[category] ?? category}</span><span className="df-library-category-count">{items.length}</span></button>{open && <div id={groupId} className="df-library-group-items">{items.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} />)}</div>}</section>;
+                    return <section key={category} className="df-library-group"><button className="df-library-category" aria-expanded={open} aria-controls={groupId} onClick={() => toggleGroup(category)}>{open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}<span>{category === 'IO' ? 'Inputs & outputs' : category}</span><span className="df-library-category-count">{items.length}</span></button>{open && <div id={groupId} className="df-library-group-items">{items.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} />)}</div>}</section>;
                 })}
-                {tab === 'templates' && templateEntries.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} template disabled={!!editingTemplateId && containsTemplate(entry.key, editingTemplateId, templates)} />)}
-                {(tab === 'layers' ? !entries.length : !templateEntries.length) && <div className="df-library-empty">{tab === 'templates' && !query ? <Boxes size={26} /> : <Search size={26} />}<h3>{query ? 'No matches yet' : 'Your reusable blocks'}</h3><p>{query ? 'Try a layer name or operation, such as “attention” or “norm”.' : 'Select connected nodes on the canvas and choose Group to create a template.'}</p>{query && <button className="df-button" onClick={() => setQuery('')}>Clear search</button>}</div>}
+                {templateEntries.length > 0 && <section className="df-library-group"><button className="df-library-category" aria-expanded={!!query || openGroups.includes('Templates')} aria-controls="library-templates" onClick={() => toggleGroup('Templates')}>{query || openGroups.includes('Templates') ? <ChevronDown size={11} /> : <ChevronRight size={11} />}<span>Templates</span><span className="df-library-category-count">{templateEntries.length}</span></button>{(query || openGroups.includes('Templates')) && <div id="library-templates" className="df-library-group-items">{templateEntries.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} template disabled={templateDisabled(entry)} />)}</div>}</section>}
+                {!entries.length && !templateEntries.length && <p className="df-library-empty">No matching blocks.</p>}
             </div>
-            <footer className="df-library-footer" role="status" aria-live="polite">{notice ? <><Check size={14} />{notice}</> : <><Plus size={14} />Click to add · drag to place</>}</footer>
+            <footer className="df-library-footer" role="status" aria-live="polite">{notice ? <><Check size={11} />{notice}</> : 'Click to add · drag to place'}</footer>
         </aside>
     );
 }

@@ -85,7 +85,7 @@ const GraphStatusPanel = () => {
         <div
             ref={ref}
             className="absolute pointer-events-auto"
-            style={{ right: '1rem', top: '1rem', zIndex: 40 }}
+            style={{ left: '1rem', top: '1rem', zIndex: 40 }}
         >
             <button
                 onClick={() => issues.length > 0 && setOpen((v) => !v)}
@@ -97,10 +97,10 @@ const GraphStatusPanel = () => {
                 }`}
                 style={{
                     padding: '7px 10px',
-                    fontSize: 11,
-                    fontWeight: 500,
+                    fontSize: 12,
+                    fontWeight: 800,
                     letterSpacing: 0,
-                    border: `1px solid ${tone.ringColor}40`,
+                    border: `2px solid ${tone.ringColor}`,
                 }}
             >
                 {tone.icon}
@@ -117,7 +117,7 @@ const GraphStatusPanel = () => {
                 <div
                     className="df-panel-subtle mt-2 max-h-80 overflow-y-auto"
                     style={{
-                        width: 'min(300px, calc(100vw - 80px))',
+                        width: 'min(260px, calc(100vw - 80px))',
                         padding: 10,
                     }}
                 >

@@ -17,7 +17,7 @@ export default function Layout() {
             <Navbar />
             <ToolbarStrip activeTab={activeTab} onChange={setActiveTab} onShowCode={() => setCodeOpen(true)} />
             <main className="df-app-main" aria-label={activeTab === 'architecture' ? 'Architecture editor' : 'Training editor'}>
-                {activeTab === 'architecture' && <ArchitectureCanvas overlay={<><Breadcrumb /><SelectionToolbar /></>}><BlockPalette /></ArchitectureCanvas>}
+                {activeTab === 'architecture' && <ArchitectureCanvas overlay={<><Breadcrumb /><BlockPalette /><SelectionToolbar /></>} />}
                 {activeTab === 'training' && <><TrainingCanvas /><TrainingPalette /></>}
                 <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
             </main>

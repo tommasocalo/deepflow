@@ -138,12 +138,13 @@ function ParameterHarness({ initial = null, type = 'float', onValue }) {
 
 function PaletteHarness() {
     return h(ReactFlowProvider, null,
-        h('div', null, h(BlockPalette), h('div', {
+        h('div', {
             'data-architecture-canvas': true,
+            style: { position: 'relative' },
             ref(element) {
-                if (element) element.getBoundingClientRect = () => ({ left: 300, top: 100, width: 1000, height: 600, x: 300, y: 100, right: 1300, bottom: 700 });
+                if (element) element.getBoundingClientRect = () => ({ left: 0, top: 100, width: 1300, height: 600, x: 0, y: 100, right: 1300, bottom: 700 });
             },
-        })),
+        }, h(BlockPalette)),
     );
 }
 
@@ -234,7 +235,7 @@ test('opening a library category does not add a node; a search result adds exact
     await click(category);
     assert.equal(category.getAttribute('aria-expanded'), 'true');
     assert.equal(graphNodes().length, 0);
-    await typeText(byAria('Search layers'), 'layer norm');
+    await typeText(byAria('Search blocks'), 'layer norm');
     const add = byAria('Add LayerNorm');
     assert.ok(add, 'Tokenized search should find LayerNorm');
     await click(add);
@@ -246,16 +247,21 @@ test('opening a library category does not add a node; a search result adds exact
     assert.ok(Number.isFinite(nodes[0].position.x) && Number.isFinite(nodes[0].position.y));
 });
 
-test('Templates tab exposes its panel and adds a real reusable instance', async () => {
+test('Templates category expands without adding nodes and exposes reusable instances to global search', async () => {
     const template = createTemplate({ id: 'decoder-template', name: 'Decoder block', graph: emptyGraph() });
     useTemplatesStore.setState({ templates: { [template.id]: template } });
     await render(h(PaletteHarness));
-    const templatesTab = container.querySelector('#templates-tab');
-    await click(templatesTab);
-    assert.equal(templatesTab.getAttribute('aria-selected'), 'true');
-    assert.equal(container.querySelector('[role="tabpanel"]').getAttribute('aria-labelledby'), templatesTab.id);
-    assert.ok(byAria('Search templates'));
+    const category = [...container.querySelectorAll('.df-library-category')].find((element) => element.textContent.startsWith('Templates'));
+    assert.equal(category.getAttribute('aria-expanded'), 'false');
+    assert.equal(byAria('Add Decoder block template'), null);
+    await click(category);
+    assert.equal(category.getAttribute('aria-expanded'), 'true');
+    assert.ok(document.getElementById(category.getAttribute('aria-controls')).contains(byAria('Add Decoder block template')));
     assert.equal(graphNodes().length, 0);
+    await click(category);
+    assert.equal(byAria('Add Decoder block template'), null);
+    await typeText(byAria('Search blocks'), 'decoder block');
+    assert.ok(byAria('Add Decoder block template'), 'Global search includes templates without switching modes');
     await click(byAria('Add Decoder block template'));
     assert.equal(graphNodes().length, 1);
     assert.equal(graphNodes()[0].kind, 'supernode');
@@ -266,10 +272,10 @@ test('collapsed library reopens and focuses search with the keyboard shortcut', 
     await render(h(PaletteHarness));
     await click(byAria('Collapse block library'));
     assert.ok(byAria('Open block library'));
-    assert.equal(byAria('Search layers'), null);
+    assert.equal(byAria('Search blocks'), null);
     await act(() => window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true })));
     await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
-    const search = byAria('Search layers');
+    const search = byAria('Search blocks');
     assert.ok(search);
     assert.equal(document.activeElement, search);
     assert.equal(graphNodes().length, 0);
@@ -318,18 +324,16 @@ test('gradient menu writes the edge operator, dismisses, and reopens on selectio
     assert.ok(picker(), 'Clicking an already selected edge opens the dismissed picker again');
 });
 
-test('library tabs move keyboard focus and their single tab stop with ArrowRight', async () => {
+test('search ArrowDown focuses a result and Enter adds the matching layer once', async () => {
     await render(h(PaletteHarness));
-    const layers = container.querySelector('#layers-tab');
-    const templates = container.querySelector('#templates-tab');
-    assert.equal(layers.tabIndex, 0);
-    assert.equal(templates.tabIndex, -1);
-    await act(() => layers.focus());
-    await act(() => layers.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })));
-    assert.equal(document.activeElement, templates);
-    assert.equal(templates.getAttribute('aria-selected'), 'true');
-    assert.equal(templates.tabIndex, 0);
-    assert.equal(layers.tabIndex, -1);
-    assert.equal(container.querySelector('[role="tabpanel"]').getAttribute('aria-labelledby'), templates.id);
+    const search = byAria('Search blocks');
+    await typeText(search, 'layer norm');
+    await act(() => search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
+    assert.equal(document.activeElement, byAria('Add LayerNorm'));
     assert.equal(graphNodes().length, 0);
+    await act(() => search.focus());
+    await act(() => search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    assert.equal(graphNodes().length, 1);
+    assert.equal(graphNodes()[0].libraryKey, 'torch.nn.LayerNorm');
+    assert.deepEqual(useArchitectureStore.getState().selectedNodeIds, [graphNodes()[0].id]);
 });

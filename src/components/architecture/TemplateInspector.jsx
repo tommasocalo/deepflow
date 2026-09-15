@@ -43,7 +43,7 @@ function TemplateParameters({ template, embedded }) {
             </summary>
 
             <div className="df-template-content">
-                <p className="df-template-note">Changes apply to every use of this template.</p>
+                <p className="df-template-note">Edits apply to all instances.</p>
                 <label className="df-template-field">
                     <span>Template name</span>
                     <input
@@ -64,7 +64,7 @@ function TemplateParameters({ template, embedded }) {
                 <div className="df-template-parameters">
                     <h3>Exposed parameters</h3>
                     {free.length === 0 && (
-                        <p className="df-template-note">Expose values such as width or depth, then reference them inside the template using <code>$name</code>.</p>
+                        <p className="df-template-note">Use <code>$name</code> in block parameters.</p>
                     )}
                     {free.map((parameter) => (
                         <section key={parameter.name} className="df-template-parameter" aria-label={`Parameter ${parameter.name}`}>
