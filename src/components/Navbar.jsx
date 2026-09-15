@@ -1,27 +1,18 @@
-import React from 'react';
-import { Brain, LogIn, UserPlus } from 'lucide-react';
+import { Workflow } from 'lucide-react';
 import StoryboardMenu from './StoryboardMenu.jsx';
-import NavButton from './NavButton.jsx';
 
-const Navbar = () => (
-    <div
-        className="w-full bg-surface border-b border-black/15 flex items-center justify-between z-30 relative"
-        style={{ padding: '0.5rem 1rem', minHeight: 48 }}
-    >
-        <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-                <Brain size={22} strokeWidth={2.5} />
-                <span className="text-base font-bold tracking-tight">DeepFlow</span>
+export default function Navbar() {
+    return (
+        <header className="df-navbar">
+            <div className="df-brand">
+                <span className="df-brand-icon"><Workflow size={19} strokeWidth={1.9} /></span>
+                <span className="df-brand-name">DeepFlow</span>
+                <span className="df-workspace-name">Model workspace</span>
             </div>
-            <div className="w-px h-5 bg-black/15" />
-            <StoryboardMenu />
-        </div>
-
-        <div className="flex items-center gap-2">
-            <NavButton icon={LogIn}    label="Login" />
-            <NavButton icon={UserPlus} label="Sign Up" tone="accent" />
-        </div>
-    </div>
-);
-
-export default Navbar;
+            <div className="df-navbar-actions">
+                <span className="df-local-state" title="Your graph is stored in this browser. Use Save to download a copy."><span />Local workspace</span>
+                <StoryboardMenu />
+            </div>
+        </header>
+    );
+}

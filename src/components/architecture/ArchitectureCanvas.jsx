@@ -217,7 +217,7 @@ const Inner = ({ children, overlay }) => {
 
     const onDragOver = useCallback((e) => {
         e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
+        e.dataTransfer.dropEffect = 'copy';
     }, []);
 
     const onDrop = useCallback(

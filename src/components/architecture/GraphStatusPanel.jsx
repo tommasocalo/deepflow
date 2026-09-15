@@ -71,31 +71,36 @@ const GraphStatusPanel = () => {
         ? { ringColor: '#dc2626', bg: 'bg-red-50',     text: 'text-red-700',     icon: <AlertCircle size={13} className="text-red-700" strokeWidth={3} />,    label: `${errorCount} error${errorCount !== 1 ? 's' : ''}${warningCount ? ` · ${warningCount} warning${warningCount !== 1 ? 's' : ''}` : ''}` }
         : warningCount > 0
             ? { ringColor: '#f59e0b', bg: 'bg-amber-50',   text: 'text-amber-700',   icon: <AlertTriangle size={13} className="text-amber-700" strokeWidth={3} />, label: `${warningCount} warning${warningCount !== 1 ? 's' : ''}` }
-            : { ringColor: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700', icon: <CheckCircle2 size={13} className="text-emerald-700" strokeWidth={3} />, label: 'Graph valid' };
+                : { ringColor: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700', icon: <CheckCircle2 size={13} className="text-emerald-700" strokeWidth={3} />, label: 'No issues detected' };
 
     const focusNode = (nodeId) => {
         const node = viewGraph?.nodes?.[nodeId];
         if (!node) return;
         const x = node.position.x + 120;  // ~half of node width
         const y = node.position.y + 60;
-        setCenter(x, y, { duration: 450, zoom: Math.max(getZoom(), 1.18) });
+        setCenter(x, y, { duration: 300, zoom: Math.max(getZoom(), 1) });
     };
 
     return (
         <div
             ref={ref}
             className="absolute pointer-events-auto"
-            style={{ left: '1rem', top: '1rem', zIndex: 40 }}
+            style={{ right: '1rem', top: '1rem', zIndex: 40 }}
         >
             <button
                 onClick={() => issues.length > 0 && setOpen((v) => !v)}
                 disabled={issues.length === 0}
+                aria-expanded={open}
+                aria-label={`Graph checks: ${tone.label}`}
                 className={`${tone.bg} ${tone.text} rounded-lg shadow-sm inline-flex items-center gap-2 text-xs font-bold tracking-wide ${
                     issues.length > 0 ? 'cursor-pointer hover:brightness-95' : 'cursor-default'
                 }`}
                 style={{
-                    padding: '7px 12px',
-                    border: `2px solid ${tone.ringColor}`,
+                    padding: '7px 10px',
+                    fontSize: 11,
+                    fontWeight: 500,
+                    letterSpacing: 0,
+                    border: `1px solid ${tone.ringColor}40`,
                 }}
             >
                 {tone.icon}
@@ -112,7 +117,7 @@ const GraphStatusPanel = () => {
                 <div
                     className="df-panel-subtle mt-2 max-h-80 overflow-y-auto"
                     style={{
-                        width: 220,
+                        width: 'min(300px, calc(100vw - 80px))',
                         padding: 10,
                     }}
                 >

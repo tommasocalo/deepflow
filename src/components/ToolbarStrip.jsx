@@ -1,13 +1,13 @@
 import React from 'react';
-import { Code2, FileJson, RotateCcw, Upload } from 'lucide-react';
+import { Code2, Database, FileJson, Network, RotateCcw, SlidersHorizontal, Upload } from 'lucide-react';
 import { useArchitectureStore } from '../stores/architectureStore.js';
 import { useTemplatesStore } from '../stores/templatesStore.js';
 import { useTrainingStore } from '../stores/trainingStore.js';
 
 const TABS = [
-    { id: 'architecture', label: 'Architecture' },
-    { id: 'data',         label: 'Data',     disabled: true },
-    { id: 'training',     label: 'Training' },
+    { id: 'architecture', label: 'Architecture', icon: Network },
+    { id: 'training', label: 'Training', icon: SlidersHorizontal },
+    { id: 'data', label: 'Data', icon: Database, disabled: true },
 ];
 
 function downloadBlob(name, content, mime = 'application/json') {
@@ -45,13 +45,13 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
             try {
                 const data = JSON.parse(await file.text());
                 if (data?.architecture) {
-                    useArchitectureStore.setState((s) => ({ ...s, graph: data.architecture }));
+                    useArchitectureStore.setState({ graph: data.architecture, currentPath: [], selectedNodeIds: [], expandedNodeId: null });
                 }
                 if (data?.templates) {
                     useTemplatesStore.setState((s) => ({ ...s, templates: data.templates }));
                 }
                 if (data?.training) {
-                    useTrainingStore.setState((s) => ({ ...s, graph: data.training }));
+                    useTrainingStore.setState({ graph: data.training, selectedNodeIds: [], expandedNodeId: null });
                 }
             } catch (err) {
                 alert('Could not load file: ' + (err.message ?? err));
@@ -61,67 +61,63 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
     };
     const handleReset = () => {
         if (!window.confirm('Reset architecture and training graphs to empty?')) return;
+        useArchitectureStore.getState().goToLevel(0);
         archResetGraph();
         trainingReset();
     };
 
     return (
-        <div
-            className="df-toolbar w-full flex items-center justify-between gap-4"
-            style={{ padding: '0.5rem 1rem' }}
-        >
-            <div className="inline-flex items-center gap-7">
+        <div className="df-toolbar">
+            <nav className="df-toolbar-tabs" aria-label="Workspace views">
                 {TABS.map((tab) => (
                     <button
                         key={tab.id}
                         disabled={tab.disabled}
+                        aria-current={activeTab === tab.id ? 'page' : undefined}
                         onClick={() => !tab.disabled && onChange(tab.id)}
-                        className={[
-                            'df-tab',
-                            activeTab === tab.id ? 'df-tab-active' : 'hover:text-black',
-                            tab.disabled ? 'opacity-40 cursor-not-allowed hover:text-text-secondary' : 'cursor-pointer',
-                        ].join(' ')}
+                        className={`df-tab ${activeTab === tab.id ? 'df-tab-active' : ''}`}
                     >
+                        <tab.icon size={14} />
                         <span>{tab.label}</span>
                         {tab.disabled && (
-                            <span className="ml-1 text-[8px] uppercase tracking-wider opacity-60">soon</span>
+                            <span className="df-tab-soon">Soon</span>
                         )}
                     </button>
                 ))}
-            </div>
+            </nav>
 
-            <div className="inline-flex items-center gap-5">
+            <div className="df-toolbar-actions">
+                <div className="df-action-group">
+                    <ActionSegment icon={FileJson} label="Save" onClick={handleSave} title="Download your workspace as JSON" />
+                    <ActionSegment icon={Upload} label="Load" onClick={handleLoad} title="Open a saved workspace" />
+                    <ActionSegment icon={RotateCcw} label="Reset" onClick={handleReset} />
+                </div>
                 <button
                     onClick={onShowCode}
-                    className="df-button min-w-[128px] px-5"
+                    className="df-button df-button-primary df-code-button"
                     title="Generated PyTorch source"
                 >
                     <Code2 size={13} strokeWidth={2.5} />
                     Code
                 </button>
-                <div className="inline-flex border border-black/20 rounded-[7px] overflow-hidden bg-white">
-                    <ActionSegment icon={FileJson}  label="Save"  onClick={handleSave}  isFirst />
-                    <ActionSegment icon={Upload}    label="Load"  onClick={handleLoad} />
-                    <ActionSegment icon={RotateCcw} label="Reset" onClick={handleReset} />
-                </div>
             </div>
         </div>
     );
 };
 
-const ActionSegment = ({ icon: Icon, label, onClick, isFirst, title }) => (
+const ActionSegment = ({ icon, label, onClick, title }) => {
+    const Icon = icon;
+    return (
     <button
         onClick={onClick}
         title={title ?? label}
-        className={[
-            'inline-flex items-center justify-center gap-1.5 h-8 px-3 text-xs font-bold',
-            'transition-colors hover:bg-stone-100',
-            isFirst ? '' : 'border-l border-black/20',
-        ].join(' ')}
+        aria-label={label}
+        className="df-action-segment"
     >
         <Icon size={13} strokeWidth={2.5} />
-        {label}
+        <span className="df-action-label">{label}</span>
     </button>
-);
+    );
+};
 
 export default ToolbarStrip;

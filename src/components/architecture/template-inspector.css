@@ -1,0 +1,127 @@
+.df-template-inspector {
+    min-width: 0;
+    width: 100%;
+    color: #334155;
+    font-size: 12px;
+    line-height: 1.5;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+}
+
+.df-template-inspector.is-floating {
+    position: absolute;
+    top: 64px;
+    right: 16px;
+    z-index: 40;
+    width: 300px;
+    max-height: calc(100% - 80px);
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px #0f172a0d;
+}
+
+.df-template-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 16px;
+    color: #334155;
+    font-weight: 600;
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+}
+
+.df-template-summary::-webkit-details-marker { display: none; }
+.df-template-summary:hover { background: #f8fafc; }
+.df-template-summary > svg:first-child { color: #4f46e5; }
+.df-template-summary > span:first-of-type { flex: 1; }
+.df-template-summary:focus-visible { outline: 2px solid #818cf8; outline-offset: -3px; }
+
+.df-template-count {
+    min-width: 21px;
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-size: 11px;
+    text-align: center;
+}
+
+.df-template-chevron { color: #94a3b8; transition: transform 140ms ease; }
+.df-template-inspector[open] .df-template-chevron { transform: rotate(180deg); }
+.df-template-content { display: grid; gap: 13px; padding: 0 16px 16px; }
+.df-template-note { margin: 0; color: #64748b; font-size: 11px; line-height: 1.55; }
+.df-template-note code { color: #4f46e5; }
+.df-template-field { display: grid; gap: 5px; min-width: 0; }
+.df-template-field > span { color: #64748b; font-size: 11px; font-weight: 500; }
+
+.df-template-field input,
+.df-template-field textarea,
+.df-template-field select {
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    outline: none;
+    background: #fff;
+    color: #334155;
+    font: inherit;
+    line-height: 1.5;
+}
+
+.df-template-field textarea { resize: vertical; }
+.df-template-field input::placeholder,
+.df-template-field textarea::placeholder { color: #94a3b8; }
+.df-template-field input:focus,
+.df-template-field textarea:focus,
+.df-template-field select:focus { border-color: #818cf8; box-shadow: 0 0 0 3px #eef2ff; }
+.df-template-field input[aria-invalid="true"] { border-color: #f59e0b; }
+.df-template-parameters { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+.df-template-parameters h3 { margin: 0; color: #334155; font-size: 12px; font-weight: 600; }
+.df-template-parameter { display: grid; gap: 9px; padding: 11px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+.df-template-parameter-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.df-template-parameter-heading code { min-width: 0; color: #4f46e5; overflow-wrap: anywhere; font-weight: 600; }
+
+.df-template-remove {
+    display: grid;
+    place-items: center;
+    flex: 0 0 26px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+}
+
+.df-template-remove:hover { color: #dc2626; background: #fef2f2; border-color: #fecaca; }
+.df-template-remove:focus-visible { outline: 2px solid #818cf8; }
+.df-template-add { display: grid; gap: 7px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+
+.df-template-add-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 32px;
+    margin-top: 3px;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.df-template-add-button:hover:not(:disabled) { background: #e0e7ff; }
+.df-template-add-button:focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
+.df-template-add-button:disabled { opacity: 0.45; cursor: default; }
