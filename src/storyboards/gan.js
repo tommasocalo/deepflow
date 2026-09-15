@@ -4,7 +4,7 @@
  *
  * Demonstrates the multi-phase scheduling primitive.
  */
-export function ganStoryboard({ architectureStore, templatesStore, trainingStore }) {
+export function ganStoryboard({ architectureStore, trainingStore }) {
     const arch = architectureStore.getState();
     const train = trainingStore.getState();
 

@@ -29,7 +29,7 @@ const numOrNull = (v) => {
  */
 function parseInputShape(raw) {
     if (!raw || typeof raw !== 'string') return null;
-    const cleaned = raw.replace(/[\(\)\[\]]/g, '').trim();
+    const cleaned = raw.replace(/[()[\]]/g, '').trim();
     if (!cleaned) return null;
     const parts = cleaned
         .split(',')
@@ -179,7 +179,7 @@ function parseSpatial(value, fallback) {
     if (value === null || value === undefined || value === '') return [fallback, fallback];
     if (typeof value === 'number') return [value, value];
     if (typeof value === 'string') {
-        const cleaned = value.replace(/[\(\)\[\]]/g, '').trim();
+        const cleaned = value.replace(/[()[\]]/g, '').trim();
         if (cleaned.includes(',')) {
             const parts = cleaned.split(',').map((p) => Number(p.trim()));
             if (parts.length === 2 && parts.every(Number.isFinite)) return parts;

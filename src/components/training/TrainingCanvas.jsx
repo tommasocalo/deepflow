@@ -58,13 +58,12 @@ const Inner = () => {
     const connect = useTrainingStore((s) => s.connect);
     const setNodeSelected = useTrainingStore((s) => s.setNodeSelected);
     const clearSelection = useTrainingStore((s) => s.clearSelection);
-    const toggleExpanded = useTrainingStore((s) => s.toggleExpanded);
     const clearExpanded = useTrainingStore((s) => s.clearExpanded);
     const addOptimizer = useTrainingStore((s) => s.addOptimizer);
     const addLoss = useTrainingStore((s) => s.addLoss);
     const addPhase = useTrainingStore((s) => s.addPhase);
 
-    const { screenToFlowPosition, setViewport, getViewport, fitView } = useReactFlow();
+    const { screenToFlowPosition, setViewport, fitView } = useReactFlow();
     const wrapperRef = useRef(null);
     const initRef = useRef(false);
     const [interactionMode, setInteractionMode] = useState('select');
@@ -101,13 +100,17 @@ const Inner = () => {
         initRef.current = true;
         const saved = localStorage.getItem(VIEWPORT_KEY);
         if (saved) {
-            try { setViewport(JSON.parse(saved), { duration: 0 }); return; } catch {}
+            try { setViewport(JSON.parse(saved), { duration: 0 }); return; } catch {
+                // A stale saved viewport falls back to fitting the graph below.
+            }
         }
         setTimeout(() => fitView({ padding: 0.2, duration: 0 }), 0);
     }, [setViewport, fitView]);
 
     const handleViewportChange = useCallback((vp) => {
-        try { localStorage.setItem(VIEWPORT_KEY, JSON.stringify(vp)); } catch {}
+        try { localStorage.setItem(VIEWPORT_KEY, JSON.stringify(vp)); } catch {
+            // Viewport persistence is optional when storage is unavailable.
+        }
     }, []);
 
     const onNodesChange = useCallback(

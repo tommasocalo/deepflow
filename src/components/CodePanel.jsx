@@ -34,7 +34,9 @@ const CodePanel = ({ open, onClose }) => {
     const code = sources[tab] ?? '';
 
     const copy = async () => {
-        try { await navigator.clipboard.writeText(code); } catch {}
+        try { await navigator.clipboard.writeText(code); } catch {
+            // Clipboard access may be unavailable; the code can still be downloaded.
+        }
     };
     const download = () => {
         const blob = new Blob([code], { type: 'text/x-python' });

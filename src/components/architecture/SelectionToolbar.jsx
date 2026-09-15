@@ -15,7 +15,6 @@ const SelectionToolbar = () => {
     const groupSelection = useArchitectureStore((s) => s.groupSelection);
     const removeNode = useArchitectureStore((s) => s.removeNode);
     const clearSelection = useArchitectureStore((s) => s.clearSelection);
-    const enterSupernode = useArchitectureStore((s) => s.enterSupernode);
     const [namePrompt, setNamePrompt] = useState(null);
 
     if (selectedNodeIds.length < 2) return null;

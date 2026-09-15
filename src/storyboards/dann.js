@@ -4,7 +4,7 @@
  *
  * Demonstrates the gradient operator on architecture edges.
  */
-export function dannStoryboard({ architectureStore, templatesStore, trainingStore }) {
+export function dannStoryboard({ architectureStore, trainingStore }) {
     const arch = architectureStore.getState();
     const train = trainingStore.getState();
 

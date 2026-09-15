@@ -12,7 +12,6 @@ import * as codegen from './codegen/index.js'
 // drive the same app state instead of creating a parallel module instance
 // via dynamic import. See scripts/*-test.mjs.
 if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-undef
     window.__deepflow = {
         architectureStore: useArchitectureStore,
         templatesStore: useTemplatesStore,

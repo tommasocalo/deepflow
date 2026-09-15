@@ -17,7 +17,9 @@ const LOSSES = [
     { type: 'custom',        label: 'Custom',        desc: 'User-defined loss module' },
 ];
 
-const Row = ({ icon: Icon, accent, label, desc, onDragStart, onClick }) => (
+const Row = ({ icon, accent, label, desc, onDragStart, onClick }) => {
+    const Icon = icon;
+    return (
     <button
         draggable
         onDragStart={onDragStart}
@@ -32,7 +34,8 @@ const Row = ({ icon: Icon, accent, label, desc, onDragStart, onClick }) => (
         <Icon size={11} strokeWidth={2.5} className="opacity-60 shrink-0" />
         <span className="truncate">{label}</span>
     </button>
-);
+    );
+};
 
 const Category = ({ name, items, renderRow }) => {
     const [open, setOpen] = useState(false);

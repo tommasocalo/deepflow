@@ -56,7 +56,6 @@ export function evaluateExpression(expr, scope = {}) {
         }
         // Any identifier remaining means an unbound name → unevaluable.
         if (/[a-zA-Z_$]/.test(substituted)) return null;
-        // eslint-disable-next-line no-new-func
         const fn = new Function(`"use strict"; return (${substituted});`);
         const result = fn();
         return Number.isFinite(result) ? result : null;
