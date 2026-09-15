@@ -4,7 +4,7 @@ import { ArrowRight, Check, RotateCcw, Scissors, Square } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 
 const STYLES = {
-    none: { stroke: '#94a3b8', label: 'Normal', icon: ArrowRight },
+    none: { stroke: '#000', label: 'Normal', icon: ArrowRight },
     detach: { stroke: '#94a3b8', dasharray: '4 4', label: 'Detach', icon: Scissors },
     stop: { stroke: '#dc7373', dasharray: '2 6', label: 'Stop', icon: Square },
     reverse: { stroke: '#8b5cf6', label: 'Reverse', icon: RotateCcw },
@@ -41,7 +41,7 @@ export default function GradientEdge({ id, sourceX, sourceY, targetX, targetY, s
     const style = STYLES[op] ?? STYLES.none;
     const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
     return <>
-        <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={interactionWidth ?? 20} style={{ stroke: selected ? '#6366f1' : style.stroke, strokeWidth: selected ? 2 : 1.5, strokeDasharray: style.dasharray }} />
+        <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={interactionWidth ?? 20} style={{ stroke: style.stroke, strokeWidth: selected ? 3 : 2, strokeDasharray: style.dasharray }} />
         {selected && <EdgeLabelRenderer><GradientPicker key={data?.menuVersion ?? 0} id={id} op={op} lambda={data?.gradientOpLambda ?? 1} x={data?.menuPosition?.x ?? labelX} y={data?.menuPosition?.y ?? labelY} /></EdgeLabelRenderer>}
     </>;
 }

@@ -4,15 +4,22 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import { JSDOM } from 'jsdom';
+import { JSDOM, VirtualConsole } from 'jsdom';
 
 // Exercise real React event handlers and Zustand stores without pretending
 // jsdom can verify canvas geometry, dragging, or visual layout.
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const jsdomErrors = [];
+const virtualConsole = new VirtualConsole();
+virtualConsole.on('jsdomError', (error) => jsdomErrors.push(error));
 const dom = new JSDOM('<!doctype html><html><body></body></html>', {
     url: 'http://localhost/',
     pretendToBeVisual: true,
+    virtualConsole,
 });
+// jsdom has no DOMMatrix API. The graph harness has identity zoom and no
+// measured layout; this supports ReactFlow's refresh without testing geometry.
+dom.window.DOMMatrixReadOnly = class { constructor() { this.m22 = 1; } };
 const installedGlobals = new Map();
 for (const [key, value] of Object.entries({
     window: dom.window,
@@ -74,6 +81,7 @@ let container;
 let root;
 
 beforeEach(() => {
+    jsdomErrors.length = 0;
     localStorage.clear();
     useTemplatesStore.setState({ templates: {} });
     useArchitectureStore.setState({ graph: emptyGraph(), currentPath: [], selectedNodeIds: [], expandedNodeId: null, recentLibraryKeys: [] });
@@ -85,6 +93,7 @@ afterEach(async () => {
     await act(() => root.unmount());
     container.remove();
     localStorage.clear();
+    assert.deepEqual(jsdomErrors, [], 'DOM event handlers must not throw uncaught errors');
 });
 after(() => {
     dom.window.close();
@@ -100,6 +109,10 @@ const click = (element) => {
     return act(() => element.click());
 };
 const byAria = (label) => container.querySelector(`[aria-label="${label}"]`);
+const byFieldLabel = (name) => {
+    const label = [...container.querySelectorAll('label')].find((element) => element.textContent.replace(/\*/g, '').trim() === name);
+    return label ? document.getElementById(label.htmlFor) : null;
+};
 const setText = (input, text) => act(() => {
     assert.ok(input, 'Expected a text input');
     // The native setter reproduces user input without bypassing React's
@@ -188,22 +201,30 @@ test('repeated parameter names have unique stable label associations', async () 
     assert.equal(inputs[1].value, '');
 });
 
-test('clicking a layer does not expand it; its explicit control opens and closes parameters', async () => {
+test('card clicks expand a layer, parameter editing stays open, and explicit controls toggle it', async () => {
     const entry = getEntry('torch.nn.Linear');
     const node = createLayerNode({ id: 'linear', libraryKey: entry.key, entry, position: { x: 10, y: 10 } });
     useArchitectureStore.setState({ graph: { nodes: { [node.id]: node }, edges: [] } });
     await render(h(GraphHarness));
-    await click(container.querySelector('.df-node-title'));
-    assert.equal(useArchitectureStore.getState().expandedNodeId, null);
-    const expand = byAria('Expand Linear');
-    assert.equal(expand.getAttribute('aria-expanded'), 'false');
-    await click(expand);
+    assert.equal(byAria('Expand Linear').getAttribute('aria-expanded'), 'false');
+    await click(container.querySelector('.react-flow__node[data-id="linear"] h3'));
     assert.equal(useArchitectureStore.getState().expandedNodeId, 'linear');
-    assert.ok(container.querySelector('.df-param-input'));
+    const input = byFieldLabel('in_features');
+    await click(input);
+    assert.equal(useArchitectureStore.getState().expandedNodeId, 'linear');
+    await typeText(input, '768');
+    await blur(input);
+    assert.equal(useArchitectureStore.getState().graph.nodes.linear.parameters.in_features, 768);
+    assert.equal(useArchitectureStore.getState().expandedNodeId, 'linear');
     const collapse = byAria('Collapse Linear');
     assert.equal(collapse.getAttribute('aria-expanded'), 'true');
     await click(collapse);
     assert.equal(useArchitectureStore.getState().expandedNodeId, null);
+    await click(container.querySelector('.react-flow__node[data-id="linear"] .react-flow__handle'));
+    assert.equal(useArchitectureStore.getState().expandedNodeId, null, 'A connector click must not resize its node');
+    await click(byAria('Expand Linear'));
+    assert.equal(useArchitectureStore.getState().expandedNodeId, 'linear');
+    assert.equal(byFieldLabel('in_features').value, '768');
 });
 
 test('opening a library category does not add a node; a search result adds exactly the chosen layer', async () => {

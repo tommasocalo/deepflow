@@ -6,8 +6,8 @@ import { useTrainingStore } from '../stores/trainingStore.js';
 
 const TABS = [
     { id: 'architecture', label: 'Architecture', icon: Network },
-    { id: 'training', label: 'Training', icon: SlidersHorizontal },
     { id: 'data', label: 'Data', icon: Database, disabled: true },
+    { id: 'training', label: 'Training', icon: SlidersHorizontal },
 ];
 
 function downloadBlob(name, content, mime = 'application/json') {
@@ -87,19 +87,19 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
             </nav>
 
             <div className="df-toolbar-actions">
-                <div className="df-action-group">
-                    <ActionSegment icon={FileJson} label="Save" onClick={handleSave} title="Download your workspace as JSON" />
-                    <ActionSegment icon={Upload} label="Load" onClick={handleLoad} title="Open a saved workspace" />
-                    <ActionSegment icon={RotateCcw} label="Reset" onClick={handleReset} />
-                </div>
                 <button
                     onClick={onShowCode}
-                    className="df-button df-button-primary df-code-button"
+                    className="df-button df-code-button"
                     title="Generated PyTorch source"
                 >
                     <Code2 size={13} strokeWidth={2.5} />
                     Code
                 </button>
+                <div className="df-action-group">
+                    <ActionSegment icon={FileJson} label="Save" onClick={handleSave} title="Download your workspace as JSON" />
+                    <ActionSegment icon={Upload} label="Load" onClick={handleLoad} title="Open a saved workspace" />
+                    <ActionSegment icon={RotateCcw} label="Reset" onClick={handleReset} />
+                </div>
             </div>
         </div>
     );

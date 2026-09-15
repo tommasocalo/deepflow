@@ -8,7 +8,10 @@ const ParameterField = ({ param, value, onChange, error, label, placeholder }) =
     const numeric = param.type === 'int' || param.type === 'float';
     const expression = numeric && typeof value === 'string' && value !== '' && !NUMBER_LITERAL.test(value);
     const className = `df-param-input nodrag${error ? ' is-invalid' : ''}${expression ? ' is-expression' : ''}`;
+    const baseWidth = param.type === 'int' ? 7 : param.type === 'float' ? 8 : param.type === 'tuple' ? 9 : 12;
+    const widthCh = numeric && typeof display === 'string' ? Math.min(16, Math.max(baseWidth, display.length + 1)) : baseWidth;
     const common = {
+        style: { '--parameter-width': `${widthCh}ch` },
         id,
         'aria-invalid': !!error,
         className,
