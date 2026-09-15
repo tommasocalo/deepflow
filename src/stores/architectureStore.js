@@ -15,6 +15,7 @@ import {
     patchNode,
     removeEdge,
     removeNode,
+    resolveGraphLevel,
 } from '../domain/architecture/index.js';
 import { getEntry } from '../domain/library/index.js';
 import { useTemplatesStore } from './templatesStore.js';
@@ -46,43 +47,14 @@ const initialGraph = () => {
  * whether to set this store's graph or call into the templates store.
  */
 function resolveLevel(state) {
-    const path = state.currentPath;
-    if (path.length === 0) {
-        return {
-            isRoot: true,
-            templateId: null,
-            label: 'main',
-        };
-    }
-    // Walk the path. At each step, the supernode lives in the previous
-    // level's graph and points at a template — the template's graph is the
-    // next level.
-    const tplStore = useTemplatesStore.getState();
-    let parentGraph = state.graph;
-    let tplId = null;
-    let label = 'main';
-    for (const sid of path) {
-        const node = parentGraph.nodes[sid];
-        if (!node || node.kind !== 'supernode') {
-            return { isRoot: true, templateId: null, label: 'main' };
-        }
-        const tpl = tplStore.getTemplate(node.templateId);
-        if (!tpl) return { isRoot: true, templateId: null, label: 'main' };
-        tplId = node.templateId;
-        label = node.label;
-        parentGraph = tpl.graph;
-    }
-    return { isRoot: false, templateId: tplId, label };
+    return resolveGraphLevel(state.graph, state.currentPath, useTemplatesStore.getState().templates);
 }
 
 /**
  * Read the graph at the current view level without mutating anything.
  */
 function getViewGraph(state) {
-    const level = resolveLevel(state);
-    if (level.isRoot) return state.graph;
-    const tpl = useTemplatesStore.getState().getTemplate(level.templateId);
-    return tpl?.graph ?? emptyGraph();
+    return resolveLevel(state).graph;
 }
 
 export const useArchitectureStore = create(
@@ -107,7 +79,7 @@ export const useArchitectureStore = create(
                 selectedNodeIds: [],
                 /** @type {string | null} id of the currently expanded node, or null */
                 expandedNodeId: null,
-                /** @type {string[]} ids of supernode instances entered, root → leaf */
+                /** @type {string[]} ids of supernode or repeat instances entered, root → leaf */
                 currentPath: [],
                 /** @type {string[]} library keys of recently-added blocks (most recent first) */
                 recentLibraryKeys: [],
@@ -214,7 +186,13 @@ export const useArchitectureStore = create(
                         };
                     }),
 
-                removeNode: (id) => updateCurrentGraph((g) => removeNode(g, id)),
+                removeNode: (id) => {
+                    updateCurrentGraph((g) => removeNode(g, id));
+                    set((state) => ({
+                        selectedNodeIds: state.selectedNodeIds.filter((nodeId) => nodeId !== id),
+                        expandedNodeId: state.expandedNodeId === id ? null : state.expandedNodeId,
+                    }));
+                },
 
                 patchNode: (id, patch) => updateCurrentGraph((g) => patchNode(g, id, patch)),
 
@@ -264,9 +242,10 @@ export const useArchitectureStore = create(
                 resetCurrentGraph: () => {
                     const level = resolveLevel(get());
                     if (level.isRoot) {
-                        set({ graph: initialGraph(), selectedNodeIds: [], currentPath: [] });
+                        set({ graph: initialGraph(), selectedNodeIds: [], expandedNodeId: null, currentPath: [] });
                     } else {
                         useTemplatesStore.getState().patchTemplate(level.templateId, { graph: emptyGraph() });
+                        set({ selectedNodeIds: [], expandedNodeId: null });
                     }
                 },
 
@@ -275,21 +254,23 @@ export const useArchitectureStore = create(
                 enterSupernode: (supernodeId) => {
                     const view = getViewGraph(get());
                     const node = view.nodes[supernodeId];
-                    if (!node || node.kind !== 'supernode') return;
+                    if (!node || !['supernode', 'repeat'].includes(node.kind)) return;
+                    if (!useTemplatesStore.getState().getTemplate(node.templateId)?.graph) return;
                     set({
                         currentPath: [...get().currentPath, supernodeId],
                         selectedNodeIds: [],
+                        expandedNodeId: null,
                     });
                 },
 
                 exitSupernode: () => {
                     const path = get().currentPath;
                     if (path.length === 0) return;
-                    set({ currentPath: path.slice(0, -1), selectedNodeIds: [] });
+                    set({ currentPath: path.slice(0, -1), selectedNodeIds: [], expandedNodeId: null });
                 },
 
                 goToLevel: (depth) =>
-                    set({ currentPath: get().currentPath.slice(0, depth), selectedNodeIds: [] }),
+                    set({ currentPath: get().currentPath.slice(0, Math.max(0, depth)), selectedNodeIds: [], expandedNodeId: null }),
 
                 // ---- grouping ----
 

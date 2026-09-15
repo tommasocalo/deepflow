@@ -16,16 +16,36 @@ export function addNode(graph, node) {
  * @param {string} id
  */
 export function removeNode(graph, id) {
-    const { [id]: _removed, ...rest } = graph.nodes;
+    const { [id]: _removed, ...nodes } = graph.nodes;
     const edges = graph.edges.filter((e) => e.source !== id && e.target !== id);
-    let nodes = rest;
-    for (const key of Object.keys(rest)) {
-        const n = rest[key];
-        if (n.kind === 'supernode' && n.children.includes(id)) {
-            nodes = { ...nodes, [key]: { ...n, children: n.children.filter((c) => c !== id) } };
-        }
+    // Instances reference a separate template graph; they do not own children
+    // in this graph. Removing a node must leave those definitions untouched.
+    return { ...graph, nodes, edges };
+}
+
+/**
+ * Resolve the shared template being edited, through both instances and repeats.
+ * Every editor surface uses the same traversal so edits and feedback refer to
+ * the graph displayed on the canvas. An invalid saved path falls back to root.
+ */
+export function resolveGraphLevel(graph, currentPath = [], templates = {}) {
+    const root = { graph, isRoot: true, templateId: null, label: 'main', segments: [] };
+    let level = root;
+    for (const id of currentPath) {
+        const node = level.graph?.nodes?.[id];
+        if (!node || !['supernode', 'repeat'].includes(node.kind)) return root;
+        const template = templates[node.templateId];
+        if (!template?.graph) return root;
+        const label = node.label || template.name || (node.kind === 'repeat' ? 'Repeat' : 'Supernode');
+        level = {
+            graph: template.graph,
+            isRoot: false,
+            templateId: node.templateId,
+            label,
+            segments: [...level.segments, { id, label, kind: node.kind, depth: level.segments.length + 1 }],
+        };
     }
-    return { nodes, edges };
+    return level;
 }
 
 /**

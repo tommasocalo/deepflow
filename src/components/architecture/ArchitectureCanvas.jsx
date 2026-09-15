@@ -5,11 +5,13 @@ import {
     Controls,
     ControlButton,
     ReactFlowProvider,
+    useNodesInitialized,
     useReactFlow,
 } from '@xyflow/react';
 import { Hand, MousePointer2 } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
+import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import LayerNodeView from './LayerNodeView.jsx';
 import SuperNodeInstanceView from './SuperNodeInstanceView.jsx';
 import RepeatNodeView from './RepeatNodeView.jsx';
@@ -67,7 +69,7 @@ function toFlowEdges(graph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions
     }));
 }
 
-const Inner = () => {
+const Inner = ({ children, overlay }) => {
     const rootGraph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const selectedNodeIds = useArchitectureStore((s) => s.selectedNodeIds);
@@ -78,12 +80,14 @@ const Inner = () => {
     const connect = useArchitectureStore((s) => s.connect);
     const setNodeSelected = useArchitectureStore((s) => s.setNodeSelected);
     const clearSelection = useArchitectureStore((s) => s.clearSelection);
-    const toggleExpanded = useArchitectureStore((s) => s.toggleExpanded);
+    const selectOnly = useArchitectureStore((s) => s.selectOnly);
+    const setExpanded = useArchitectureStore((s) => s.setExpanded);
     const clearExpanded = useArchitectureStore((s) => s.clearExpanded);
     const addLayerByLibraryKey = useArchitectureStore((s) => s.addLayerByLibraryKey);
     const addSuperNodeInstance = useArchitectureStore((s) => s.addSuperNodeInstance);
 
-    const { screenToFlowPosition, setViewport, getViewport, fitView } = useReactFlow();
+    const { screenToFlowPosition, setViewport, fitView } = useReactFlow();
+    const nodesInitialized = useNodesInitialized();
     const wrapperRef = useRef(null);
     const lastViewportKeyRef = useRef(null);
     const [interactionMode, setInteractionMode] = useState('select');  // 'select' | 'pan'
@@ -94,19 +98,10 @@ const Inner = () => {
 
     // Resolve the visible graph from the path. Templates is included in deps
     // so edits inside a drilled-in template re-render the canvas.
-    const viewGraph = useMemo(() => {
-        if (!currentPath || currentPath.length === 0) return rootGraph;
-        let parentGraph = rootGraph;
-        let tpl = null;
-        for (const sid of currentPath) {
-            const node = parentGraph.nodes[sid];
-            if (!node || node.kind !== 'supernode') return rootGraph;
-            tpl = templates[node.templateId];
-            if (!tpl) return rootGraph;
-            parentGraph = tpl.graph;
-        }
-        return parentGraph;
-    }, [rootGraph, currentPath, templates]);
+    const viewGraph = useMemo(
+        () => resolveGraphLevel(rootGraph, currentPath, templates).graph,
+        [rootGraph, currentPath, templates],
+    );
 
     const selectedSet = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
     const selectedEdgeSet = useMemo(() => new Set(selectedEdgeIds), [selectedEdgeIds]);
@@ -116,6 +111,7 @@ const Inner = () => {
         [viewGraph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions],
     );
     const showPanCursor = interactionMode === 'pan' || spacePressed;
+    const graphIsEmpty = nodes.length === 0;
 
     useEffect(() => {
         const isEditable = (target) =>
@@ -126,42 +122,48 @@ const Inner = () => {
         const onKeyUp = (event) => {
             if (event.code === 'Space') setSpacePressed(false);
         };
+        const onBlur = () => setSpacePressed(false);
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('keyup', onKeyUp);
-        window.addEventListener('blur', onKeyUp);
+        window.addEventListener('blur', onBlur);
         return () => {
             window.removeEventListener('keydown', onKeyDown);
             window.removeEventListener('keyup', onKeyUp);
-            window.removeEventListener('blur', onKeyUp);
+            window.removeEventListener('blur', onBlur);
         };
     }, []);
 
     // Save and restore viewport per level so drilling in/out preserves zoom.
     useEffect(() => {
+        if (!nodesInitialized && !graphIsEmpty) return;
         const key = viewportKey(currentPath);
-        if (lastViewportKeyRef.current && lastViewportKeyRef.current !== key) {
-            try {
-                localStorage.setItem(lastViewportKeyRef.current, JSON.stringify(getViewport()));
-            } catch {}
-        }
+        if (lastViewportKeyRef.current === key) return;
         lastViewportKeyRef.current = key;
 
-        const saved = localStorage.getItem(key);
-        if (saved) {
-            try {
-                setViewport(JSON.parse(saved), { duration: 0 });
+        try {
+            const saved = JSON.parse(localStorage.getItem(key));
+            if (saved && [saved.x, saved.y, saved.zoom].every(Number.isFinite) && saved.zoom > 0) {
+                setViewport({ ...saved, zoom: Math.max(0.2, Math.min(2, saved.zoom)) }, { duration: 0 });
                 return;
-            } catch {}
+            }
+        } catch {
+            // A stale viewport or disabled storage should not prevent editing.
         }
-        setTimeout(() => fitView({ padding: 0.2, duration: 0 }), 0);
-    }, [currentPath, setViewport, getViewport, fitView]);
+        if (graphIsEmpty) {
+            setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 0 });
+        } else {
+            fitView({ padding: 0.2, minZoom: 0.2, maxZoom: 1, duration: 0 });
+        }
+    }, [currentPath, nodesInitialized, graphIsEmpty, setViewport, fitView]);
 
     const handleViewportChange = useCallback(
         (vp) => {
             const key = viewportKey(currentPath);
             try {
                 localStorage.setItem(key, JSON.stringify(vp));
-            } catch {}
+            } catch {
+                // Viewport persistence is optional when storage is unavailable.
+            }
         },
         [currentPath],
     );
@@ -225,78 +227,89 @@ const Inner = () => {
             const templateId = e.dataTransfer.getData('application/deepflow-template-id');
             if (!libraryKey && !templateId) return;
             const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-            if (templateId) {
-                addSuperNodeInstance(templateId, position);
-            } else if (libraryKey) {
-                addLayerByLibraryKey(libraryKey, position);
+            const id = templateId
+                ? addSuperNodeInstance(templateId, position, templates[templateId]?.name)
+                : addLayerByLibraryKey(libraryKey, position);
+            if (id) {
+                selectOnly(id);
+                setExpanded(id);
             }
         },
-        [screenToFlowPosition, addLayerByLibraryKey, addSuperNodeInstance],
+        [screenToFlowPosition, addLayerByLibraryKey, addSuperNodeInstance, templates, selectOnly, setExpanded],
     );
 
     return (
-        <div
-            ref={wrapperRef}
-            className={showPanCursor ? 'deepflow-mode-pan' : 'deepflow-mode-select'}
-            style={{ width: '100%', height: '100%', backgroundColor: '#ffffff', position: 'relative' }}
-        >
-            <GraphStatusPanel />
-            <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onEdgeClick={onEdgeClick}
-                onConnect={onConnect}
-                onDragOver={onDragOver}
-                onDrop={onDrop}
-                onViewportChange={handleViewportChange}
-                onPaneClick={() => {
-                    clearSelection();
-                    clearExpanded();
-                    setSelectedEdgeIds([]);
-                    setEdgeMenuPositions({});
-                    setEdgeMenuVersions({});
-                }}
-                selectionOnDrag={interactionMode === 'select'}
-                panOnDrag={interactionMode === 'pan'}
-                panActivationKeyCode="Space"
-                multiSelectionKeyCode={['Meta', 'Shift']}
-                deleteKeyCode={['Delete', 'Backspace']}
-                edgesFocusable
-                edgesReconnectable={false}
-                fitViewOptions={{ padding: 0.2 }}
-                proOptions={{ hideAttribution: true }}
-                style={{ width: '100%', height: '100%' }}
+        <div className="df-architecture-workspace" style={{ display: 'flex', width: '100%', height: '100%', minWidth: 0 }}>
+            {children}
+            <div
+                ref={wrapperRef}
+                data-architecture-canvas
+                className={showPanCursor ? 'deepflow-mode-pan' : 'deepflow-mode-select'}
+                style={{ flex: 1, minWidth: 0, height: '100%', backgroundColor: '#f8fafc', position: 'relative' }}
             >
-                <Background color="#cbd5e1" gap={24} size={1.25} variant="dots" />
-                <Controls className="df-flow-controls text-black!">
-                    <ControlButton
-                        onClick={() => setInteractionMode('select')}
-                        title="Select nodes"
-                        className={interactionMode === 'select' ? 'bg-black! text-white!' : 'bg-white! text-black!'}
-                    >
-                        <MousePointer2 size={12} strokeWidth={2.5} />
-                    </ControlButton>
-                    <ControlButton
-                        onClick={() => setInteractionMode('pan')}
-                        title="Pan canvas"
-                        className={interactionMode === 'pan' ? 'bg-black! text-white!' : 'bg-white! text-black!'}
-                    >
-                        <Hand size={12} strokeWidth={2.5} />
-                    </ControlButton>
-                </Controls>
-            </ReactFlow>
-            {spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
+                <GraphStatusPanel />
+                <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    nodeTypes={nodeTypes}
+                    edgeTypes={edgeTypes}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onEdgeClick={onEdgeClick}
+                    onConnect={onConnect}
+                    onDragOver={onDragOver}
+                    onDrop={onDrop}
+                    onViewportChange={handleViewportChange}
+                    onPaneClick={() => {
+                        clearSelection();
+                        clearExpanded();
+                        setSelectedEdgeIds([]);
+                        setEdgeMenuPositions({});
+                        setEdgeMenuVersions({});
+                    }}
+                    selectionOnDrag={interactionMode === 'select'}
+                    panOnDrag={interactionMode === 'pan'}
+                    panActivationKeyCode="Space"
+                    multiSelectionKeyCode={['Meta', 'Shift']}
+                    deleteKeyCode={['Delete', 'Backspace']}
+                    edgesFocusable
+                    edgesReconnectable={false}
+                    minZoom={0.2}
+                    maxZoom={2}
+                    fitViewOptions={{ padding: 0.2, minZoom: 0.2, maxZoom: 1 }}
+                    proOptions={{ hideAttribution: true }}
+                    style={{ width: '100%', height: '100%' }}
+                >
+                    <Background color="#cbd5e1" gap={24} size={1} variant="dots" />
+                    <Controls className="df-flow-controls text-black!" fitViewOptions={{ padding: 0.2, minZoom: 0.2, maxZoom: 1 }}>
+                        <ControlButton
+                            onClick={() => setInteractionMode('select')}
+                            title="Select nodes"
+                            aria-label="Select nodes"
+                            className={interactionMode === 'select' ? 'bg-black! text-white!' : 'bg-white! text-black!'}
+                        >
+                            <MousePointer2 size={12} strokeWidth={2.5} />
+                        </ControlButton>
+                        <ControlButton
+                            onClick={() => setInteractionMode('pan')}
+                            title="Pan canvas"
+                            aria-label="Pan canvas"
+                            className={interactionMode === 'pan' ? 'bg-black! text-white!' : 'bg-white! text-black!'}
+                        >
+                            <Hand size={12} strokeWidth={2.5} />
+                        </ControlButton>
+                    </Controls>
+                </ReactFlow>
+                {overlay}
+                {spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
+            </div>
         </div>
     );
 };
 
-const ArchitectureCanvas = () => (
+const ArchitectureCanvas = ({ children, overlay }) => (
     <ReactFlowProvider>
-        <Inner />
+        <Inner overlay={overlay}>{children}</Inner>
     </ReactFlowProvider>
 );
 

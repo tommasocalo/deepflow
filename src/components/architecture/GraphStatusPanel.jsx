@@ -10,6 +10,7 @@ import { useReactFlow } from '@xyflow/react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
+import { resolveGraphLevel } from '../../domain/architecture/index.js';
 
 /**
  * Top-left chip showing the validation status. Click to expand the issue
@@ -33,18 +34,7 @@ const GraphStatusPanel = () => {
     const { setCenter, getZoom } = useReactFlow();
 
     // Resolve view graph for node lookup
-    const viewGraph = (() => {
-        if (!currentPath?.length) return archGraph;
-        let g = archGraph;
-        for (const sid of currentPath) {
-            const node = g?.nodes?.[sid];
-            if (!node || node.kind !== 'supernode') return archGraph;
-            const tpl = templates?.[node.templateId];
-            if (!tpl) return archGraph;
-            g = tpl.graph;
-        }
-        return g;
-    })();
+    const viewGraph = resolveGraphLevel(archGraph, currentPath, templates).graph;
 
     useEffect(() => {
         if (!open) return;
