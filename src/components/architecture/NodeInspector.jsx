@@ -28,9 +28,24 @@ const FIELD_LABELS = {
     split_size_or_sections: 'Sections', padding_idx: 'Padding index',
 };
 
+// A few width bands keep numeric settings small without resizing for every keystroke.
+function inspectorWidth(node) {
+    if (node.kind !== 'layer') return 200;
+    const entry = getEntry(node.libraryKey);
+    const primary = (entry?.parameters ?? []).filter((p) => p.required || SHAPE_PRIORITY.includes(p.name));
+    const longest = Math.max(0, ...primary.map((p) => {
+        const value = node.parameters[p.name];
+        return String(Array.isArray(value) ? value.join(', ') : value ?? '').length;
+    }));
+    const contentWidth = longest <= 7 ? 168 : longest <= 11 ? 200 : 224;
+    const variantWidth = node.libraryKey === 'deepflow.nn.PositionalEmbedding' ? 200
+        : getNodeFamily(node.libraryKey)?.key === 'attention' ? 200 : 168;
+    return Math.max(contentWidth, variantWidth);
+}
+
 function InspectorField({ param, value, label, ...props }) {
     const text = Array.isArray(value) ? value.join(', ') : String(value ?? '');
-    const wide = param.name === 'shape' || (text.length > 18 && param.type !== 'enum' && param.type !== 'bool');
+    const wide = param.name === 'shape' || (text.length > 13 && param.type !== 'enum' && param.type !== 'bool');
     return (
         <div className={`df-inspector-field${wide ? ' is-wide' : ''}`} data-parameter={param.name}>
             <ParameterField
@@ -84,6 +99,8 @@ function LayerBody({ id, node, errors }) {
     const moduleOptions = family?.variants ?? (entry && entry.category !== 'IO'
         ? PYTORCH_BLOCKS.filter((c) => c.category === entry.category && !TEMPLATE_ONLY.has(c.key))
         : []);
+    const selectedModule = moduleOptions.find((option) => option.key === node.libraryKey);
+    const moduleWidth = Math.min(145, Math.max(64, (selectedModule?.name.length ?? 8) * 5.7 + 33));
     const switchModule = (libraryKey) => {
         const patch = createVariantPatch(node, libraryKey);
         if (patch) patchNode(id, patch);
@@ -92,9 +109,9 @@ function LayerBody({ id, node, errors }) {
     return (
         <>
             {moduleOptions.length > 1 && (
-                <label className="df-inspector-module">
-                    <span>{family ? 'Variant' : 'Module'}</span>
-                    <select aria-label={family ? "Operation type" : "Module"} value={node.libraryKey} onChange={(e) => switchModule(e.target.value)} className="df-input">
+                <label className="df-inspector-module" style={{ '--df-module-width': `${moduleWidth}px` }}>
+                    <span>Type</span>
+                    <select aria-label={family ? "Operation type" : "Module"} title={selectedModule?.name} value={node.libraryKey} onChange={(e) => switchModule(e.target.value)} className="df-input">
                         {moduleOptions.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
                     </select>
                 </label>
@@ -218,7 +235,7 @@ export default function NodeInspector() {
     const rename = (label) => (node.kind === 'repeat' ? patchRepeatNode(id, { label }) : patchNode(id, { label }));
 
     return (
-        <aside ref={panelRef} className="df-inspector df-panel-subtle nodrag nopan nowheel" aria-label={`${node.label} inspector`} onKeyDown={(e) => e.stopPropagation()}>
+        <aside ref={panelRef} className="df-inspector df-panel-subtle nodrag nopan nowheel" aria-label={`${node.label} inspector`} style={{ '--df-inspector-width': `${inspectorWidth(node)}px` }} onKeyDown={(e) => e.stopPropagation()}>
             <header className="df-inspector-header">
                 {node.kind === 'layer'
                     ? <OperationIcon libraryKey={node.libraryKey} size={24} />
