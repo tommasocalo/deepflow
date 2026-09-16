@@ -21,16 +21,16 @@ function containsTemplate(templateId, targetId, templates, visited = new Set()) 
     return Object.values(templates[templateId]?.graph?.nodes ?? {}).some((node) => node.templateId && containsTemplate(node.templateId, targetId, templates, visited));
 }
 
-function LibraryTile({ entry, onAdd, template = false, disabled = false }) {
+function LibraryTile({ entry, onAdd, template = false }) {
     return (
-        <button type="button" className="df-library-tile" data-library-key={entry.key} disabled={disabled} draggable={!disabled}
+        <button type="button" className="df-library-tile" data-library-key={entry.key} draggable
             onDragStart={(event) => {
                 event.dataTransfer.setData(template ? 'application/deepflow-template-id' : 'application/deepflow-lib-key', entry.key);
                 event.dataTransfer.effectAllowed = 'copy';
             }}
-            onClick={() => onAdd(entry, template)} title={disabled ? 'This template would contain itself.' : entry.description}
+            onClick={() => onAdd(entry, template)} title={entry.description}
             aria-label={`Add ${entry.name}${template ? ' template' : ''}`}>
-            {template ? <Boxes size={32} aria-hidden="true" /> : <OperationIcon libraryKey={entry.key} size={32} className="df-library-icon" />}
+            {template ? <Boxes size={28} aria-hidden="true" /> : <OperationIcon libraryKey={entry.key} size={28} className="df-library-icon" />}
             <span className="df-library-name">{entry.name}</span>
         </button>
     );
@@ -50,7 +50,7 @@ export default function BlockPalette() {
     const addLayer = useArchitectureStore((s) => s.addLayerByLibraryKey);
     const addTemplate = useArchitectureStore((s) => s.addSuperNodeInstance);
     const selectOnly = useArchitectureStore((s) => s.selectOnly);
-    const setExpanded = useArchitectureStore((s) => s.setExpanded);
+    const clearExpanded = useArchitectureStore((s) => s.clearExpanded);
     const editingTemplateId = resolveGraphLevel(rootGraph, currentPath, templates).templateId;
     const matchingEntries = useMemo(() => PALETTE_ENTRIES.filter((entry) => matches(entry, query)), [query]);
     const layers = matchingEntries.filter((entry) => !['IO', 'Operations'].includes(entry.category))
@@ -59,8 +59,8 @@ export default function BlockPalette() {
     const operations = matchingEntries.filter((entry) => ['IO', 'Operations'].includes(entry.category));
     const groups = [{ name: 'Layers', items: layers }, { name: 'Inputs & operations', items: operations }];
     const entries = [...layers, ...operations];
-    const templateEntries = Object.values(templates).map((template) => ({ key: template.id, name: template.name, category: 'Template', description: template.description || 'Reusable graph template' })).filter((entry) => matches(entry, query));
     const templateDisabled = (entry) => !!editingTemplateId && containsTemplate(entry.key, editingTemplateId, templates);
+    const templateEntries = Object.values(templates).map((template) => ({ key: template.id, name: template.name, category: 'Template', description: template.description || 'Reusable graph template' })).filter((entry) => !templateDisabled(entry) && matches(entry, query));
 
     useEffect(() => {
         const focusSearch = (event) => {
@@ -101,7 +101,7 @@ export default function BlockPalette() {
         const id = isTemplate ? addTemplate(entry.key, position, entry.name) : addLayer(entry.key, position);
         if (!id) return;
         selectOnly(id);
-        setExpanded(id);
+        clearExpanded();
         setNotice(`${entry.name} added`);
         clearTimeout(noticeTimer.current);
         noticeTimer.current = setTimeout(() => setNotice(''), 2200);
@@ -111,7 +111,7 @@ export default function BlockPalette() {
         if (event.key === 'Escape') { if (query) setQuery(''); else searchRef.current?.blur(); }
         if (event.key === 'ArrowDown') { event.preventDefault(); panelRef.current?.querySelector('.df-library-tile:not(:disabled)')?.focus(); }
         if (event.key === 'Enter' && query.trim()) {
-            const first = entries[0] ?? templateEntries.find((entry) => !templateDisabled(entry));
+            const first = entries[0] ?? templateEntries[0];
             if (first) addEntry(first, !entries.length);
         }
     }
@@ -129,7 +129,7 @@ export default function BlockPalette() {
                         <div className="df-library-grid">{items.map((entry) => <LibraryTile key={entry.key} entry={entry} onAdd={addEntry} />)}</div>
                     </section>
                 ))}
-                {templateEntries.length > 0 && <section className="df-library-group" aria-label="Templates"><h3 className="df-library-section-label">Templates</h3><div className="df-library-grid">{templateEntries.map((entry) => <LibraryTile key={entry.key} entry={entry} onAdd={addEntry} template disabled={templateDisabled(entry)} />)}</div></section>}
+                {templateEntries.length > 0 && <section className="df-library-group" aria-label="Templates"><h3 className="df-library-section-label">Templates</h3><div className="df-library-grid">{templateEntries.map((entry) => <LibraryTile key={entry.key} entry={entry} onAdd={addEntry} template />)}</div></section>}
                 {!entries.length && !templateEntries.length && <p className="df-library-empty">No matching blocks.</p>}
             </div>
             <footer className="df-library-footer" role="status" aria-live="polite">{notice ? <><Check size={11} />{notice}</> : 'Click to add · drag to place'}</footer>

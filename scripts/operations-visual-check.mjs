@@ -57,6 +57,7 @@ try {
     await variantPage.getByRole('textbox', { name: 'Search blocks', exact: true }).fill('embedding');
     assert.equal(await variantPage.locator('.df-library-tile').count(), 1, 'Variant search resolves to its family');
     await variantPage.getByRole('button', { name: 'Add Linear', exact: true }).click();
+    await variantPage.getByRole('button', { name: 'Inspect Linear', exact: true }).click();
     const variant = variantPage.getByRole('combobox', { name: 'Operation type', exact: true });
     await variant.selectOption('torch.nn.Embedding');
     assert.equal(await variant.inputValue(), 'torch.nn.Embedding');
@@ -66,6 +67,11 @@ try {
     assert.ok(await variantPage.getByLabel('max_len').count(), 'Positional embedding exposes its own parameters');
     await variantPage.getByRole('textbox', { name: 'Search blocks', exact: true }).fill('causal');
     await variantPage.getByRole('button', { name: 'Add Attention', exact: true }).click();
+    const addedAttention = await variantPage.evaluate(() => {
+        const state = window.__deepflow.architectureStore.getState();
+        return state.graph.nodes[state.selectedNodeIds[0]];
+    });
+    await variantPage.getByRole('button', { name: `Inspect ${addedAttention.label}`, exact: true }).click();
     await variant.selectOption('torch.nn.MultiheadAttention');
     assert.equal(await variant.inputValue(), 'torch.nn.MultiheadAttention');
     assert.deepEqual(errors, []);

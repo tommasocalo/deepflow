@@ -2,18 +2,21 @@ import { useId } from 'react';
 
 const NUMBER_LITERAL = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
-const ParameterField = ({ param, value, onChange, error, label, ariaLabel, placeholder }) => {
+const ParameterField = ({ param, value, onChange, error, errors = [], label, ariaLabel, placeholder }) => {
     const id = useId();
+    const hasError = !!error || errors.length > 0;
+    const errorId = `${id}-errors`;
     const display = value === null || value === undefined ? '' : value;
     const numeric = param.type === 'int' || param.type === 'float';
     const expression = numeric && typeof value === 'string' && value !== '' && !NUMBER_LITERAL.test(value);
-    const className = `df-param-input nodrag${error ? ' is-invalid' : ''}${expression ? ' is-expression' : ''}`;
+    const className = `df-param-input nodrag${hasError ? ' is-invalid' : ''}${expression ? ' is-expression' : ''}`;
     const baseWidth = param.type === 'int' ? 7 : param.type === 'float' ? 8 : param.type === 'tuple' ? 9 : 12;
     const widthCh = numeric && typeof display === 'string' ? Math.min(16, Math.max(baseWidth, display.length + 1)) : baseWidth;
     const common = {
         style: { '--parameter-width': `${widthCh}ch` },
         id,
-        'aria-invalid': !!error,
+        'aria-invalid': hasError,
+        'aria-describedby': errors.length ? errorId : undefined,
         'aria-label': ariaLabel,
         className,
         onClick: (event) => event.stopPropagation(),
@@ -22,7 +25,7 @@ const ParameterField = ({ param, value, onChange, error, label, ariaLabel, place
     };
 
     return (
-        <div className={`df-param-row${error ? ' has-error' : ''}`}>
+        <div className={`df-param-row${hasError ? ' has-error' : ''}`}>
             <label htmlFor={id} title={param.description} className="df-param-label">
                 {label ?? param.name}
                 {param.required && <span className="df-param-required" title="Required">*</span>}
@@ -66,6 +69,7 @@ const ParameterField = ({ param, value, onChange, error, label, ariaLabel, place
                     }}
                 />
             )}
+            {errors.length > 0 && <div id={errorId} className="df-param-errors">{errors.map((message, index) => <span key={index}>{message}</span>)}</div>}
         </div>
     );
 };

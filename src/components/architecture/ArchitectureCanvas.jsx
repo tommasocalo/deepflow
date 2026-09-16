@@ -95,7 +95,6 @@ const Inner = ({ children, overlay }) => {
     const setNodeSelected = useArchitectureStore((s) => s.setNodeSelected);
     const clearSelection = useArchitectureStore((s) => s.clearSelection);
     const selectOnly = useArchitectureStore((s) => s.selectOnly);
-    const setExpanded = useArchitectureStore((s) => s.setExpanded);
     const clearExpanded = useArchitectureStore((s) => s.clearExpanded);
     const addLayerByLibraryKey = useArchitectureStore((s) => s.addLayerByLibraryKey);
     const addSuperNodeInstance = useArchitectureStore((s) => s.addSuperNodeInstance);
@@ -321,10 +320,10 @@ const Inner = ({ children, overlay }) => {
                 : addLayerByLibraryKey(libraryKey, position);
             if (id) {
                 selectOnly(id);
-                setExpanded(id);
+                clearExpanded();
             }
         },
-        [screenToFlowPosition, addLayerByLibraryKey, addSuperNodeInstance, templates, selectOnly, setExpanded],
+        [screenToFlowPosition, addLayerByLibraryKey, addSuperNodeInstance, templates, selectOnly, clearExpanded],
     );
 
     return (

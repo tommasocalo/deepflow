@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const directory = 'screenshots/palette-grid';
+const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/palette-grid';
 await mkdir(directory, { recursive: true });
 const browser = await chromium.launch();
 try {
@@ -19,8 +19,13 @@ try {
     const nodeCount = () => page.evaluate(() => Object.keys(window.__deepflow.architectureStore.getState().graph.nodes).length);
     const selected = () => page.evaluate(() => {
         const state = window.__deepflow.architectureStore.getState();
-        return state.graph.nodes[state.expandedNodeId];
+        return state.graph.nodes[state.selectedNodeIds[0]];
     });
+    const openSelected = async () => {
+        assert.equal(await page.locator('.df-inspector').count(), 0, 'Adding only places the node');
+        const node = await selected();
+        await page.locator(`.react-flow__node[data-id="${node.id}"]`).getByRole('button', { name: `Inspect ${node.label}`, exact: true }).click();
+    };
     await add('Normalization').waitFor();
     await settle();
     for (const family of ['Linear', 'Attention', 'Normalization', 'Activation', 'Convolution', 'Pooling', 'Recurrent']) {
@@ -49,6 +54,7 @@ try {
     const before = await nodeCount();
     await page.keyboard.press('Enter');
     assert.equal(await nodeCount(), before + 1);
+    await openSelected();
     const variant = page.getByRole('combobox', { name: 'Operation type', exact: true });
     const name = page.getByRole('textbox', { name: 'Block name', exact: true });
     await name.fill('Feature norm');
@@ -71,6 +77,7 @@ try {
         ['Recurrent', 'torch.nn.GRU'],
     ]) {
         await add(family).click();
+        await openSelected();
         await variant.selectOption(key);
         assert.equal((await selected()).libraryKey, key);
         // Selected variant names must fit alongside the native select arrow.
@@ -89,6 +96,7 @@ try {
 
     // The full encoder block remains distinct from the attention family.
     await add('Transformer').click();
+    await openSelected();
     assert.equal((await selected()).libraryKey, 'torch.nn.TransformerEncoderLayer');
     assert.equal(await variant.count(), 0);
     await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
@@ -97,15 +105,17 @@ try {
     const beforeDrag = await nodeCount();
     await add('Convolution').dragTo(page.locator('.react-flow__pane'), { targetPosition: { x: 250, y: 200 } });
     assert.equal(await nodeCount(), beforeDrag + 1);
+    assert.equal(await page.locator('.df-inspector').count(), 0, 'Dropping only places the node');
     assert.ok(await page.evaluate(() => Object.values(window.__deepflow.architectureStore.getState().graph.nodes).some((node) => node.libraryKey === 'torch.nn.Conv2d')));
 
-    // Templates are immediately available, including the recursive-template guard.
+    // Only usable templates are shown at each level.
     const template = page.getByRole('button', { name: 'Add Transformer block template', exact: true });
     await template.click();
     assert.equal((await selected()).kind, 'supernode');
-    await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
+    assert.equal(await page.locator('.df-inspector').count(), 0);
     await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).click();
-    assert.ok(await template.isDisabled(), 'A template cannot contain itself');
+    assert.equal(await template.count(), 0, 'A template cannot contain itself, so its palette entry is hidden');
+    assert.equal(await page.locator('.df-library section[aria-label="Templates"]').count(), 0);
     await page.getByRole('tab', { name: 'main', exact: true }).click();
     assert.ok(await template.isEnabled());
     assert.deepEqual(errors, []);

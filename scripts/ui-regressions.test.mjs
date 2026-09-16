@@ -240,7 +240,7 @@ test('compact nodes open the inspector and editing keeps node geometry unchanged
     assert.equal(byFieldLabel('in_features').value, '768');
 });
 
-test('family tiles are immediately available and variant search adds the family default once', async () => {
+test('family tiles add the family default once without opening settings', async () => {
     await render(h(PaletteHarness));
     assert.equal(container.querySelector('.df-library-category'), null, 'Families are available without opening an accordion');
     for (const name of ['Linear', 'Attention', 'Normalization', 'Activation', 'Convolution', 'Pooling', 'Recurrent']) {
@@ -258,7 +258,7 @@ test('family tiles are immediately available and variant search adds the family 
     assert.equal(nodes.length, 1);
     assert.equal(nodes[0].libraryKey, 'torch.nn.LayerNorm');
     assert.deepEqual(useArchitectureStore.getState().selectedNodeIds, [nodes[0].id]);
-    assert.equal(useArchitectureStore.getState().expandedNodeId, nodes[0].id);
+    assert.equal(useArchitectureStore.getState().expandedNodeId, null);
     assert.ok(Number.isFinite(nodes[0].position.x) && Number.isFinite(nodes[0].position.y));
 });
 
@@ -274,6 +274,12 @@ test('template tiles are immediately available and remain discoverable through g
     assert.equal(graphNodes().length, 1);
     assert.equal(graphNodes()[0].kind, 'supernode');
     assert.equal(graphNodes()[0].templateId, template.id);
+    assert.equal(useArchitectureStore.getState().expandedNodeId, null);
+    await act(() => useArchitectureStore.getState().enterSupernode(graphNodes()[0].id));
+    assert.equal(byAria('Add Decoder block template'), null, 'An unavailable recursive template is hidden');
+    assert.equal(container.querySelector('section[aria-label="Templates"]'), null, 'Empty template section is hidden too');
+    await act(() => byAria('Search blocks').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    assert.equal(Object.keys(useTemplatesStore.getState().templates[template.id].graph.nodes).length, 0);
 });
 
 test('normalization inspector switches variants, preserves a custom name and shows the new parameter schema', async () => {
@@ -319,6 +325,48 @@ test('collapsed library reopens and focuses search with the keyboard shortcut', 
     assert.ok(search);
     assert.equal(document.activeElement, search);
     assert.equal(graphNodes().length, 0);
+});
+
+test('inspector shows accessible field errors once and reveals invalid options', async () => {
+    const entry = getEntry('torch.nn.MaxPool1d');
+    const pool = createLayerNode({ id: 'pool', libraryKey: entry.key, entry, position: { x: 100, y: 100 } });
+    useArchitectureStore.setState({ graph: { nodes: { pool }, edges: [] } });
+    await render(h(GraphHarness));
+    await click(byAria('Inspect MaxPool1d'));
+    const kernel = byFieldLabel('kernel_size');
+    assert.equal(kernel.getAttribute('aria-invalid'), 'true');
+    const error = document.getElementById(kernel.getAttribute('aria-describedby'));
+    assert.equal(error.textContent, 'Required');
+    assert.ok(kernel.closest('.df-param-row').contains(error));
+    assert.equal(container.querySelectorAll('.df-inspector-issue.is-error').length, 0, 'Field error is not repeated below');
+    await typeText(kernel, '2');
+    await blur(kernel);
+    assert.equal(kernel.getAttribute('aria-invalid'), 'false');
+    assert.equal(kernel.getAttribute('aria-describedby'), null);
+    assert.equal(container.querySelector('.df-param-errors'), null);
+
+    await act(() => useArchitectureStore.getState().patchLayerParameters('pool', { stride: 1.5 }));
+    assert.equal(container.querySelector('.df-inspector-options').open, true);
+    const stride = byFieldLabel('stride');
+    assert.equal(stride.getAttribute('aria-invalid'), 'true');
+    assert.equal(document.getElementById(stride.getAttribute('aria-describedby')).textContent, 'Must be an integer');
+    await typeText(stride, '2');
+    await blur(stride);
+    assert.equal(stride.getAttribute('aria-invalid'), 'false');
+});
+
+test('inline inspector feedback respects resolved template parameters', async () => {
+    const entry = getEntry('torch.nn.Linear');
+    const linear = createLayerNode({ id: 'bound', libraryKey: entry.key, entry, position: { x: 100, y: 100 }, parameters: { in_features: 4, out_features: '$width' } });
+    const template = createTemplate({ id: 'parameterized', name: 'Projection', graph: { nodes: { bound: linear }, edges: [] }, freeParameters: [{ name: 'width', default: 64 }] });
+    const instance = createSuperNodeInstance({ id: 'instance', templateId: template.id, label: 'Projection' });
+    useTemplatesStore.setState({ templates: { [template.id]: template } });
+    useArchitectureStore.setState({ graph: { nodes: { instance }, edges: [] }, currentPath: ['instance'], expandedNodeId: 'bound' });
+    await render(h(ReactFlowProvider, null, h(NodeInspector)));
+    assert.equal(byFieldLabel('out_features').value, '$width');
+    assert.equal(byFieldLabel('out_features').getAttribute('aria-invalid'), 'false');
+    assert.equal(byFieldLabel('out_features').getAttribute('aria-describedby'), null);
+    assert.equal(container.querySelector('.df-param-errors'), null);
 });
 
 

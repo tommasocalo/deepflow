@@ -1,5 +1,5 @@
-import React from 'react';
-import { AlertCircle, AlertTriangle, Boxes, ChevronRight, Repeat, X } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { AlertCircle, AlertTriangle, Boxes, ChevronDown, ChevronRight, Repeat, X } from 'lucide-react';
 import { PYTORCH_BLOCKS, getEntry } from '../../domain/library/index.js';
 import { createVariantPatch, getNodeFamily } from '../../domain/library/nodeFamilies.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
@@ -9,6 +9,7 @@ import { useValidation } from '../../hooks/useValidation.js';
 import ParameterField from './ParameterField.jsx';
 import OperationIcon from './OperationIcon.jsx';
 import { useInspectorPlacement } from './useInspectorPlacement.js';
+import { compactConnectionWarnings, compactParameterError, partitionParameterErrors } from './inspectorIssues.js';
 import './nodes.css';
 import './inspector.css';
 
@@ -59,7 +60,12 @@ function InspectorField({ param, value, label, ...props }) {
     );
 }
 
-function ParamGroup({ params, values, errors, onPatch, collapsed = false }) {
+function ParamGroup({ params, values, fieldErrors, onPatch, collapsed = false }) {
+    const detailsRef = useRef(null);
+    const hasErrors = params.some((p) => fieldErrors[p.name]?.length);
+    useEffect(() => {
+        if (hasErrors && detailsRef.current) detailsRef.current.open = true;
+    }, [hasErrors]);
     if (!params.length) return null;
     const fields = <div className="df-inspector-fields">{params.map((p) => (
         <InspectorField
@@ -67,11 +73,11 @@ function ParamGroup({ params, values, errors, onPatch, collapsed = false }) {
             param={p}
             value={values[p.name]}
             onChange={(v) => onPatch({ [p.name]: v })}
-            error={errors.some((e) => e.toLowerCase().includes(p.name.toLowerCase()))}
+            errors={(fieldErrors[p.name] ?? []).map((message) => compactParameterError(p.name, message))}
         />
     ))}</div>;
     return collapsed ? (
-        <details className="df-inspector-group df-inspector-options">
+        <details ref={detailsRef} className="df-inspector-group df-inspector-options">
             <summary>Options</summary>
             {fields}
         </details>
@@ -83,12 +89,12 @@ function Issues({ errors, warnings }) {
     return (
         <div className="df-inspector-issues">
             {errors.map((e, i) => <div key={`e${i}`} className="df-inspector-issue is-error"><AlertCircle size={11} strokeWidth={3} /><span>{e}</span></div>)}
-            {warnings.map((w, i) => <div key={`w${i}`} className="df-inspector-issue is-warning"><AlertTriangle size={11} strokeWidth={3} /><span>{w}</span></div>)}
+            {compactConnectionWarnings(warnings).map((w, i) => <div key={`w${i}`} className="df-inspector-issue is-warning"><AlertTriangle size={11} strokeWidth={3} /><span>{w}</span></div>)}
         </div>
     );
 }
 
-function LayerBody({ id, node, errors }) {
+function LayerBody({ id, node, fieldErrors }) {
     const entry = getEntry(node.libraryKey);
     const patchNode = useArchitectureStore((s) => s.patchNode);
     const patchLayerParameters = useArchitectureStore((s) => s.patchLayerParameters);
@@ -100,7 +106,6 @@ function LayerBody({ id, node, errors }) {
         ? PYTORCH_BLOCKS.filter((c) => c.category === entry.category && !TEMPLATE_ONLY.has(c.key) && !getNodeFamily(c.key))
         : []);
     const selectedModule = moduleOptions.find((option) => option.key === node.libraryKey);
-    const moduleWidth = Math.min(145, Math.max(64, (selectedModule?.name.length ?? 8) * 5.7 + 33));
     const switchModule = (libraryKey) => {
         const patch = createVariantPatch(node, libraryKey);
         if (patch) patchNode(id, patch);
@@ -109,17 +114,20 @@ function LayerBody({ id, node, errors }) {
     return (
         <>
             {moduleOptions.length > 1 && (
-                <label className="df-inspector-module" style={{ '--df-module-width': `${moduleWidth}px` }}>
+                <label className="df-inspector-module">
                     <span>Type</span>
-                    <select aria-label={family ? "Operation type" : "Module"} title={selectedModule?.name} value={node.libraryKey} onChange={(e) => switchModule(e.target.value)} className="df-input">
-                        {moduleOptions.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
-                    </select>
+                    <span className="df-inspector-select">
+                        <select aria-label={family ? "Operation type" : "Module"} title={selectedModule?.name} value={node.libraryKey} onChange={(e) => switchModule(e.target.value)}>
+                            {moduleOptions.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
+                        </select>
+                        <ChevronDown size={11} strokeWidth={3} aria-hidden="true" />
+                    </span>
                 </label>
             )}
             {params.length ? (
                 <>
-                    <ParamGroup params={primary} values={node.parameters} errors={errors} onPatch={onPatch} />
-                    <ParamGroup params={options} values={node.parameters} errors={errors} onPatch={onPatch} collapsed />
+                    <ParamGroup params={primary} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch} />
+                    <ParamGroup params={options} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch} collapsed />
                 </>
             ) : <p className="df-inspector-note">No parameters.</p>}
         </>
@@ -231,6 +239,9 @@ export default function NodeInspector() {
     const id = node.id;
     const errors = validation.errors[id] ?? [];
     const warnings = validation.warnings[id] ?? [];
+    const { fields: fieldErrors, remaining: nodeErrors } = node.kind === 'layer'
+        ? partitionParameterErrors(getEntry(node.libraryKey)?.parameters ?? [], errors)
+        : { fields: {}, remaining: errors };
     const ContainerIcon = node.kind === 'repeat' ? Repeat : Boxes;
     const rename = (label) => (node.kind === 'repeat' ? patchRepeatNode(id, { label }) : patchNode(id, { label }));
 
@@ -244,10 +255,10 @@ export default function NodeInspector() {
                 <button type="button" className="df-inspector-close" onClick={clearExpanded} aria-label="Close inspector"><X size={13} strokeWidth={3} /></button>
             </header>
             <div className="df-inspector-body">
-                {node.kind === 'layer' && <LayerBody id={id} node={node} errors={errors} />}
+                {node.kind === 'layer' && <LayerBody id={id} node={node} fieldErrors={fieldErrors} />}
                 {node.kind === 'supernode' && <SupernodeBody id={id} node={node} />}
                 {node.kind === 'repeat' && <RepeatBody id={id} node={node} />}
-                <Issues errors={errors} warnings={warnings} />
+                <Issues errors={nodeErrors} warnings={warnings} />
             </div>
         </aside>
     );
