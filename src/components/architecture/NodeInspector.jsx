@@ -9,6 +9,7 @@ import { formatShape } from '../../validation/index.js';
 import { styleFor } from './categoryStyle.js';
 import ParameterField from './ParameterField.jsx';
 import './nodes.css';
+import './inspector.css';
 
 const SHAPE_PRIORITY = [
     'in_channels', 'out_channels', 'in_features', 'out_features', 'embed_dim', 'num_heads',
@@ -17,10 +18,20 @@ const SHAPE_PRIORITY = [
 ];
 const TEMPLATE_ONLY = new Set(['deepflow.template.Input', 'deepflow.template.Output']);
 
+function InspectorField({ param, value, ...props }) {
+    const text = Array.isArray(value) ? value.join(', ') : String(value ?? '');
+    const wide = param.name === 'shape' || (text.length > 14 && param.type !== 'enum' && param.type !== 'bool');
+    return (
+        <div className={`df-inspector-field${wide ? ' is-wide' : ''}`}>
+            <ParameterField param={param} value={value} {...props} />
+        </div>
+    );
+}
+
 function ParamGroup({ title, params, values, errors, onPatch, collapsed = false }) {
     if (!params.length) return null;
     const fields = params.map((p) => (
-        <ParameterField
+        <InspectorField
             key={p.name}
             param={p}
             value={values[p.name]}
@@ -102,7 +113,7 @@ function Bindings({ freeParams, values, onChange, hint }) {
             <h3>Parameters</h3>
             <div className="df-inspector-fields">
                 {freeParams.map((p) => (
-                    <ParameterField
+                    <InspectorField
                         key={p.name}
                         param={p}
                         label={`$${p.name}`}
@@ -156,13 +167,13 @@ function RepeatBody({ id, node }) {
             <section className="df-inspector-group">
                 <h3>Repetition</h3>
                 <div className="df-inspector-fields">
-                    <ParameterField
+                    <InspectorField
                         param={{ name: 'count', type: 'int', description: 'Number of iterations' }}
                         label="count"
                         value={node.count}
                         onChange={(v) => { const n = Number(v); if (Number.isInteger(n) && n > 0) patchRepeatNode(id, { count: n }); }}
                     />
-                    <ParameterField
+                    <InspectorField
                         param={{ name: 'iterationVariable', type: 'string', description: 'Name bound to the iteration index in formulas' }}
                         label="index"
                         value={iterVar}
@@ -212,9 +223,10 @@ export default function NodeInspector() {
         <aside className="df-inspector df-panel-subtle nodrag nopan nowheel" aria-label={`${node.label} inspector`} onKeyDown={(e) => e.stopPropagation()}>
             <header className="df-inspector-header">
                 <span className="df-inspector-accent" style={{ background: accent }} />
-                <Icon size={13} strokeWidth={2.5} aria-hidden="true" />
-                <input aria-label="Block name" value={node.label} onChange={(e) => rename(e.target.value)} />
-                <span className="df-inspector-kind">{kind}</span>
+                <div className="df-inspector-heading">
+                    <div className="df-inspector-kind"><Icon size={12} strokeWidth={2.5} aria-hidden="true" /><span>{kind}</span></div>
+                    <input aria-label="Block name" value={node.label} onChange={(e) => rename(e.target.value)} />
+                </div>
                 <button type="button" className="df-inspector-close" onClick={clearExpanded} aria-label="Close inspector"><X size={13} strokeWidth={3} /></button>
             </header>
             <div className="df-inspector-body">
