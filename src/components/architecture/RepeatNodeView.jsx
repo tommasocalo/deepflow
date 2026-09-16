@@ -4,7 +4,7 @@ import { ChevronRight, Repeat, X } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
-import { CONTAINER_WIDTH, isInteractive } from './nodeGeometry.js';
+import { isInteractive } from './nodeGeometry.js';
 
 /**
  * A repeated template: the container is drawn as a short stack so the
@@ -30,7 +30,6 @@ const RepeatNodeView = ({ id, data, selected }) => {
     return (
         <div
             className={['df-repeat', `df-repeat--${tone}`, selected ? 'is-selected' : '', expandedNodeId === id ? 'is-active' : ''].join(' ')}
-            style={{ width: CONTAINER_WIDTH }}
             onClick={onClick}
             onDoubleClick={(e) => { if (!isInteractive(e.target)) { e.stopPropagation(); enterSupernode(id); } }}
             title={template ? `${template.name} × ${count} — double-click to open` : 'Template missing'}
@@ -40,7 +39,7 @@ const RepeatNodeView = ({ id, data, selected }) => {
             ))}
             <div className="df-repeat-face">
                 <Repeat size={14} strokeWidth={2.75} className="df-container-icon" />
-                <span className="df-container-label">{node.label}</span>
+                <span className="df-container-label" title={node.label}>{node.label}</span>
                 <span className="df-repeat-count">× {count}</span>
                 <button
                     className="nodrag df-container-open"

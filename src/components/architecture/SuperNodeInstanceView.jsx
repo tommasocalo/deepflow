@@ -4,7 +4,7 @@ import { Boxes, ChevronRight, X } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
-import { CONTAINER_WIDTH, isInteractive } from './nodeGeometry.js';
+import { isInteractive } from './nodeGeometry.js';
 
 /** A supernode instance: hatched container, label, "open" affordance. */
 const SuperNodeInstanceView = ({ id, data, selected }) => {
@@ -28,13 +28,12 @@ const SuperNodeInstanceView = ({ id, data, selected }) => {
     return (
         <div
             className={['df-container', `df-container--${tone}`, selected ? 'is-selected' : '', expandedNodeId === id ? 'is-active' : ''].join(' ')}
-            style={{ width: CONTAINER_WIDTH }}
             onClick={onClick}
             onDoubleClick={(e) => { if (!isInteractive(e.target)) { e.stopPropagation(); enterSupernode(id); } }}
             title={template ? `${template.name} — double-click to open` : 'Template missing'}
         >
             <Boxes size={15} strokeWidth={2.5} className="df-container-icon" />
-            <span className="df-container-label">{node.label}</span>
+            <span className="df-container-label" title={node.label}>{node.label}</span>
             <span className="df-container-meta">{template ? `${innerCount} block${innerCount === 1 ? '' : 's'}` : 'missing'}</span>
             <button
                 className="nodrag df-container-open"

@@ -1,6 +1,5 @@
 /** Positions use top-centre origin so nodes share a flow axis. */
 export const OP_SIZE = 36;
-export const CONTAINER_WIDTH = 260;
 
 /** Half-width used to decide whether an edge passes "through" other nodes. */
 export const COLUMN_HALF_WIDTH = 150;
