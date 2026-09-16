@@ -57,7 +57,7 @@ try {
     await page.evaluate(({ d, b }) => window.__deepflow.architectureStore.getState().connect({ source: d, target: b }), ids);
     await drag(endpoint('target'), port(ids.b, 'target'));
     assert.deepEqual(await edgeState(), stable, 'Duplicate cancels');
-    await drag(endpoint('target'), page.locator(`.react-flow__node[data-id="${ids.b}"] .df-block-content`));
+    await drag(endpoint('target'), page.locator(`.react-flow__node[data-id="${ids.b}"] .df-block`));
     assert.deepEqual(await edgeState(), stable, 'Dropping on a node body cancels');
     await endpoint('target').click();
     assert.deepEqual(await edgeState(), stable, 'A click alone does not disconnect');

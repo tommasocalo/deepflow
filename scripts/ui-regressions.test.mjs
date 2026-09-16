@@ -112,6 +112,8 @@ const click = (element) => {
 };
 const byAria = (label) => container.querySelector(`[aria-label="${label}"]`);
 const byFieldLabel = (name) => {
+    const named = byAria(name);
+    if (named) return named;
     const label = [...container.querySelectorAll('label')].find((element) => element.textContent.replace(/\*/g, '').trim() === name);
     return label ? document.getElementById(label.htmlFor) : null;
 };
@@ -398,11 +400,11 @@ test('operation nodes expose dimensions and inspector; selected connections stay
     useArchitectureStore.setState({ graph });
     await render(h(GraphHarness));
     const block = container.querySelector('.react-flow__node[data-id="linear"] .df-block');
-    assert.equal(block.querySelector('.df-block-shape').textContent, 'B × 1024 × 3072');
+    assert.equal(block.querySelector('.df-port-shape--output').getAttribute('aria-label'), 'Output dimensions: B × 1024 × 3072');
     assert.equal(block.querySelector('input'), null);
     await click(byAria('Inspect Linear'));
     assert.ok(byAria('Linear inspector'));
-    assert.equal(block.querySelector('.df-block-shape').textContent, 'B × 1024 × 3072');
+    assert.equal(block.querySelector('.df-port-shape--output').getAttribute('aria-label'), 'Output dimensions: B × 1024 × 3072');
     await render(h(EdgeHarness, { selected: false }));
     assert.equal(container.querySelector('.df-tensor-preview'), null);
     assert.equal(container.querySelector('.df-activation'), null);

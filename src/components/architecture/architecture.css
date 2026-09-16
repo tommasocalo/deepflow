@@ -15,7 +15,7 @@
 .df-levels-hint { margin-left: 8px; font-size: 10px; color: #888; white-space: nowrap; }
 
 /* ---------- Compact node language ---------- */
-.df-block { position: relative; display: flex; align-items: center; gap: 9px; width: 190px; min-height: 56px; padding: 8px 9px; border: 2px solid #111; border-radius: 6px; box-shadow: 3px 3px 0 #111; cursor: grab; }
+.df-block { position: relative; display: flex; align-items: center; gap: 7px; width: max-content; max-width: 240px; height: 36px; padding: 4px 8px; border: 2px solid #111; border-radius: 6px; box-shadow: 3px 3px 0 #111; cursor: grab; }
 .df-block:active { cursor: grabbing; }
 .df-block.is-selected, .df-block.is-active { box-shadow: 3px 3px 0 var(--node-accent, #444); }
 .df-block--warning { border-color: #d97706; }
@@ -23,15 +23,17 @@
 .df-block--boundary { border-style: dashed; background: #fff !important; color: #333; }
 .df-operation-icon { display: block; flex-shrink: 0; object-fit: contain; pointer-events: none; user-select: none; }
 img.df-operation-icon { mix-blend-mode: multiply; }
-.df-block-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.df-block-caption { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .55; }
-.df-block-shape { font: 600 10px/14px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.df-block-name { min-width: 0; font-size: 12px; line-height: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.df-block:focus-visible, .df-op:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.df-port-shape { position: absolute; z-index: 5; left: calc(50% + 10px); display: flex; align-items: baseline; gap: 5px; width: max-content; max-width: 240px; padding: 1px 4px; border: 1px solid #ddd; border-radius: 3px; background: #fff; color: #333; font: 9px/13px ui-monospace, SFMono-Regular, Menlo, monospace; pointer-events: none; visibility: hidden; }
+.df-port-shape small { font: 700 8px/12px ui-sans-serif, system-ui, sans-serif; color: #777; }
+.df-port-shape--input { bottom: calc(100% + 7px); }
+.df-port-shape--output { top: calc(100% + 7px); }
+.df-block:hover .df-port-shape, .df-block:focus-visible .df-port-shape, .df-block.is-selected .df-port-shape, .df-block.is-active .df-port-shape,
+.df-op:hover .df-port-shape, .df-op:focus-visible .df-port-shape, .df-op.is-selected .df-port-shape, .df-op.is-active .df-port-shape { visibility: visible; }
 .df-block-status { position: absolute; top: -7px; left: -7px; background: white; border-radius: 50%; }
 .df-block-icon--error { color: #dc2626; }
 .df-block-icon--warning { color: #b45309; }
-.df-block-inspect { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; border: 1px solid #111; border-radius: 3px; padding: 0; background: #fff; color: #111; cursor: pointer; }
-.df-block-inspect:hover, .df-block-inspect[aria-expanded="true"] { background: #111; color: white; }
-.df-block-inspect:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 .df-block-delete { position: absolute; top: -8px; right: -8px; z-index: 5; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border: 1px solid #00000030; border-radius: 999px; background: #fff; color: #000; opacity: 0; transition: opacity 120ms ease; }
 .df-block:hover .df-block-delete, .df-container:hover .df-block-delete, .df-repeat:hover .df-block-delete, .df-block-delete:focus-visible { opacity: 1; }
 .df-block-delete:hover { background: #fee2e2; border-color: #dc2626; }

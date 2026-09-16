@@ -7,6 +7,21 @@ const relativeRect = (element, origin) => {
     return { x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height };
 };
 
+
+// Include visible port labels: they extend beyond the content-sized card.
+const nodeRect = (element, origin) => {
+    const boxes = [relativeRect(element, origin), ...[...element.querySelectorAll('.df-port-shape')]
+        .filter((label) => getComputedStyle(label).visibility !== 'hidden')
+        .map((label) => relativeRect(label, origin))];
+    const x = Math.min(...boxes.map((box) => box.x));
+    const y = Math.min(...boxes.map((box) => box.y));
+    return {
+        x, y,
+        width: Math.max(...boxes.map((box) => box.x + box.width)) - x,
+        height: Math.max(...boxes.map((box) => box.y + box.height)) - y,
+    };
+};
+
 /** Read geometry after React Flow commits and move only the overlay, not graph state. */
 export function useInspectorPlacement(nodeId) {
     const panelRef = useRef(null);
@@ -27,10 +42,10 @@ export function useInspectorPlacement(nodeId) {
             const bounds = { width: origin.width, height: origin.height };
             const obstacles = [...canvas.querySelectorAll('.df-library, .react-flow__controls, [aria-label^="Graph checks:"]')]
                 .map((element) => relativeRect(element, origin));
-            const nodes = nodeElements.filter((element) => element !== selected).map((element) => relativeRect(element, origin));
+            const nodes = nodeElements.filter((element) => element !== selected).map((element) => nodeRect(element, origin));
             const placement = placeInspector({
-                anchor: relativeRect(selected, origin),
-                panel: { width: panel.offsetWidth || 272, height: panel.offsetHeight || 320 },
+                anchor: nodeRect(selected, origin),
+                panel: { width: panel.offsetWidth || 260, height: panel.offsetHeight || 320 },
                 bounds, obstacles, nodes,
             });
             panel.style.left = `${Math.round(placement.x)}px`;

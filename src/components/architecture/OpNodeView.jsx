@@ -4,6 +4,7 @@ import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
 import { OP_SIZE, isInteractive } from './nodeGeometry.js';
 import OperationIcon from './OperationIcon.jsx';
+import PortShapeLabels from './PortShapeLabels.jsx';
 import { getEntry } from '../../domain/library/index.js';
 // Keys are listed in nodeGeometry.js (isOpKey) so the canvas can route without importing a component file.
 
@@ -28,9 +29,21 @@ const OpNodeView = ({ id, data, selected }) => {
             style={{ width: OP_SIZE, height: OP_SIZE }}
             title={`${title}${node.label && node.label !== title ? ` — ${node.label}` : ''}`}
             onClick={onClick}
+            role="button"
+            tabIndex={0}
+            aria-label={`Inspect ${node.label}`}
+            aria-expanded={expandedNodeId === id}
+            onKeyDown={(event) => {
+                if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleExpanded(id);
+                }
+            }}
         >
             <OperationIcon libraryKey={node.libraryKey} size={22} />
             <span className="sr-only">{title}</span>
+            <PortShapeLabels node={node} shapes={validation.shapes} />
             <Handle type="target" position={Position.Top} className="df-handle df-handle--op" />
             <Handle type="source" position={Position.Bottom} className="df-handle df-handle--op" />
         </div>
