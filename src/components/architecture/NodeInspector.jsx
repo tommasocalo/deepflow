@@ -97,7 +97,7 @@ function LayerBody({ id, node, errors }) {
     const options = params.filter((p) => !p.required && !SHAPE_PRIORITY.includes(p.name));
     const family = getNodeFamily(node.libraryKey);
     const moduleOptions = family?.variants ?? (entry && entry.category !== 'IO'
-        ? PYTORCH_BLOCKS.filter((c) => c.category === entry.category && !TEMPLATE_ONLY.has(c.key))
+        ? PYTORCH_BLOCKS.filter((c) => c.category === entry.category && !TEMPLATE_ONLY.has(c.key) && !getNodeFamily(c.key))
         : []);
     const selectedModule = moduleOptions.find((option) => option.key === node.libraryKey);
     const moduleWidth = Math.min(145, Math.max(64, (selectedModule?.name.length ?? 8) * 5.7 + 33));

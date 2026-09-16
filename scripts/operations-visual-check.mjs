@@ -55,7 +55,7 @@ try {
     variantPage.on('pageerror', (error) => errors.push(error.message));
     await variantPage.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
     await variantPage.getByRole('textbox', { name: 'Search blocks', exact: true }).fill('embedding');
-    assert.equal(await variantPage.locator('.df-library-row').count(), 1, 'Variant search resolves to its family');
+    assert.equal(await variantPage.locator('.df-library-tile').count(), 1, 'Variant search resolves to its family');
     await variantPage.getByRole('button', { name: 'Add Linear', exact: true }).click();
     const variant = variantPage.getByRole('combobox', { name: 'Operation type', exact: true });
     await variant.selectOption('torch.nn.Embedding');

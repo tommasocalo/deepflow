@@ -18,6 +18,50 @@ export const NODE_FAMILIES = [
             { key: 'torch.nn.MultiheadAttention', name: 'Multi-head' },
         ],
     },
+    {
+        key: 'normalization', name: 'Normalization', defaultKey: 'torch.nn.LayerNorm',
+        variants: [
+            { key: 'torch.nn.LayerNorm', name: 'LayerNorm' },
+            { key: 'torch.nn.BatchNorm1d', name: 'BatchNorm 1D' },
+            { key: 'torch.nn.BatchNorm2d', name: 'BatchNorm 2D' },
+            { key: 'torch.nn.GroupNorm', name: 'GroupNorm' },
+        ],
+    },
+    {
+        key: 'activation', name: 'Activation', defaultKey: 'torch.nn.ReLU',
+        variants: [
+            { key: 'torch.nn.ReLU', name: 'ReLU' },
+            { key: 'torch.nn.LeakyReLU', name: 'Leaky ReLU' },
+            { key: 'torch.nn.GELU', name: 'GELU' },
+            { key: 'torch.nn.Sigmoid', name: 'Sigmoid' },
+            { key: 'torch.nn.Tanh', name: 'Tanh' },
+            { key: 'torch.nn.Softmax', name: 'Softmax' },
+        ],
+    },
+    {
+        key: 'convolution', name: 'Convolution', defaultKey: 'torch.nn.Conv2d',
+        variants: [
+            { key: 'torch.nn.Conv2d', name: 'Conv 2D' },
+            { key: 'torch.nn.Conv1d', name: 'Conv 1D' },
+            { key: 'torch.nn.ConvTranspose2d', name: 'Transposed 2D' },
+        ],
+    },
+    {
+        key: 'pooling', name: 'Pooling', defaultKey: 'torch.nn.MaxPool2d',
+        variants: [
+            { key: 'torch.nn.MaxPool2d', name: 'Max Pool 2D' },
+            { key: 'torch.nn.MaxPool1d', name: 'Max Pool 1D' },
+            { key: 'torch.nn.AvgPool2d', name: 'Average 2D' },
+            { key: 'torch.nn.AdaptiveAvgPool2d', name: 'Adaptive avg 2D' },
+        ],
+    },
+    {
+        key: 'recurrent', name: 'Recurrent', defaultKey: 'torch.nn.LSTM',
+        variants: [
+            { key: 'torch.nn.LSTM', name: 'LSTM' },
+            { key: 'torch.nn.GRU', name: 'GRU' },
+        ],
+    },
 ];
 
 export function getNodeFamily(libraryKey) {
@@ -48,18 +92,35 @@ export function createVariantPatch(node, nextKey) {
     const current = getEntry(node?.libraryKey);
     const next = getEntry(nextKey);
     if (node?.kind !== 'layer' || !current || !next || nextKey === node.libraryKey || current.category !== next.category || current.category === 'IO') return null;
+    const family = getNodeFamily(current.key);
+    if (family?.key !== getNodeFamily(next.key)?.key) return null;
     const parameters = defaultParameterValues(next);
     for (const spec of next.parameters) {
-        const previous = current.parameters.find((candidate) => candidate.name === spec.name && candidate.type === spec.type);
-        if (previous && Object.hasOwn(node.parameters ?? {}, spec.name)) parameters[spec.name] = node.parameters[spec.name];
+        const previous = current.parameters.find((candidate) => candidate.name === spec.name);
+        if (!previous || !Object.hasOwn(node.parameters ?? {}, spec.name)) continue;
+        const value = node.parameters[spec.name];
+        // Spatial tuple parameters also accept a scalar. Carry a 1D scalar
+        // forward, but never reduce a 2D tuple to one arbitrarily chosen axis.
+        const scalarInteger = Number.isInteger(value) || (typeof value === 'string' && value.trim() !== '' && Number.isInteger(Number(value)));
+        if (previous.type === spec.type || (previous.type === 'int' && spec.type === 'tuple')
+            || (previous.type === 'tuple' && spec.type === 'int' && scalarInteger)) parameters[spec.name] = value;
     }
     // These names refer to the same output-vector width. Vocabulary size and
     // maximum sequence length deliberately remain independent requirements.
     const previousWidth = current.key === 'torch.nn.Linear' ? 'out_features' : 'embedding_dim';
     const nextWidth = next.key === 'torch.nn.Linear' ? 'out_features' : 'embedding_dim';
-    if (getNodeFamily(current.key)?.key === 'linear' && getNodeFamily(next.key)?.key === 'linear'
+    if (family?.key === 'linear'
         && Object.hasOwn(node.parameters ?? {}, previousWidth)) {
         parameters[nextWidth] = node.parameters[previousWidth];
+    }
+    // BatchNorm and GroupNorm name channel count differently; a LayerNorm
+    // normalized shape may span several axes and must not be treated as one.
+    if (family?.key === 'normalization') {
+        const previousChannels = current.key === 'torch.nn.GroupNorm' ? 'num_channels' : 'num_features';
+        const nextChannels = next.key === 'torch.nn.GroupNorm' ? 'num_channels' : 'num_features';
+        if (Object.hasOwn(parameters, nextChannels) && Object.hasOwn(node.parameters ?? {}, previousChannels)) {
+            parameters[nextChannels] = node.parameters[previousChannels];
+        }
     }
     return {
         libraryKey: next.key,

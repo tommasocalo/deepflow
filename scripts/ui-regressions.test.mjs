@@ -125,6 +125,11 @@ const setText = (input, text) => act(() => {
     Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, text);
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 });
+const selectValue = (select, value) => act(() => {
+    assert.ok(select, 'Expected a select');
+    Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set.call(select, value);
+    select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+});
 async function typeText(input, text) {
     await act(() => input.focus());
     await setText(input, '');
@@ -235,16 +240,19 @@ test('compact nodes open the inspector and editing keeps node geometry unchanged
     assert.equal(byFieldLabel('in_features').value, '768');
 });
 
-test('opening a library category does not add a node; a search result adds exactly the chosen layer', async () => {
+test('family tiles are immediately available and variant search adds the family default once', async () => {
     await render(h(PaletteHarness));
-    const category = [...container.querySelectorAll('.df-library-category')].find((element) => element.textContent.startsWith('Normalization'));
-    assert.equal(category.getAttribute('aria-expanded'), 'false');
-    await click(category);
-    assert.equal(category.getAttribute('aria-expanded'), 'true');
+    assert.equal(container.querySelector('.df-library-category'), null, 'Families are available without opening an accordion');
+    for (const name of ['Linear', 'Attention', 'Normalization', 'Activation', 'Convolution', 'Pooling', 'Recurrent']) {
+        assert.ok(byAria(`Add ${name}`)?.matches('.df-library-tile'), `${name} has a directly available tile`);
+    }
+    assert.equal(byAria('Add LayerNorm'), null);
+    assert.equal(byAria('Add BatchNorm1d'), null);
     assert.equal(graphNodes().length, 0);
     await typeText(byAria('Search blocks'), 'layer norm');
-    const add = byAria('Add LayerNorm');
-    assert.ok(add, 'Tokenized search should find LayerNorm');
+    const add = byAria('Add Normalization');
+    assert.ok(add, 'Searching a variant finds its family tile');
+    assert.equal(container.querySelectorAll('.df-library-tile').length, 1);
     await click(add);
     const nodes = graphNodes();
     assert.equal(nodes.length, 1);
@@ -254,25 +262,50 @@ test('opening a library category does not add a node; a search result adds exact
     assert.ok(Number.isFinite(nodes[0].position.x) && Number.isFinite(nodes[0].position.y));
 });
 
-test('Templates category expands without adding nodes and exposes reusable instances to global search', async () => {
+test('template tiles are immediately available and remain discoverable through global search', async () => {
     const template = createTemplate({ id: 'decoder-template', name: 'Decoder block', graph: emptyGraph() });
     useTemplatesStore.setState({ templates: { [template.id]: template } });
     await render(h(PaletteHarness));
-    const category = [...container.querySelectorAll('.df-library-category')].find((element) => element.textContent.startsWith('Templates'));
-    assert.equal(category.getAttribute('aria-expanded'), 'false');
-    assert.equal(byAria('Add Decoder block template'), null);
-    await click(category);
-    assert.equal(category.getAttribute('aria-expanded'), 'true');
-    assert.ok(document.getElementById(category.getAttribute('aria-controls')).contains(byAria('Add Decoder block template')));
+    assert.ok(byAria('Add Decoder block template')?.matches('.df-library-tile'));
     assert.equal(graphNodes().length, 0);
-    await click(category);
-    assert.equal(byAria('Add Decoder block template'), null);
     await typeText(byAria('Search blocks'), 'decoder block');
     assert.ok(byAria('Add Decoder block template'), 'Global search includes templates without switching modes');
     await click(byAria('Add Decoder block template'));
     assert.equal(graphNodes().length, 1);
     assert.equal(graphNodes()[0].kind, 'supernode');
     assert.equal(graphNodes()[0].templateId, template.id);
+});
+
+test('normalization inspector switches variants, preserves a custom name and shows the new parameter schema', async () => {
+    const entry = getEntry('torch.nn.LayerNorm');
+    const input = createLayerNode({ id: 'input', libraryKey: 'deepflow.io.Input', entry: getEntry('deepflow.io.Input'), position: { x: 100, y: 0 }, parameters: { shape: '(64, 16, 16)', dtype: 'float32' } });
+    const normalization = createLayerNode({ id: 'norm', libraryKey: entry.key, entry, label: 'Feature normalization', position: { x: 100, y: 100 }, parameters: { normalized_shape: [64, 16, 16], eps: 0.001, elementwise_affine: false } });
+    const edge = createEdge({ id: 'normalization-input', source: input.id, target: normalization.id });
+    const graph = { nodes: { input, norm: normalization }, edges: [edge] };
+    useArchitectureStore.setState({ graph });
+    await render(h(GraphHarness));
+    await click(byAria('Inspect Feature normalization'));
+    const variant = byAria('Operation type');
+    assert.deepEqual([...variant.options].map((option) => option.value), ['torch.nn.LayerNorm', 'torch.nn.BatchNorm1d', 'torch.nn.BatchNorm2d', 'torch.nn.GroupNorm']);
+    assert.equal(byFieldLabel('normalized_shape').value, '64, 16, 16');
+    await selectValue(variant, 'torch.nn.GroupNorm');
+
+    const state = useArchitectureStore.getState();
+    assert.equal(state.graph.nodes.norm.libraryKey, 'torch.nn.GroupNorm');
+    assert.equal(state.graph.nodes.norm.label, 'Feature normalization');
+    assert.equal(state.graph.edges, graph.edges);
+    assert.ok(byAria('Feature normalization inspector'));
+    assert.equal(byFieldLabel('normalized_shape'), null);
+    assert.equal(byFieldLabel('elementwise_affine'), null);
+    assert.equal(byFieldLabel('num_groups').value, '');
+    assert.equal(byFieldLabel('num_channels').value, '');
+    assert.equal(byFieldLabel('eps').value, '0.001');
+    await typeText(byFieldLabel('num_groups'), '8');
+    await blur(byFieldLabel('num_groups'));
+    await typeText(byFieldLabel('num_channels'), '64');
+    await blur(byFieldLabel('num_channels'));
+    assert.deepEqual(useArchitectureStore.getState().graph.nodes.norm.parameters, { num_groups: 8, num_channels: 64, eps: 0.001, affine: true });
+    assert.equal(useArchitectureStore.getState().expandedNodeId, normalization.id);
 });
 
 test('collapsed library reopens and focuses search with the keyboard shortcut', async () => {
@@ -350,7 +383,7 @@ test('search ArrowDown focuses a result and Enter adds the matching layer once',
     const search = byAria('Search blocks');
     await typeText(search, 'layer norm');
     await act(() => search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
-    assert.equal(document.activeElement, byAria('Add LayerNorm'));
+    assert.equal(document.activeElement, byAria('Add Normalization'));
     assert.equal(graphNodes().length, 0);
     await act(() => search.focus());
     await act(() => search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
