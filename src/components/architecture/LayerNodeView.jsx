@@ -1,6 +1,6 @@
 import React, { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { AlertCircle, AlertTriangle, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, GripVertical, SlidersHorizontal, X } from 'lucide-react';
 import { getEntry } from '../../domain/library/index.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
@@ -26,6 +26,7 @@ const LayerNodeView = ({ id, data, selected }) => {
     const outputShape = validation.shapes[id];
     const style = styleFor(entry?.category ?? 'IO');
     const isIO = entry?.category === 'IO';
+    const tensorFlow = data.tensorFlow || node.visualization === 'tensor-flow';
     const isBoundary = node.libraryKey.startsWith('deepflow.template.');
     const width = isIO ? 220 : widthForShape(outputShape, 200);
     const tone = errors.length ? 'error' : warnings.length ? 'warning' : 'ok';
@@ -39,21 +40,34 @@ const LayerNodeView = ({ id, data, selected }) => {
         <div
             className={[
                 'df-block', style.card,
+                tensorFlow ? 'df-block--tensor-flow' : '',
                 `df-block--${tone}`,
                 selected ? 'is-selected' : '',
                 active ? 'is-active' : '',
                 isBoundary ? 'df-block--boundary' : '',
             ].join(' ')}
-            style={{ width, height: BLOCK_HEIGHT }}
+            style={{ width, height: BLOCK_HEIGHT, ...(tensorFlow ? { '--tensor-accent': style.accent } : {}) }}
             onClick={onClick}
-            title={entry?.description}
+            title={tensorFlow ? `${entry?.description ?? node.label} · Drag to move, click to inspect` : entry?.description}
         >
             {tone === 'error' && <AlertCircle size={14} strokeWidth={3} className="df-block-icon df-block-icon--error" />}
             {tone === 'warning' && <AlertTriangle size={14} strokeWidth={3} className="df-block-icon df-block-icon--warning" />}
             <span className="df-block-label">{node.label}</span>
+            {tensorFlow && entry?.name.toLowerCase() !== node.label.toLowerCase() && <span className="df-tensor-layer-kind">{entry?.name}</span>}
+            {tensorFlow && <GripVertical size={12} className="df-tensor-drag" aria-hidden="true" />}
             {isIO && !isBoundary && (
                 <span className="df-block-tag">{INPUT_ONLY.has(node.libraryKey) ? 'in' : 'out'}</span>
             )}
+
+            <button
+                type="button"
+                className="nodrag df-block-inspect"
+                aria-label={`Inspect ${node.label}`}
+                aria-expanded={active}
+                title="Inspect block"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => { event.stopPropagation(); toggleExpanded(id); }}
+            ><SlidersHorizontal size={12} aria-hidden="true" /></button>
 
             <button
                 aria-label={`Delete ${node.label}`}

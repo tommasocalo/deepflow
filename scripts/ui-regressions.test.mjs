@@ -57,6 +57,7 @@ try {
                 export { default as BlockPalette } from './src/components/architecture/BlockPalette.jsx';
                 export { default as ArchitectureCanvas } from './src/components/architecture/ArchitectureCanvas.jsx';
                 export { default as ArchitectureEdge } from './src/components/architecture/ArchitectureEdge.jsx';
+                export { default as TensorPreview } from './src/components/architecture/TensorPreview.jsx';
                 export { default as NodeInspector } from './src/components/architecture/NodeInspector.jsx';
                 export { useArchitectureStore } from './src/stores/architectureStore.js';
                 export { useTemplatesStore } from './src/stores/templatesStore.js';
@@ -78,7 +79,7 @@ try {
 } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
 }
-const { ParameterField, LayerNodeView, BlockPalette, ArchitectureCanvas, ArchitectureEdge, NodeInspector, useArchitectureStore, useTemplatesStore, createLayerNode, createTemplate, createEdge, emptyGraph, getEntry } = app;
+const { ParameterField, LayerNodeView, BlockPalette, ArchitectureCanvas, ArchitectureEdge, NodeInspector, TensorPreview, useArchitectureStore, useTemplatesStore, createLayerNode, createTemplate, createEdge, emptyGraph, getEntry } = app;
 let container;
 let root;
 
@@ -227,7 +228,8 @@ test('compact nodes open the inspector and editing keeps node geometry unchanged
     assert.equal(useArchitectureStore.getState().expandedNodeId, null);
     await click(block.querySelector('.react-flow__handle'));
     assert.equal(useArchitectureStore.getState().expandedNodeId, null, 'Connecting must not open the inspector');
-    await click(block);
+    await click(byAria('Inspect Linear'));
+    assert.equal(byAria('Inspect Linear').getAttribute('aria-expanded'), 'true');
     assert.equal(byFieldLabel('in_features').value, '768');
 });
 
@@ -285,7 +287,7 @@ test('collapsed library reopens and focuses search with the keyboard shortcut', 
 });
 
 
-function EdgeHarness({ selected }) {
+function EdgeHarness({ selected, tensorFlow = false, shape = [null, 1024, 768] }) {
     const edge = useArchitectureStore((state) => state.graph.edges[0]);
     return h(ReactFlowProvider, null, h(ReactFlow, {
         width: 1000, height: 700, nodes: [], edges: [],
@@ -293,7 +295,7 @@ function EdgeHarness({ selected }) {
         id: edge.id, selected,
         sourceX: 100, sourceY: 100, targetX: 100, targetY: 300,
         sourcePosition: 'bottom', targetPosition: 'top',
-        data: { activation: 'B × 1024 × 768', gradientOp: edge.gradientOp },
+        data: { activation: 'B × 1024 × 768', gradientOp: edge.gradientOp, tensorFlow, shape },
     }))));
 }
 
@@ -387,4 +389,30 @@ test('canvas keeps 60 multi-drag frames local, persists on release and recovers 
     } finally {
         storageProto.setItem = setItem;
     }
+});
+
+test('MLP tensor sketches encode feature expansion with bounded uniform cells', async () => {
+    await render(h(TensorPreview, { shape: [null, 1024, 768], compact: true }));
+    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 24);
+    assert.equal(container.querySelector('.df-tensor-dimensions').textContent, 'B × 1024 × 768');
+    assert.match(container.querySelector('title').textContent, /shape only/);
+    assert.match(container.querySelector('title').textContent, /128 features/);
+    await render(h(TensorPreview, { shape: [null, 1024, 3072], compact: true }));
+    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 96);
+    await render(h(TensorPreview, { shape: [null, 1000000, 1000000], compact: true }));
+    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 144, 'Large tensors must not create one DOM cell per value');
+    await render(h(TensorPreview, { shape: null }));
+    assert.equal(container.querySelector('svg'), null);
+});
+
+test('only opted-in MLP edges render tensor grids and keep stored model data intact', async () => {
+    const edge = createEdge({ id: 'connection', source: 'a', target: 'b' });
+    const graph = { nodes: {}, edges: [edge] };
+    useArchitectureStore.setState({ graph });
+    await render(h(EdgeHarness, { tensorFlow: false, selected: false }));
+    assert.equal(container.querySelector('.df-tensor-preview'), null);
+    await render(h(EdgeHarness, { tensorFlow: true, selected: true }));
+    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 24);
+    assert.equal(container.querySelector('.df-tensor-edge').tabIndex, 0);
+    assert.equal(useArchitectureStore.getState().graph, graph);
 });

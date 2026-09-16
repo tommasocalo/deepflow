@@ -27,12 +27,19 @@ export function buildTransformerBlockGraph() {
     const attn = layer('deepflow.nn.CausalSelfAttention',{ x: X, y: 185 }, { embed_dim: '$d_model', num_heads: '$n_heads', dropout: 0.1 }, 'causal self-attention');
     const add1 = layer('deepflow.op.Add',                { x: X, y: 280 }, {}, 'residual');
     const ln2  = layer('torch.nn.LayerNorm',             { x: X, y: 360 }, { normalized_shape: '$d_model' }, 'ln_2');
-    const fc   = layer('torch.nn.Linear',                { x: X, y: 450 }, { in_features: '$d_model', out_features: '4 * d_model' }, 'mlp fc');
-    const gelu = layer('torch.nn.GELU',                  { x: X, y: 540 }, {}, 'gelu');
-    const proj = layer('torch.nn.Linear',                { x: X, y: 630 }, { in_features: '4 * d_model', out_features: '$d_model' }, 'mlp proj');
-    const drop = layer('torch.nn.Dropout',               { x: X, y: 720 }, { p: 0.1 }, 'dropout');
-    const add2 = layer('deepflow.op.Add',                { x: X, y: 815 }, {}, 'residual');
-    const tout = layer('deepflow.template.Output',       { x: X, y: 895 }, {}, 'block output');
+    const fc   = layer('torch.nn.Linear',                { x: X, y: 470 }, { in_features: '$d_model', out_features: '4 * d_model' }, 'mlp fc');
+    const gelu = layer('torch.nn.GELU',                  { x: X, y: 580 }, {}, 'gelu');
+    const proj = layer('torch.nn.Linear',                { x: X, y: 690 }, { in_features: '4 * d_model', out_features: '$d_model' }, 'mlp proj');
+    const drop = layer('torch.nn.Dropout',               { x: X, y: 800 }, { p: 0.1 }, 'dropout');
+    const add2 = layer('deepflow.op.Add',                { x: X, y: 910 }, {}, 'residual');
+    const tout = layer('deepflow.template.Output',       { x: X, y: 995 }, {}, 'block output');
+
+    // Presentation-only metadata: the experimental treatment is limited to
+    // this MLP segment; parameters and generated PyTorch remain unchanged.
+    for (const [node, role] of [[ln2, 'norm'], [fc, 'expand'], [gelu, 'activation'], [proj, 'project'], [drop, 'dropout'], [add2, 'residual']]) {
+        node.visualization = 'tensor-flow';
+        node.tensorRole = role;
+    }
 
     const chain = [tin, ln1, attn, add1, ln2, fc, gelu, proj, drop, add2, tout];
     const nodes = Object.fromEntries(chain.map((n) => [n.id, n]));

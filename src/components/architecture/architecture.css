@@ -15,7 +15,7 @@
 .df-levels-hint { margin-left: 8px; font-size: 10px; color: #888; white-space: nowrap; }
 
 /* ---------- Compact node language ---------- */
-.df-block { position: relative; display: flex; align-items: center; gap: 6px; padding: 0 14px; border: 2px solid #000; border-radius: 8px; box-shadow: 3px 3px 0 #000; cursor: pointer; transition: box-shadow 120ms ease, width 180ms ease, transform 120ms ease; }
+.df-block { position: relative; display: flex; align-items: center; gap: 6px; padding: 0 14px; border: 2px solid #000; border-radius: 8px; box-shadow: 3px 3px 0 #000; cursor: pointer; transition: box-shadow 120ms ease; }
 .df-block.is-selected, .df-block.is-active { box-shadow: 5px 5px 0 #000; }
 .df-block.is-active { outline: 2px solid #000; outline-offset: 3px; }
 .df-block--warning { border-color: #d97706; box-shadow: 3px 3px 0 #d97706; }
@@ -70,8 +70,6 @@
 
 /* Activations on edges */
 .df-activation { position: absolute; top: 0; left: 0; pointer-events: none; display: inline-flex; align-items: center; gap: 6px; padding: 1px 5px; border: 1px solid #00000033; border-radius: 4px; background: #ffffffee; color: #333; font: 500 9.5px/14px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
-.df-activation--gradop { border-color: var(--edge-color, #000); color: var(--edge-color, #000); }
-.df-activation-op { font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
 
 /* ---------- Node inspector (left) ---------- */
 .df-inspector { position: absolute; top: 3.75rem; left: 1rem; z-index: 40; width: 272px; max-width: calc(100% - 2rem); max-height: calc(100% - 5rem); display: flex; flex-direction: column; overflow: hidden; color: #111; }
@@ -105,3 +103,21 @@
 .df-inspector-issue.is-warning { background: #fffbeb; border-left: 3px solid #f59e0b; color: #92400e; }
 .df-inspector-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-top: 1px solid #00000012; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #777; }
 .df-inspector-footer code { font-size: 10.5px; font-weight: 600; text-transform: none; letter-spacing: 0; color: #111; }
+
+
+/* GPT-2 MLP experiment: keep the compact port geometry and reveal the flow. */
+.df-block.df-block--tensor-flow { border: 1px solid #00000040; border-left: 0; border-radius: 3px; padding-left: 15px; padding-right: 9px; background: #ffffff30 !important; color: #111; box-shadow: 2px 2px 0 #00000035; cursor: grab; transition: box-shadow 120ms ease, border-color 120ms ease; }
+.df-block--tensor-flow::before { content: ''; position: absolute; top: -1px; bottom: -1px; left: 0; width: 5px; border: 1px solid #000; background: var(--tensor-accent, #999); }
+.df-block--tensor-flow .df-block-label { color: color-mix(in srgb, var(--tensor-accent, #444) 60%, #000); font-size: 12px; }
+.df-tensor-layer-kind { color: #666; font-size: 9px; font-weight: 500; white-space: nowrap; }
+.df-tensor-drag { flex-shrink: 0; color: #888; opacity: .7; }
+.df-block.df-block--tensor-flow:hover { border-color: #000; background: #ffffff80 !important; }
+.df-block.df-block--tensor-flow.is-selected, .df-block.df-block--tensor-flow.is-active { border-color: #000; box-shadow: 3px 3px 0 #000; }
+.df-block.df-block--tensor-flow.is-active { outline-width: 1px; outline-offset: 3px; }
+.df-block.df-block--tensor-flow.df-block--error { border-color: #dc2626; box-shadow: 2px 2px 0 #dc2626; }
+.df-block.df-block--tensor-flow.df-block--warning { border-color: #d97706; }
+.df-block--tensor-flow:active { cursor: grabbing; }
+
+.df-block-inspect { display: grid; place-items: center; flex-shrink: 0; width: 20px; height: 24px; margin-right: -6px; border: 0; padding: 0; background: transparent; cursor: pointer; opacity: .55; }
+.df-block-inspect:hover, .df-block-inspect[aria-expanded="true"] { opacity: 1; }
+.df-block-inspect:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 2px; }
