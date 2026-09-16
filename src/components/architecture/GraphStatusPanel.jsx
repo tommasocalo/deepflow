@@ -76,8 +76,8 @@ const GraphStatusPanel = () => {
     const focusNode = (nodeId) => {
         const node = viewGraph?.nodes?.[nodeId];
         if (!node) return;
-        const x = node.position.x + 120;  // ~half of node width
-        const y = node.position.y + 60;
+        const x = node.position.x;        // nodes are positioned by top-centre
+        const y = node.position.y + 24;
         setCenter(x, y, { duration: 300, zoom: Math.max(getZoom(), 1) });
     };
 

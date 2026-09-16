@@ -304,6 +304,30 @@ export const PYTORCH_BLOCKS = [
     },
 
     {
+        key: 'deepflow.nn.PositionalEmbedding',
+        name: 'Positional Embedding',
+        category: 'Linear',
+        description: 'Learned positional embedding table. Takes token ids (B, T) and returns (T, D) position vectors, ready to be added to token embeddings.',
+        pyTorchFn: 'torch.nn.Embedding',
+        parameters: [
+            { name: 'max_len', type: 'int', description: 'Maximum sequence length (rows of the table)', required: true },
+            { name: 'embedding_dim', type: 'int', description: 'Embedding size D', required: true },
+        ],
+    },
+    {
+        key: 'deepflow.nn.CausalSelfAttention',
+        name: 'Causal Self-Attention',
+        category: 'Attention',
+        description: 'GPT-style masked multi-head self-attention over a single (B, T, D) stream: fused QKV projection, causal mask, output projection.',
+        pyTorchFn: 'CausalSelfAttention',
+        parameters: [
+            { name: 'embed_dim', type: 'int', description: 'Model dim D', required: true },
+            { name: 'num_heads', type: 'int', description: 'Attention heads (must divide D)', required: true },
+            { name: 'dropout', type: 'float', description: 'Attention dropout', default: 0.0 },
+            { name: 'bias', type: 'bool', description: 'Bias in QKV / output projections', default: true },
+        ],
+    },
+    {
         key: 'torch.nn.MultiheadAttention',
         name: 'MultiheadAttention',
         category: 'Attention',

@@ -3,9 +3,9 @@ import fs from 'node:fs/promises';
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
-await page.goto('http://localhost:5174/', { waitUntil: 'domcontentloaded' });
+await page.goto('http://localhost:5173/', { waitUntil: 'domcontentloaded' });
 await page.evaluate(() => { try { localStorage.clear(); } catch {} });
-await page.goto('http://localhost:5174/', { waitUntil: 'networkidle' });
+await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(500);
 
 const result = await page.evaluate(() => {

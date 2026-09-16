@@ -26,6 +26,7 @@ const StoryboardMenu = () => {
                         <button
                             key={sb.id}
                             onClick={() => {
+                                architectureStore.getState().goToLevel(0);
                                 sb.run({ architectureStore, templatesStore, trainingStore });
                                 setOpen(false);
                             }}

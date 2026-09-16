@@ -22,9 +22,9 @@ export function resnetStoryboard({ architectureStore, templatesStore, trainingSt
     arch.patchLayerParameters(inputId, { shape: '(3, 32, 32)' });
 
     // Build a parametric ConvBlock = Conv2d → BatchNorm2d → ReLU
-    const convId = arch.addLayerByLibraryKey('torch.nn.Conv2d',      { x: 200, y: 200 });
-    const bnId   = arch.addLayerByLibraryKey('torch.nn.BatchNorm2d', { x: 200, y: 320 });
-    const reluId = arch.addLayerByLibraryKey('torch.nn.ReLU',        { x: 200, y: 440 });
+    const convId = arch.addLayerByLibraryKey('torch.nn.Conv2d',      { x: 320, y: 200 });
+    const bnId   = arch.addLayerByLibraryKey('torch.nn.BatchNorm2d', { x: 320, y: 320 });
+    const reluId = arch.addLayerByLibraryKey('torch.nn.ReLU',        { x: 320, y: 440 });
     arch.patchLayerParameters(convId, { in_channels: 3, out_channels: 64, kernel_size: 3, padding: 1, bias: false });
     arch.patchLayerParameters(bnId,   { num_features: 64 });
     arch.connect({ source: inputId, target: convId });

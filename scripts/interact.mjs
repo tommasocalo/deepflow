@@ -10,7 +10,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const URL = process.env.URL ?? 'http://localhost:5174/';
+const URL = process.env.URL ?? 'http://localhost:5173/';
 
 async function shot(page, name) {
     const out = path.resolve(`screenshots/${name}.png`);

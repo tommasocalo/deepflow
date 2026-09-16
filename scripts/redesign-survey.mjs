@@ -3,7 +3,7 @@
  */
 import { chromium } from 'playwright';
 
-const URL = process.env.URL ?? 'http://localhost:5174/';
+const URL = process.env.URL ?? 'http://localhost:5173/';
 
 async function shot(page, name) {
     const out = `screenshots/${name}.png`;

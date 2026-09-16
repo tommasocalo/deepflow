@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const URL = process.env.URL ?? 'http://localhost:5174/';
+const URL = process.env.URL ?? 'http://localhost:5173/';
 const OUT = process.env.OUT ?? 'screenshots/state.png';
 const VIEWPORT = { width: 1440, height: 900 };
 

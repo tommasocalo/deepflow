@@ -13,13 +13,18 @@ import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import LayerNodeView from './LayerNodeView.jsx';
+import OpNodeView from './OpNodeView.jsx';
 import SuperNodeInstanceView from './SuperNodeInstanceView.jsx';
 import RepeatNodeView from './RepeatNodeView.jsx';
 import GradientEdge from './GradientEdge.jsx';
 import GraphStatusPanel from './GraphStatusPanel.jsx';
+import { useValidation } from '../../hooks/useValidation.js';
+import { COLUMN_HALF_WIDTH, activationLabel, isOpKey } from './nodeGeometry.js';
+import './architecture.css';
 
 const nodeTypes = {
     archLayer: LayerNodeView,
+    archOp: OpNodeView,
     archSupernode: SuperNodeInstanceView,
     archRepeat: RepeatNodeView,
 };
@@ -41,6 +46,7 @@ function toFlowNodes(graph, selectedSet) {
         type:
             node.kind === 'supernode' ? 'archSupernode'
             : node.kind === 'repeat'  ? 'archRepeat'
+            : isOpKey(node.libraryKey) ? 'archOp'
             :                            'archLayer',
         position: node.position,
         data: { node },
@@ -48,7 +54,27 @@ function toFlowNodes(graph, selectedSet) {
     }));
 }
 
-function toFlowEdges(graph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions) {
+/**
+ * An edge "skips" when another node sits vertically between its endpoints
+ * in the same column — a residual / skip connection. Those are routed
+ * around the column so they stay legible.
+ */
+function edgeSkips(edge, nodes) {
+    const src = nodes[edge.source];
+    const tgt = nodes[edge.target];
+    if (!src || !tgt) return false;
+    const top = Math.min(src.position.y, tgt.position.y) + 20;
+    const bottom = Math.max(src.position.y, tgt.position.y) - 20;
+    if (bottom - top < 40) return false;
+    const cx = (src.position.x + tgt.position.x) / 2;
+    return Object.values(nodes).some((n) =>
+        n.id !== src.id && n.id !== tgt.id &&
+        n.position.y > top && n.position.y < bottom &&
+        Math.abs(n.position.x - cx) < COLUMN_HALF_WIDTH,
+    );
+}
+
+function toFlowEdges(graph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions, shapes) {
     return graph.edges.map((e) => ({
         id: e.id,
         source: e.source,
@@ -61,6 +87,8 @@ function toFlowEdges(graph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions
             gradientOpLambda: e.gradientOpLambda,
             menuPosition: edgeMenuPositions[e.id],
             menuVersion: edgeMenuVersions[e.id] ?? 0,
+            activation: activationLabel(shapes?.[e.source]),
+            detour: edgeSkips(e, graph.nodes),
         },
         animated: false,
         selected: selectedEdgeSet.has(e.id),
@@ -103,12 +131,13 @@ const Inner = ({ children, overlay }) => {
         [rootGraph, currentPath, templates],
     );
 
+    const validation = useValidation();
     const selectedSet = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
     const selectedEdgeSet = useMemo(() => new Set(selectedEdgeIds), [selectedEdgeIds]);
     const nodes = useMemo(() => toFlowNodes(viewGraph, selectedSet), [viewGraph, selectedSet]);
     const edges = useMemo(
-        () => toFlowEdges(viewGraph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions),
-        [viewGraph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions],
+        () => toFlowEdges(viewGraph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions, validation.shapes),
+        [viewGraph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions, validation.shapes],
     );
     const showPanCursor = interactionMode === 'pan' || spacePressed;
     const graphIsEmpty = nodes.length === 0;
@@ -253,6 +282,7 @@ const Inner = ({ children, overlay }) => {
                     edges={edges}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
+                    nodeOrigin={[0.5, 0]}
                     onNodesChange={onNodesChange}
                     onEdgesChange={onEdgesChange}
                     onEdgeClick={onEdgeClick}

@@ -131,6 +131,43 @@ const RULES = {
         return { output: [...s, dim ?? null], errors: [] };
     },
 
+    'deepflow.nn.PositionalEmbedding': ([s], p) => {
+        if (!s) return { output: null, errors: [] };
+        const dim = numOrNull(p.embedding_dim);
+        const maxLen = numOrNull(p.max_len);
+        const t = s[s.length - 1];
+        const errors = [];
+        if (maxLen !== null && t !== null && t > maxLen) {
+            errors.push(`Positional Embedding max_len=${maxLen} but sequence length is ${t}`);
+        }
+        return { output: [...s, dim ?? null], errors };
+    },
+
+    'deepflow.nn.CausalSelfAttention': ([s], p) => {
+        if (!s) return { output: null, errors: [] };
+        const errors = [];
+        if (s.length !== 3) errors.push(`Causal Self-Attention expects (B, T, D); got rank ${s.length}`);
+        const d = numOrNull(p.embed_dim);
+        const heads = numOrNull(p.num_heads);
+        const last = s[s.length - 1];
+        if (d !== null && last !== null && last !== d) {
+            errors.push(`Causal Self-Attention embed_dim=${d} but input has ${last} features`);
+        }
+        if (d !== null && heads !== null && heads > 0 && d % heads !== 0) {
+            errors.push(`embed_dim=${d} is not divisible by num_heads=${heads}`);
+        }
+        return { output: s, errors };
+    },
+    'torch.nn.MultiheadAttention': ([s], p) => {
+        if (!s) return { output: null, errors: [] };
+        const d = numOrNull(p.embed_dim);
+        const last = s[s.length - 1];
+        if (d !== null && last !== null && last !== d) {
+            return { output: s, errors: [`MultiheadAttention embed_dim=${d} but input has ${last} features`] };
+        }
+        return { output: s, errors: [] };
+    },
+
     'torch.nn.BatchNorm2d': ([s], p) => {
         if (!s) return { output: null, errors: [] };
         if (s.length !== 4) {
@@ -151,7 +188,15 @@ const RULES = {
         }
         return { output: s, errors: [] };
     },
-    'torch.nn.LayerNorm': passthrough,
+    'torch.nn.LayerNorm': ([s], p) => {
+        if (!s) return { output: null, errors: [] };
+        const n = numOrNull(typeof p.normalized_shape === 'string' ? p.normalized_shape.replace(/[()[\],]/g, '') : p.normalized_shape);
+        const last = s[s.length - 1];
+        if (n !== null && last !== null && last !== n) {
+            return { output: s, errors: [`LayerNorm normalized_shape=${n} but input has ${last} features`] };
+        }
+        return { output: s, errors: [] };
+    },
     'torch.nn.GroupNorm': ([s], p) => {
         if (!s) return { output: null, errors: [] };
         const c = numOrNull(p.num_channels);
@@ -223,10 +268,12 @@ function adaptivePoolRule([s], p) {
 }
 
 function elementwiseRule(inputs) {
-    const present = inputs.filter(Boolean);
-    if (present.length < 2) {
-        return { output: present[0] ?? null, errors: ['Element-wise op needs at least 2 inputs'] };
+    if (inputs.length < 2) {
+        return { output: inputs[0] ?? null, errors: ['Element-wise op needs at least 2 inputs'] };
     }
+    const present = inputs.filter(Boolean);
+    // Some inputs have unknown shapes: propagate what we know, no error.
+    if (present.length < 2) return { output: present[0] ?? null, errors: [] };
     const ranks = new Set(present.map((s) => s.length));
     if (ranks.size > 1) {
         return { output: present[0], errors: [`Element-wise inputs differ in rank: ${[...ranks].join(' vs ')}`] };
@@ -245,10 +292,11 @@ function elementwiseRule(inputs) {
 }
 
 function concatRule(inputs, p) {
-    const present = inputs.filter(Boolean);
-    if (present.length < 2) {
-        return { output: present[0] ?? null, errors: ['Concat needs at least 2 inputs'] };
+    if (inputs.length < 2) {
+        return { output: inputs[0] ?? null, errors: ['Concat needs at least 2 inputs'] };
     }
+    const present = inputs.filter(Boolean);
+    if (present.length < 2) return { output: null, errors: [] };
     const axis = numOrNull(p.dim) ?? 1;
     const ref = present[0];
     if (!present.every((s) => s.length === ref.length)) {

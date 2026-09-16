@@ -1,7 +1,7 @@
 import { topologicalSort } from '../validation/topology.js';
 import { resolveLayerParameters, resolveParameterValue } from '../domain/expressions.js';
 import { getEntry } from '../domain/library/index.js';
-import { indent, kwArgs, toPyIdent } from './python.js';
+import { indent, kwArgs, toPyIdent, toPyLiteral } from './python.js';
 
 /**
  * Generate a runnable PyTorch nn.Module class from an architecture graph.
@@ -43,9 +43,10 @@ export function generateArchitectureModule(graph, { templates = {}, className = 
             const out = outputName(item.id);
             const fieldName = `self.${item.field}`;
             const args = renderArgs(item.entry, item.parameters);
-            initLines.push(`${fieldName} = ${item.entry.pyTorchFn}(${args})`);
+            initLines.push(`${fieldName} = ${item.initExpr ?? `${item.entry.pyTorchFn}(${args})`}`);
             const [src] = item.inputs;
-            forwardLines.push(`${out} = ${fieldName}(${exprFor(src)})`);
+            const call = item.forwardExpr ? item.forwardExpr(fieldName, exprFor(src)) : `${fieldName}(${exprFor(src)})`;
+            forwardLines.push(`${out} = ${call}`);
         } else if (item.kind === 'passthrough') {
             const [src] = item.inputs;
             // alias rather than emit
@@ -61,9 +62,13 @@ export function generateArchitectureModule(graph, { templates = {}, className = 
         }
     }
 
-    const finalExpr = plan.finalId
-        ? exprFor(plan.finalId)
-        : (plan.items.length ? exprFor(plan.items[plan.items.length - 1].id) : 'x');
+    // Multi-output models return a tuple in Output-node order.
+    const outputRefs = plan.outputRefs ?? [];
+    const finalExpr = outputRefs.length > 1
+        ? outputRefs.map((id) => exprFor(id)).join(', ')
+        : plan.finalId
+            ? exprFor(plan.finalId)
+            : (plan.items.length ? exprFor(plan.items[plan.items.length - 1].id) : 'x');
 
     const init = initLines.length
         ? initLines.join('\n')
@@ -72,20 +77,47 @@ export function generateArchitectureModule(graph, { templates = {}, className = 
         ? forwardLines.join('\n')
         : 'pass';
 
-    const helpers = ctx.usesGRL
+    const attnHelper = ctx.usesCausalAttention ? CAUSAL_ATTENTION_SRC : '';
+    const helpers = attnHelper + (ctx.usesGRL
         ? `\nclass _GradReverse(torch.autograd.Function):\n    @staticmethod\n    def forward(ctx, x, lambd):\n        ctx.lambd = float(lambd)\n        return x.view_as(x)\n\n    @staticmethod\n    def backward(ctx, grad_output):\n        return grad_output.neg() * ctx.lambd, None\n\n\ndef _grad_reverse(x, lambd):\n    return _GradReverse.apply(x, lambd)\n`
-        : '';
+        : '');
 
     return `import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n${helpers}\n\nclass ${toPyIdent(className, 'Model')}(nn.Module):\n    def __init__(self):\n        super().__init__()\n${indent(init, 2)}\n\n    def forward(self, x):\n${indent(fwd, 2)}\n        return ${finalExpr}\n`;
 }
 
 // ------------------- internals -------------------
 
+const CAUSAL_ATTENTION_SRC = `
+class CausalSelfAttention(nn.Module):
+    """GPT-style masked multi-head self-attention (fused QKV + output projection)."""
+
+    def __init__(self, embed_dim, num_heads, dropout=0.0, bias=True):
+        super().__init__()
+        assert embed_dim % num_heads == 0, "embed_dim must be divisible by num_heads"
+        self.num_heads = num_heads
+        self.dropout = dropout
+        self.qkv = nn.Linear(embed_dim, 3 * embed_dim, bias=bias)
+        self.proj = nn.Linear(embed_dim, embed_dim, bias=bias)
+
+    def forward(self, x):
+        B, T, C = x.shape
+        q, k, v = self.qkv(x).split(C, dim=2)
+        q = q.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
+        k = k.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
+        v = v.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
+        y = F.scaled_dot_product_attention(
+            q, k, v, dropout_p=self.dropout if self.training else 0.0, is_causal=True
+        )
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        return self.proj(y)
+`;
+
 function makeContext(templates) {
     return {
         templates,
         fieldCounter: {},
         usesGRL: false,
+        usesCausalAttention: false,
         nextField(name) {
             const base = toPyIdent(name, 'layer');
             const n = (this.fieldCounter[base] = (this.fieldCounter[base] || 0) + 1);
@@ -146,6 +178,29 @@ function expandGraph(graph, scope, ctx) {
             if (node.libraryKey === 'deepflow.op.Concat') {
                 const dim = resolveParameterValue(node.parameters?.dim, scope) ?? 1;
                 items.push({ id, kind: 'combine', inputs: inputRefs, expr: (xs) => `torch.cat([${xs.join(', ')}], dim=${dim})` });
+                outRef[id] = id;
+                continue;
+            }
+
+            if (node.libraryKey === 'deepflow.nn.PositionalEmbedding') {
+                const resolved = resolveLayerParameters(node, scope);
+                const field = ctx.nextField(node.label || entry.name);
+                items.push({
+                    id, kind: 'instantiate', field, entry, parameters: resolved.parameters, inputs: inputRefs,
+                    initExpr: `torch.nn.Embedding(${toPyLiteral(resolved.parameters.max_len)}, ${toPyLiteral(resolved.parameters.embedding_dim)})`,
+                    forwardExpr: (f, x) => `${f}(torch.arange(${x}.size(1), device=${x}.device))`,
+                });
+                outRef[id] = id;
+                continue;
+            }
+            if (node.libraryKey === 'deepflow.nn.CausalSelfAttention') {
+                ctx.usesCausalAttention = true;
+                const resolved = resolveLayerParameters(node, scope);
+                const field = ctx.nextField(node.label || entry.name);
+                items.push({
+                    id, kind: 'instantiate', field, entry, parameters: resolved.parameters, inputs: inputRefs,
+                    initExpr: `CausalSelfAttention(${renderArgs(entry, resolved.parameters)})`,
+                });
                 outRef[id] = id;
                 continue;
             }
@@ -247,13 +302,16 @@ function expandGraph(graph, scope, ctx) {
     // Identify the final node — the last topologically-ordered output / passthrough
     // that has no outgoing edges.
     let finalId = null;
+    /** @type {string[]} plan ids of root-level Output nodes, in topological order */
+    const outputRefs = [];
     for (const id of order) {
         const node = graph.nodes[id];
         if (!node) continue;
         const outs = adjacency.out[id]?.length ?? 0;
         if (outs === 0) finalId = outRef[id] ?? id;
+        if (node.kind === 'layer' && node.libraryKey === 'deepflow.io.Output') outputRefs.push(outRef[id] ?? id);
     }
-    return { items, finalId };
+    return { items, finalId, outputRefs };
 }
 
 function buildSubScope(freeParameters, bindings, parentScope) {

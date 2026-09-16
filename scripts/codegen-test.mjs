@@ -6,7 +6,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
 
-const URL = process.env.URL ?? 'http://localhost:5174/';
+const URL = process.env.URL ?? 'http://localhost:5173/';
 
 async function main() {
     const browser = await chromium.launch();

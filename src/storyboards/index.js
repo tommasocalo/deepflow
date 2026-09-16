@@ -3,11 +3,18 @@
  * Each storyboard takes the running stores and populates them with a
  * fully wired example. Used for demos, onboarding, and the user study.
  */
+import { gpt2Storyboard } from './gpt2.js';
 import { resnetStoryboard } from './resnet.js';
 import { dannStoryboard } from './dann.js';
 import { ganStoryboard } from './gan.js';
 
 export const STORYBOARDS = [
+    {
+        id: 'gpt2',
+        label: 'GPT-2 small',
+        summary: 'Default model: embeddings, 12 repeated pre-LN Transformer blocks with residual streams, LM head.',
+        run: gpt2Storyboard,
+    },
     {
         id: 'resnet',
         label: 'ResNet stages',
