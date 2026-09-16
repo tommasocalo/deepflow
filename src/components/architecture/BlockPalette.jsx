@@ -84,11 +84,16 @@ export default function BlockPalette() {
         const point = screenToFlowPosition({ x: bounds.left + availableWidth * 0.5, y: bounds.top + bounds.height * 0.42 });
         const topLeft = screenToFlowPosition({ x: bounds.left + 28, y: bounds.top + 70 });
         const bottomRight = screenToFlowPosition({ x: bounds.left + availableWidth - 28, y: bounds.bottom - 70 });
+        // Node positions identify their top-centre. Reserve half the widest
+        // card on each side, rather than treating x as its left edge.
+        const halfWidth = 150;
+        const minX = topLeft.x + halfWidth;
+        const maxX = bottomRight.x - halfWidth;
         const clamp = (candidate) => ({
-            x: Math.max(topLeft.x, Math.min(candidate.x, bottomRight.x - 320)),
-            y: Math.max(topLeft.y, Math.min(candidate.y, bottomRight.y - 200)),
+            x: minX <= maxX ? Math.max(minX, Math.min(candidate.x, maxX)) : (topLeft.x + bottomRight.x) / 2,
+            y: Math.max(topLeft.y, Math.min(candidate.y, bottomRight.y - 72)),
         });
-        let position = clamp({ x: Math.round(point.x - 120), y: Math.round(point.y - 65) });
+        let position = clamp({ x: Math.round(point.x), y: Math.round(point.y) });
         const nodes = getNodes();
         for (let attempt = 0; attempt < 12; attempt++) {
             if (!nodes.some((node) => Math.abs(node.position.x - position.x) < 220 && Math.abs(node.position.y - position.y) < 130)) break;

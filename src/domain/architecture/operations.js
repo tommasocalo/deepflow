@@ -82,7 +82,20 @@ export function patchLayerParameters(graph, id, parameterPatch) {
  * @param {import('./types.js').Position} position
  */
 export function moveNode(graph, id, position) {
-    return patchNode(graph, id, { position });
+    return moveNodes(graph, [{ id, position }]);
+}
+
+/** Apply a whole drag selection atomically, retaining unrelated node objects. */
+export function moveNodes(graph, moves) {
+    let nodes = graph.nodes;
+    for (const { id, position } of moves) {
+        const node = nodes[id];
+        if (!node || !Number.isFinite(position?.x) || !Number.isFinite(position?.y)) continue;
+        if (node.position.x === position.x && node.position.y === position.y) continue;
+        if (nodes === graph.nodes) nodes = { ...nodes };
+        nodes[id] = { ...node, position: { x: position.x, y: position.y } };
+    }
+    return nodes === graph.nodes ? graph : { ...graph, nodes };
 }
 
 /**

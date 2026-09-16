@@ -16,10 +16,12 @@ import LayerNodeView from './LayerNodeView.jsx';
 import OpNodeView from './OpNodeView.jsx';
 import SuperNodeInstanceView from './SuperNodeInstanceView.jsx';
 import RepeatNodeView from './RepeatNodeView.jsx';
-import GradientEdge from './GradientEdge.jsx';
+import ArchitectureEdge from './ArchitectureEdge.jsx';
 import GraphStatusPanel from './GraphStatusPanel.jsx';
 import { useValidation } from '../../hooks/useValidation.js';
-import { COLUMN_HALF_WIDTH, activationLabel, isOpKey } from './nodeGeometry.js';
+import { COLUMN_HALF_WIDTH, activationLabel } from './nodeGeometry.js';
+import { tensorFlowNodeIds } from './tensorFlow.js';
+import { createDragBatcher, syncFlowNodes } from './flowAdapter.js';
 import './architecture.css';
 
 const nodeTypes = {
@@ -30,28 +32,16 @@ const nodeTypes = {
 };
 
 const edgeTypes = {
-    archEdge: GradientEdge,
+    archEdge: ArchitectureEdge,
 };
+
+const NODE_ORIGIN = [0.5, 0];
 
 const VIEWPORT_KEY_PREFIX = 'deepflow:architecture-viewport';
 
 function viewportKey(currentPath) {
     if (!currentPath || currentPath.length === 0) return `${VIEWPORT_KEY_PREFIX}:root`;
     return `${VIEWPORT_KEY_PREFIX}:${currentPath.join('/')}`;
-}
-
-function toFlowNodes(graph, selectedSet) {
-    return Object.values(graph.nodes).map((node) => ({
-        id: node.id,
-        type:
-            node.kind === 'supernode' ? 'archSupernode'
-            : node.kind === 'repeat'  ? 'archRepeat'
-            : isOpKey(node.libraryKey) ? 'archOp'
-            :                            'archLayer',
-        position: node.position,
-        data: { node },
-        selected: selectedSet.has(node.id),
-    }));
 }
 
 /**
@@ -74,27 +64,28 @@ function edgeSkips(edge, nodes) {
     );
 }
 
-function toFlowEdges(graph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions, shapes) {
-    return graph.edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle,
-        type: 'archEdge',
-        data: {
-            gradientOp: e.gradientOp ?? 'none',
-            gradientOpLambda: e.gradientOpLambda,
-            menuPosition: edgeMenuPositions[e.id],
-            menuVersion: edgeMenuVersions[e.id] ?? 0,
-            activation: activationLabel(shapes?.[e.source]),
-            detour: edgeSkips(e, graph.nodes),
-        },
-        animated: false,
-        selected: selectedEdgeSet.has(e.id),
-        // Wider invisible hit area so users can actually click an edge.
-        interactionWidth: 20,
-    }));
+function toFlowEdges(graph, selectedEdgeSet, shapes, tensorFlowIds) {
+    return graph.edges.map((e) => {
+        const detour = edgeSkips(e, graph.nodes);
+        return {
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            sourceHandle: e.sourceHandle,
+            targetHandle: e.targetHandle,
+            type: 'archEdge',
+            data: {
+                activation: activationLabel(shapes?.[e.source]),
+                shape: shapes?.[e.source],
+                tensorFlow: tensorFlowIds.has(e.source) && !detour,
+                detour,
+            },
+            animated: false,
+            selected: selectedEdgeSet.has(e.id),
+            // Wider invisible hit area so users can actually click an edge.
+            interactionWidth: 20,
+        };
+    });
 }
 
 const Inner = ({ children, overlay }) => {
@@ -102,7 +93,7 @@ const Inner = ({ children, overlay }) => {
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const selectedNodeIds = useArchitectureStore((s) => s.selectedNodeIds);
     const templates = useTemplatesStore((s) => s.templates);
-    const moveNode = useArchitectureStore((s) => s.moveNode);
+    const moveNodes = useArchitectureStore((s) => s.moveNodes);
     const removeNodeStore = useArchitectureStore((s) => s.removeNode);
     const removeEdgeStore = useArchitectureStore((s) => s.removeEdge);
     const connect = useArchitectureStore((s) => s.connect);
@@ -114,14 +105,14 @@ const Inner = ({ children, overlay }) => {
     const addLayerByLibraryKey = useArchitectureStore((s) => s.addLayerByLibraryKey);
     const addSuperNodeInstance = useArchitectureStore((s) => s.addSuperNodeInstance);
 
-    const { screenToFlowPosition, setViewport, fitView } = useReactFlow();
+    const { screenToFlowPosition, setViewport, setNodes, fitView } = useReactFlow();
     const nodesInitialized = useNodesInitialized();
     const wrapperRef = useRef(null);
     const lastViewportKeyRef = useRef(null);
+    const mountedRef = useRef(false);
+    const [dragBatcher] = useState(createDragBatcher);
     const [interactionMode, setInteractionMode] = useState('select');  // 'select' | 'pan'
     const [selectedEdgeIds, setSelectedEdgeIds] = useState([]);
-    const [edgeMenuPositions, setEdgeMenuPositions] = useState({});
-    const [edgeMenuVersions, setEdgeMenuVersions] = useState({});
     const [spacePressed, setSpacePressed] = useState(false);
 
     // Resolve the visible graph from the path. Templates is included in deps
@@ -132,15 +123,49 @@ const Inner = ({ children, overlay }) => {
     );
 
     const validation = useValidation();
-    const selectedSet = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
+    const levelKey = JSON.stringify(currentPath);
+    const dragContext = useMemo(() => ({ graph: viewGraph, levelKey }), [viewGraph, levelKey]);
+    const tensorFlowIds = useMemo(() => tensorFlowNodeIds(viewGraph), [viewGraph]);
+    const [initialNodes] = useState(() => syncFlowNodes([], viewGraph, selectedNodeIds, tensorFlowIds, levelKey));
     const selectedEdgeSet = useMemo(() => new Set(selectedEdgeIds), [selectedEdgeIds]);
-    const nodes = useMemo(() => toFlowNodes(viewGraph, selectedSet), [viewGraph, selectedSet]);
+    // Edges use committed geometry: their routing classification stays stable
+    // while ReactFlow moves only the endpoint coordinates during a drag.
     const edges = useMemo(
-        () => toFlowEdges(viewGraph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions, validation.shapes),
-        [viewGraph, selectedEdgeSet, edgeMenuPositions, edgeMenuVersions, validation.shapes],
+        () => toFlowEdges(viewGraph, selectedEdgeSet, validation.shapes, tensorFlowIds),
+        [viewGraph, selectedEdgeSet, validation.shapes, tensorFlowIds],
     );
     const showPanCursor = interactionMode === 'pan' || spacePressed;
-    const graphIsEmpty = nodes.length === 0;
+    const graphIsEmpty = Object.keys(viewGraph.nodes).length === 0;
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            dragBatcher.cancel();
+        };
+    }, [dragBatcher]);
+
+    useEffect(() => {
+        const resetPositions = dragBatcher.reconcile(dragContext);
+        setNodes((previous) => syncFlowNodes(previous, viewGraph, selectedNodeIds, tensorFlowIds, levelKey, resetPositions));
+    }, [setNodes, dragBatcher, dragContext, viewGraph, selectedNodeIds, tensorFlowIds, levelKey]);
+
+    const restorePositions = useCallback(() => {
+        setNodes((previous) => syncFlowNodes(previous, viewGraph, selectedNodeIds, tensorFlowIds, levelKey, true));
+    }, [setNodes, viewGraph, selectedNodeIds, tensorFlowIds, levelKey]);
+
+    useEffect(() => {
+        const cancelDrag = () => {
+            dragBatcher.cancel();
+            restorePositions();
+        };
+        window.addEventListener('pointercancel', cancelDrag);
+        window.addEventListener('blur', cancelDrag);
+        return () => {
+            window.removeEventListener('pointercancel', cancelDrag);
+            window.removeEventListener('blur', cancelDrag);
+        };
+    }, [dragBatcher, restorePositions]);
 
     useEffect(() => {
         const isEditable = (target) =>
@@ -162,7 +187,7 @@ const Inner = ({ children, overlay }) => {
         };
     }, []);
 
-    // Save and restore viewport per level so drilling in/out preserves zoom.
+    // Restore viewport per level; movement is saved once in onMoveEnd.
     useEffect(() => {
         if (!nodesInitialized && !graphIsEmpty) return;
         const key = viewportKey(currentPath);
@@ -185,8 +210,8 @@ const Inner = ({ children, overlay }) => {
         }
     }, [currentPath, nodesInitialized, graphIsEmpty, setViewport, fitView]);
 
-    const handleViewportChange = useCallback(
-        (vp) => {
+    const handleMoveEnd = useCallback(
+        (_event, vp) => {
             const key = viewportKey(currentPath);
             try {
                 localStorage.setItem(key, JSON.stringify(vp));
@@ -199,18 +224,28 @@ const Inner = ({ children, overlay }) => {
 
     const onNodesChange = useCallback(
         (changes) => {
+            if (!mountedRef.current) return;
+            const transaction = dragBatcher.consume(changes, dragContext);
+            if (transaction) {
+                const expected = transaction.isDrag ? transaction.context : { levelKey };
+                if (transaction.cancelled || !moveNodes(transaction.moves, expected)) restorePositions();
+            }
             for (const change of changes) {
-                if (change.type === 'position' && change.position) {
-                    moveNode(change.id, change.position);
-                } else if (change.type === 'remove') {
+                if (change.type === 'remove' && viewGraph.nodes[change.id]) {
                     removeNodeStore(change.id);
                 } else if (change.type === 'select') {
                     setNodeSelected(change.id, change.selected);
                 }
             }
         },
-        [moveNode, removeNodeStore, setNodeSelected],
+        [dragBatcher, dragContext, levelKey, viewGraph, moveNodes, restorePositions, removeNodeStore, setNodeSelected],
     );
+
+    const onDragStart = useCallback((_event, nodeOrNodes) => {
+        dragBatcher.begin(dragContext);
+        const dragged = Array.isArray(nodeOrNodes) ? nodeOrNodes : [nodeOrNodes];
+        if (dragged.some((node) => node?.data.levelKey !== levelKey)) dragBatcher.cancel();
+    }, [dragBatcher, dragContext, levelKey]);
 
     const onEdgesChange = useCallback(
         (changes) => {
@@ -230,19 +265,6 @@ const Inner = ({ children, overlay }) => {
     );
 
     const onConnect = useCallback((params) => connect(params), [connect]);
-
-    const onEdgeClick = useCallback(
-        (event, edge) => {
-            const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-            setSelectedEdgeIds([edge.id]);
-            setEdgeMenuPositions((positions) => ({ ...positions, [edge.id]: position }));
-            setEdgeMenuVersions((versions) => ({
-                ...versions,
-                [edge.id]: (versions[edge.id] ?? 0) + 1,
-            }));
-        },
-        [screenToFlowPosition],
-    );
 
     const onDragOver = useCallback((e) => {
         e.preventDefault();
@@ -278,24 +300,23 @@ const Inner = ({ children, overlay }) => {
             >
                 <GraphStatusPanel />
                 <ReactFlow
-                    nodes={nodes}
+                    defaultNodes={initialNodes}
                     edges={edges}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
-                    nodeOrigin={[0.5, 0]}
+                    nodeOrigin={NODE_ORIGIN}
                     onNodesChange={onNodesChange}
+                    onNodeDragStart={onDragStart}
+                    onSelectionDragStart={onDragStart}
                     onEdgesChange={onEdgesChange}
-                    onEdgeClick={onEdgeClick}
                     onConnect={onConnect}
                     onDragOver={onDragOver}
                     onDrop={onDrop}
-                    onViewportChange={handleViewportChange}
+                    onMoveEnd={handleMoveEnd}
                     onPaneClick={() => {
                         clearSelection();
                         clearExpanded();
                         setSelectedEdgeIds([]);
-                        setEdgeMenuPositions({});
-                        setEdgeMenuVersions({});
                     }}
                     selectionOnDrag={interactionMode === 'select'}
                     panOnDrag={interactionMode === 'pan'}

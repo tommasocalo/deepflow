@@ -10,6 +10,7 @@ import {
     createTemplate,
     emptyGraph,
     moveNode,
+    moveNodes,
     patchEdge,
     patchLayerParameters,
     patchNode,
@@ -64,12 +65,14 @@ export const useArchitectureStore = create(
                 const state = get();
                 const level = resolveLevel(state);
                 if (level.isRoot) {
-                    set({ graph: transform(state.graph) });
+                    const graph = transform(state.graph);
+                    if (graph !== state.graph) set({ graph });
                 } else {
                     const tplStore = useTemplatesStore.getState();
                     const tpl = tplStore.getTemplate(level.templateId);
                     if (!tpl) return;
-                    tplStore.patchTemplate(level.templateId, { graph: transform(tpl.graph) });
+                    const graph = transform(tpl.graph);
+                    if (graph !== tpl.graph) tplStore.patchTemplate(level.templateId, { graph });
                 }
             };
 
@@ -200,6 +203,16 @@ export const useArchitectureStore = create(
                     updateCurrentGraph((g) => patchLayerParameters(g, id, parameterPatch)),
 
                 moveNode: (id, position) => updateCurrentGraph((g) => moveNode(g, id, position)),
+
+                moveNodes: (moves, expected) => {
+                    const state = get();
+                    const graph = getViewGraph(state);
+                    // A delayed pointer event must not move nodes in another
+                    // level, a newly loaded graph, or a concurrently edited one.
+                    if (expected && ((expected.graph && expected.graph !== graph) || expected.levelKey !== JSON.stringify(state.currentPath))) return false;
+                    updateCurrentGraph((g) => moveNodes(g, moves));
+                    return true;
+                },
 
                 connect: ({ source, target, sourceHandle, targetHandle }) => {
                     if (!source || !target || source === target) return null;

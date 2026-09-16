@@ -42,9 +42,9 @@ for (const [key, value] of Object.entries({
 
 // Import React DOM after installing document so its event system uses the DOM
 // implementation. Keep packages external so tests and components share React.
-const { act, createElement: h, useState } = await import('react');
+const { act, createElement: h, useState, useEffect } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { ReactFlow, ReactFlowProvider } = await import('@xyflow/react');
+const { ReactFlow, ReactFlowProvider, useStoreApi } = await import('@xyflow/react');
 const temporaryDirectory = await mkdtemp(join(projectRoot, '.ui-regressions-'));
 let app;
 try {
@@ -55,7 +55,9 @@ try {
                 export { default as ParameterField } from './src/components/architecture/ParameterField.jsx';
                 export { default as LayerNodeView } from './src/components/architecture/LayerNodeView.jsx';
                 export { default as BlockPalette } from './src/components/architecture/BlockPalette.jsx';
-                export { default as GradientEdge } from './src/components/architecture/GradientEdge.jsx';
+                export { default as ArchitectureCanvas } from './src/components/architecture/ArchitectureCanvas.jsx';
+                export { default as ArchitectureEdge } from './src/components/architecture/ArchitectureEdge.jsx';
+                export { default as NodeInspector } from './src/components/architecture/NodeInspector.jsx';
                 export { useArchitectureStore } from './src/stores/architectureStore.js';
                 export { useTemplatesStore } from './src/stores/templatesStore.js';
                 export { createLayerNode, createTemplate, createEdge, emptyGraph } from './src/domain/architecture/index.js';
@@ -76,7 +78,7 @@ try {
 } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
 }
-const { ParameterField, LayerNodeView, BlockPalette, GradientEdge, useArchitectureStore, useTemplatesStore, createLayerNode, createTemplate, createEdge, emptyGraph, getEntry } = app;
+const { ParameterField, LayerNodeView, BlockPalette, ArchitectureCanvas, ArchitectureEdge, NodeInspector, useArchitectureStore, useTemplatesStore, createLayerNode, createTemplate, createEdge, emptyGraph, getEntry } = app;
 let container;
 let root;
 
@@ -153,9 +155,9 @@ function GraphHarness() {
     const graph = useArchitectureStore((state) => state.graph);
     return h(ReactFlowProvider, null, h(ReactFlow, {
         width: 1000, height: 700,
-        nodes: Object.values(graph.nodes).map((node) => ({ id: node.id, type: 'layer', position: node.position, data: { node }, width: 260, height: 160 })),
+        nodes: Object.values(graph.nodes).map((node) => ({ id: node.id, type: 'layer', position: node.position, data: { node }, width: 240, height: 44 })),
         edges: [], nodeTypes,
-    }));
+    }), h(NodeInspector));
 }
 
 test('numeric editing retains decimal zeros and exponent text until blur', async () => {
@@ -202,29 +204,30 @@ test('repeated parameter names have unique stable label associations', async () 
     assert.equal(inputs[1].value, '');
 });
 
-test('card clicks expand a layer, parameter editing stays open, and explicit controls toggle it', async () => {
+test('compact nodes open the inspector and editing keeps node geometry unchanged', async () => {
     const entry = getEntry('torch.nn.Linear');
     const node = createLayerNode({ id: 'linear', libraryKey: entry.key, entry, position: { x: 10, y: 10 } });
     useArchitectureStore.setState({ graph: { nodes: { [node.id]: node }, edges: [] } });
     await render(h(GraphHarness));
-    assert.equal(byAria('Expand Linear').getAttribute('aria-expanded'), 'false');
-    await click(container.querySelector('.react-flow__node[data-id="linear"] h3'));
+    const block = container.querySelector('.react-flow__node[data-id="linear"] .df-block');
+    const size = block.style.cssText;
+    assert.equal(container.querySelector('.df-inspector'), null);
+    assert.equal(block.querySelector('input'), null);
+    await click(block);
     assert.equal(useArchitectureStore.getState().expandedNodeId, 'linear');
+    assert.ok(byAria('Linear inspector'));
     const input = byFieldLabel('in_features');
     await click(input);
-    assert.equal(useArchitectureStore.getState().expandedNodeId, 'linear');
     await typeText(input, '768');
     await blur(input);
     assert.equal(useArchitectureStore.getState().graph.nodes.linear.parameters.in_features, 768);
     assert.equal(useArchitectureStore.getState().expandedNodeId, 'linear');
-    const collapse = byAria('Collapse Linear');
-    assert.equal(collapse.getAttribute('aria-expanded'), 'true');
-    await click(collapse);
+    assert.equal(block.style.cssText, size, 'Opening and editing must not expand the block');
+    await click(byAria('Close inspector'));
     assert.equal(useArchitectureStore.getState().expandedNodeId, null);
-    await click(container.querySelector('.react-flow__node[data-id="linear"] .react-flow__handle'));
-    assert.equal(useArchitectureStore.getState().expandedNodeId, null, 'A connector click must not resize its node');
-    await click(byAria('Expand Linear'));
-    assert.equal(useArchitectureStore.getState().expandedNodeId, 'linear');
+    await click(block.querySelector('.react-flow__handle'));
+    assert.equal(useArchitectureStore.getState().expandedNodeId, null, 'Connecting must not open the inspector');
+    await click(block);
     assert.equal(byFieldLabel('in_features').value, '768');
 });
 
@@ -282,46 +285,29 @@ test('collapsed library reopens and focuses search with the keyboard shortcut', 
 });
 
 
-function EdgeHarness({ selected, menuVersion = 0 }) {
+function EdgeHarness({ selected }) {
     const edge = useArchitectureStore((state) => state.graph.edges[0]);
-    // ReactFlow supplies the real EdgeLabelRenderer portal. Coordinates are
-    // fixed because this test verifies menu state and mutations, not geometry.
     return h(ReactFlowProvider, null, h(ReactFlow, {
         width: 1000, height: 700, nodes: [], edges: [],
-    }, h('svg', null, h(GradientEdge, {
+    }, h('svg', null, h(ArchitectureEdge, {
         id: edge.id, selected,
         sourceX: 100, sourceY: 100, targetX: 100, targetY: 300,
         sourcePosition: 'bottom', targetPosition: 'top',
-        data: { gradientOp: edge.gradientOp, gradientOpLambda: edge.gradientOpLambda, menuVersion },
+        data: { activation: 'B × 1024 × 768', gradientOp: edge.gradientOp },
     }))));
 }
 
-test('gradient menu writes the edge operator, dismisses, and reopens on selection or a new click', async () => {
-    const entry = getEntry('torch.nn.Linear');
-    const source = createLayerNode({ id: 'source', libraryKey: entry.key, entry, position: { x: 100, y: 100 } });
-    const target = createLayerNode({ id: 'target', libraryKey: entry.key, entry, position: { x: 100, y: 300 } });
-    const edge = createEdge({ id: 'connection', source: source.id, target: target.id });
-    useArchitectureStore.setState({ graph: { nodes: { source, target }, edges: [edge] } });
-    const picker = () => container.querySelector('.df-gradient-picker');
-    const option = (label) => [...picker().querySelectorAll('button')].find((button) => button.textContent === label);
-
-    await render(h(EdgeHarness, { selected: false }));
-    assert.equal(picker(), null);
+test('architecture edges show tensor shapes without gradient controls or mutations', async () => {
+    const edge = createEdge({ id: 'connection', source: 'a', target: 'b', gradientOp: 'reverse', gradientOpLambda: 0.5 });
+    useArchitectureStore.setState({ graph: { nodes: {}, edges: [edge] } });
     await render(h(EdgeHarness, { selected: true }));
-    assert.ok(picker());
-    await click(option('Detach'));
-    assert.equal(useArchitectureStore.getState().graph.edges[0].gradientOp, 'detach');
-    assert.equal(picker(), null);
-
+    assert.equal(container.querySelector('.df-activation').textContent, 'B × 1024 × 768');
+    assert.equal(container.querySelector('.df-gradient-picker'), null);
+    assert.equal(container.querySelector('.df-activation-op'), null);
+    assert.equal(container.querySelector('.react-flow__edge-path').style.stroke, 'rgb(17, 17, 17)');
+    assert.equal(useArchitectureStore.getState().graph.edges[0], edge, 'Existing training semantics must survive display changes');
     await render(h(EdgeHarness, { selected: false }));
-    await render(h(EdgeHarness, { selected: true }));
-    assert.ok(picker(), 'Reselecting the edge opens a fresh picker');
-    assert.equal(option('Detach').getAttribute('aria-pressed'), 'true');
-    await click(option('Normal'));
-    assert.equal(useArchitectureStore.getState().graph.edges[0].gradientOp, 'none');
-    assert.equal(picker(), null);
-    await render(h(EdgeHarness, { selected: true, menuVersion: 1 }));
-    assert.ok(picker(), 'Clicking an already selected edge opens the dismissed picker again');
+    assert.equal(container.querySelector('.df-gradient-picker'), null);
 });
 
 test('search ArrowDown focuses a result and Enter adds the matching layer once', async () => {
@@ -336,4 +322,69 @@ test('search ArrowDown focuses a result and Enter adds the matching layer once',
     assert.equal(graphNodes().length, 1);
     assert.equal(graphNodes()[0].libraryKey, 'torch.nn.LayerNorm');
     assert.deepEqual(useArchitectureStore.getState().selectedNodeIds, [graphNodes()[0].id]);
+});
+
+// Real canvas / ReactFlow store integration; no pretend pointer geometry.
+// triggerNodeChanges is the same update path used by ReactFlow's drag handler.
+function CanvasBridge({ onReady }) {
+    const store = useStoreApi();
+    useEffect(() => { onReady(store); }, [store, onReady]);
+    return null;
+}
+
+test('canvas keeps 60 multi-drag frames local, persists on release and recovers from cancellation', async () => {
+    const entry = getEntry('torch.nn.Linear');
+    const a = createLayerNode({ id: 'a', libraryKey: entry.key, entry, position: { x: 200, y: 100 } });
+    const b = createLayerNode({ id: 'b', libraryKey: entry.key, entry, position: { x: 200, y: 250 } });
+    const c = createLayerNode({ id: 'c', libraryKey: entry.key, entry, position: { x: 200, y: 400 } });
+    const edge = createEdge({ id: 'skip', source: 'a', target: 'c' });
+    const graph = { nodes: { a, b, c }, edges: [edge] };
+    useArchitectureStore.setState({ graph });
+    let flow;
+    const onReady = (store) => { flow = store; };
+    await render(h(ArchitectureCanvas, { overlay: h(CanvasBridge, { onReady }) }));
+    const untouched = flow.getState().nodes.find((node) => node.id === 'c');
+    const route = flow.getState().edges[0].data;
+    assert.equal(route.detour, true);
+    let writes = 0;
+    const storageProto = dom.window.Storage.prototype;
+    const setItem = storageProto.setItem;
+    storageProto.setItem = function (key, value) {
+        if (key === 'deepflow:architecture-graph') writes += 1;
+        return setItem.call(this, key, value);
+    };
+    try {
+        await act(() => flow.getState().onSelectionDragStart(null, flow.getState().nodes.filter((node) => node.id !== 'c')));
+        for (let frame = 1; frame <= 60; frame += 1) {
+            await act(() => flow.getState().triggerNodeChanges([
+                { type: 'position', id: 'a', position: { x: 200 + frame, y: 100 + frame }, dragging: true },
+                { type: 'position', id: 'b', position: { x: 200 + frame, y: 250 + frame }, dragging: true },
+            ]));
+        }
+        assert.equal(useArchitectureStore.getState().graph, graph);
+        assert.equal(writes, 0);
+        assert.equal(flow.getState().nodes.find((node) => node.id === 'c'), untouched);
+        assert.equal(flow.getState().edges[0].data, route, 'Routing classification stays stable during drag');
+        assert.deepEqual(flow.getState().nodes.find((node) => node.id === 'a').position, { x: 260, y: 160 });
+        await act(() => flow.getState().triggerNodeChanges([
+            { type: 'position', id: 'a', dragging: false },
+            { type: 'position', id: 'b', dragging: false },
+        ]));
+        assert.equal(writes, 1);
+        assert.deepEqual(useArchitectureStore.getState().graph.nodes.b.position, { x: 260, y: 310 });
+
+        await act(() => flow.getState().onNodeDragStart(null, flow.getState().nodes.find((node) => node.id === 'a')));
+        await act(() => flow.getState().triggerNodeChanges([{ type: 'position', id: 'a', position: { x: 900, y: 160 }, dragging: true }]));
+        await act(() => window.dispatchEvent(new dom.window.Event('blur')));
+        assert.deepEqual(flow.getState().nodes.find((node) => node.id === 'a').position, { x: 260, y: 160 });
+        // No trailing end event: a completely new gesture must still work.
+        await act(() => flow.getState().onNodeDragStart(null, flow.getState().nodes.find((node) => node.id === 'b')));
+        await act(() => flow.getState().triggerNodeChanges([{ type: 'position', id: 'b', position: { x: 500, y: 310 }, dragging: true }]));
+        await act(() => flow.getState().triggerNodeChanges([{ type: 'position', id: 'b', dragging: false }]));
+        assert.equal(writes, 2);
+        assert.deepEqual(useArchitectureStore.getState().graph.nodes.a.position, { x: 260, y: 160 });
+        assert.deepEqual(useArchitectureStore.getState().graph.nodes.b.position, { x: 500, y: 310 });
+    } finally {
+        storageProto.setItem = setItem;
+    }
 });

@@ -13,23 +13,15 @@ import { useArchitectureStore } from '../stores/architectureStore.js';
 import { useTemplatesStore } from '../stores/templatesStore.js';
 import { useTrainingStore } from '../stores/trainingStore.js';
 import { gpt2Storyboard } from '../storyboards/gpt2.js';
+import { createDefaultModelSeeder } from '../storyboards/defaultModel.js';
 
-const SEEDED_KEY = 'deepflow:seeded';
-
-/** First visit: open on GPT-2 instead of an empty canvas. */
-function seedDefaultModel() {
-    try {
-        if (localStorage.getItem(SEEDED_KEY)) return;
-        gpt2Storyboard({
-            architectureStore: useArchitectureStore,
-            templatesStore: useTemplatesStore,
-            trainingStore: useTrainingStore,
-        });
-        localStorage.setItem(SEEDED_KEY, '1');
-    } catch {
-        // Storage unavailable: keep the empty starter graph.
-    }
-}
+const seedDefaultModel = createDefaultModelSeeder({
+    seed: () => gpt2Storyboard({
+        architectureStore: useArchitectureStore,
+        templatesStore: useTemplatesStore,
+        trainingStore: useTrainingStore,
+    }),
+});
 
 const Layout = () => {
     const [activeTab, setActiveTab] = useState('architecture');

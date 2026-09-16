@@ -224,7 +224,7 @@ export default function NodeInspector() {
                 <Issues errors={errors} warnings={warnings} />
             </div>
             <footer className="df-inspector-footer">
-                <span>activation</span>
+                <span>Output shape</span>
                 <code>{outShape ? formatShape(outShape) : '—'}</code>
             </footer>
         </aside>
