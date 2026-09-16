@@ -1,0 +1,14 @@
+Use case: logo-brand. Asset type: a production icon sprite sheet for the DeepFlow neural-network editor.
+Create exactly EIGHT neo-brutalist pictograms on a pure white background, arranged in a precise 4-column by 2-row grid on a 2048 by 1024 canvas. Each cell is exactly 512 by 512, centers at x=256,768,1280,1792 and y=256,768. No labels, no text, no letters, no surrounding tile/card, no grid separators. Keep every icon within a 290 by 290 area centered in its cell, ample white margin.
+All icons form one coherent bold graphic family: very thick near-black strokes, simple geometric silhouettes, flat pastel fills, sharp offset black shadows, straight-on 2D views, minimal internal details, visually legible at 28px. Never gradients, no glossy effects, no soft shadows, no texture.
+Row 1 left to right:
+1 LINEAR projection: three small blue squares on left connected by straight black lines to two blue squares on right, minimal neural projection symbol.
+2 ATTENTION: three pink outlined vertical bars with simple converging black arrows aimed at one central pink diamond. A clear focused-routing symbol.
+3 CONVOLUTION: a mint green 3-by-3 square grid with one bold smaller square kernel outlined on top.
+4 NORMALIZATION: three orange vertical bars of different heights on left, simple arrow, three equal-height orange bars on right.
+Row 2 left to right:
+5 ACTIVATION: purple angular plot axes with a bold kinked ReLU curve (flat then rising).
+6 POOLING: four mint squares converging via short black lines into one larger mint square below.
+7 DROPOUT: four orange squares in 2-by-2 arrangement, one empty dashed outline, the others solid pastel orange.
+8 RECURRENT: cyan square surrounded by a bold near-black bent circular return arrow, very simple loop symbol.
+These are tool icons, not illustrations. Every icon has identical visual weight, uses white negative space and one pastel accent color. Exactly 8 icons, no extra marks or tiny decoration.
