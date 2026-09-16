@@ -87,7 +87,6 @@ img.df-operation-icon { mix-blend-mode: multiply; }
 .df-inspector-group h3, .df-inspector-group summary { margin: 0 0 2px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #666; }
 .df-inspector-group summary { cursor: pointer; list-style: none; padding: 4px 0; }
 .df-inspector-group summary::-webkit-details-marker { display: none; }
-.df-inspector-count { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 400; color: #999; }
 .df-inspector-fields { display: flex; flex-wrap: wrap; gap: 2px 4px; }
 .df-inspector-fields .df-param-row:hover { background: #f5f5f4; }
 .df-inspector-actions { display: flex; gap: 6px; margin-bottom: 8px; }

@@ -72,7 +72,7 @@ function ParamGroup({ params, values, errors, onPatch, collapsed = false }) {
     ))}</div>;
     return collapsed ? (
         <details className="df-inspector-group df-inspector-options">
-            <summary>Options <span className="df-inspector-count">{params.length}</span></summary>
+            <summary>Options</summary>
             {fields}
         </details>
     ) : fields;
