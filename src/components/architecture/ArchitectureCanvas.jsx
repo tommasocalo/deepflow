@@ -4,6 +4,7 @@ import {
     Background,
     Controls,
     ControlButton,
+    ConnectionLineType,
     ReactFlowProvider,
     useNodesInitialized,
     useReactFlow,
@@ -11,21 +12,19 @@ import {
 import { Hand, MousePointer2 } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
-import { resolveGraphLevel } from '../../domain/architecture/index.js';
+import { isValidConnection, resolveGraphLevel } from '../../domain/architecture/index.js';
 import LayerNodeView from './LayerNodeView.jsx';
 import OpNodeView from './OpNodeView.jsx';
 import SuperNodeInstanceView from './SuperNodeInstanceView.jsx';
 import RepeatNodeView from './RepeatNodeView.jsx';
 import ArchitectureEdge from './ArchitectureEdge.jsx';
 import GraphStatusPanel from './GraphStatusPanel.jsx';
-import { useValidation } from '../../hooks/useValidation.js';
-import { COLUMN_HALF_WIDTH, activationLabel, isOpKey } from './nodeGeometry.js';
-import { featurePreview } from './featurePreview.js';
-import { getEntry } from '../../domain/library/index.js';
-import { styleFor } from './categoryStyle.js';
+import { COLUMN_HALF_WIDTH } from './nodeGeometry.js';
 import { tensorFlowNodeIds } from './tensorFlow.js';
 import { createDragBatcher, syncFlowNodes } from './flowAdapter.js';
+import { isBlankCanvasDrop } from './connectionGesture.js';
 import './architecture.css';
+import './connectors.css';
 
 const nodeTypes = {
     archLayer: LayerNodeView,
@@ -67,41 +66,20 @@ function edgeSkips(edge, nodes) {
     );
 }
 
-function toFlowEdges(graph, selectedEdgeSet, shapes, tensorFlowIds) {
-    return graph.edges.map((e) => {
-        const detour = edgeSkips(e, graph.nodes);
-        const previewFor = (id) => {
-            const node = graph.nodes[id];
-            const category = getEntry(node?.libraryKey)?.category;
-            if (!node || node.kind !== 'layer' || category === 'IO' || isOpKey(node.libraryKey)) return null;
-            const shape = shapes?.[id];
-            return featurePreview(shape, ['Convolution', 'Pooling'].includes(category) && shape?.length > 2 ? 1 : shape?.length - 1);
-        };
-        const sourcePreview = previewFor(e.source);
-        const targetPreview = previewFor(e.target);
-        return {
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            sourceHandle: e.sourceHandle,
-            targetHandle: e.targetHandle,
-            type: 'archEdge',
-            data: {
-                activation: activationLabel(shapes?.[e.source]),
-                shape: shapes?.[e.source],
-                tensorFlow: tensorFlowIds.has(e.source) && !detour,
-                detour,
-                featureStream: !!(sourcePreview || targetPreview) && !detour,
-                sourceSpan: sourcePreview?.width ?? 0,
-                targetSpan: targetPreview?.width ?? 0,
-                accent: styleFor(getEntry(graph.nodes[e.source]?.libraryKey)?.category).accent,
-            },
-            animated: false,
-            selected: selectedEdgeSet.has(e.id),
-            // Wider invisible hit area so users can actually click an edge.
-            interactionWidth: 20,
-        };
-    });
+function toFlowEdges(graph, selectedEdgeSet) {
+    return graph.edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        targetHandle: edge.targetHandle,
+        type: 'archEdge',
+        data: { detour: edgeSkips(edge, graph.nodes) },
+        selected: selectedEdgeSet.has(edge.id),
+        animated: false,
+        interactionWidth: 20,
+        ariaLabel: 'Connection. Drag either endpoint to reconnect; release on the canvas to disconnect.',
+    }));
 }
 
 const Inner = ({ children, overlay }) => {
@@ -113,6 +91,7 @@ const Inner = ({ children, overlay }) => {
     const removeNodeStore = useArchitectureStore((s) => s.removeNode);
     const removeEdgeStore = useArchitectureStore((s) => s.removeEdge);
     const connect = useArchitectureStore((s) => s.connect);
+    const reconnectEdge = useArchitectureStore((s) => s.reconnectEdge);
     const setNodeSelected = useArchitectureStore((s) => s.setNodeSelected);
     const clearSelection = useArchitectureStore((s) => s.clearSelection);
     const selectOnly = useArchitectureStore((s) => s.selectOnly);
@@ -126,6 +105,8 @@ const Inner = ({ children, overlay }) => {
     const wrapperRef = useRef(null);
     const lastViewportKeyRef = useRef(null);
     const mountedRef = useRef(false);
+    const connectionContextRef = useRef(null);
+    const reconnectRef = useRef(null);
     const [dragBatcher] = useState(createDragBatcher);
     const [interactionMode, setInteractionMode] = useState('select');  // 'select' | 'pan'
     const [selectedEdgeIds, setSelectedEdgeIds] = useState([]);
@@ -138,7 +119,6 @@ const Inner = ({ children, overlay }) => {
         [rootGraph, currentPath, templates],
     );
 
-    const validation = useValidation();
     const levelKey = JSON.stringify(currentPath);
     const dragContext = useMemo(() => ({ graph: viewGraph, levelKey }), [viewGraph, levelKey]);
     const tensorFlowIds = useMemo(() => tensorFlowNodeIds(viewGraph), [viewGraph]);
@@ -147,8 +127,8 @@ const Inner = ({ children, overlay }) => {
     // Edges use committed geometry: their routing classification stays stable
     // while ReactFlow moves only the endpoint coordinates during a drag.
     const edges = useMemo(
-        () => toFlowEdges(viewGraph, selectedEdgeSet, validation.shapes, tensorFlowIds),
-        [viewGraph, selectedEdgeSet, validation.shapes, tensorFlowIds],
+        () => toFlowEdges(viewGraph, selectedEdgeSet),
+        [viewGraph, selectedEdgeSet],
     );
     const showPanCursor = interactionMode === 'pan' || spacePressed;
     const graphIsEmpty = Object.keys(viewGraph.nodes).length === 0;
@@ -158,6 +138,8 @@ const Inner = ({ children, overlay }) => {
         return () => {
             mountedRef.current = false;
             dragBatcher.cancel();
+            reconnectRef.current = null;
+            connectionContextRef.current = null;
         };
     }, [dragBatcher]);
 
@@ -172,6 +154,8 @@ const Inner = ({ children, overlay }) => {
 
     useEffect(() => {
         const cancelDrag = () => {
+            reconnectRef.current = null;
+            connectionContextRef.current = null;
             dragBatcher.cancel();
             restorePositions();
         };
@@ -188,6 +172,10 @@ const Inner = ({ children, overlay }) => {
             target?.closest?.('input, textarea, select, [contenteditable="true"]');
         const onKeyDown = (event) => {
             if (event.code === 'Space' && !isEditable(event.target)) setSpacePressed(true);
+            if (event.key === 'Escape') {
+                reconnectRef.current = null;
+                connectionContextRef.current = null;
+            }
         };
         const onKeyUp = (event) => {
             if (event.code === 'Space') setSpacePressed(false);
@@ -266,7 +254,7 @@ const Inner = ({ children, overlay }) => {
     const onEdgesChange = useCallback(
         (changes) => {
             for (const change of changes) {
-                if (change.type === 'remove') removeEdgeStore(change.id);
+                if (change.type === 'remove') removeEdgeStore(change.id, { levelKey });
                 else if (change.type === 'select') {
                     setSelectedEdgeIds((ids) => {
                         const next = new Set(ids);
@@ -277,10 +265,44 @@ const Inner = ({ children, overlay }) => {
                 }
             }
         },
-        [removeEdgeStore],
+        [removeEdgeStore, levelKey],
     );
 
-    const onConnect = useCallback((params) => connect(params), [connect]);
+    const onConnectStart = useCallback(() => {
+        connectionContextRef.current = dragContext;
+    }, [dragContext]);
+
+    const onConnect = useCallback((connection) => {
+        const context = connectionContextRef.current;
+        if (context) connect(connection, context);
+    }, [connect]);
+
+    const onReconnectStart = useCallback((_event, edge) => {
+        reconnectRef.current = { id: edge.id, context: dragContext, attempted: false };
+    }, [dragContext]);
+
+    const onReconnect = useCallback((edge, connection) => {
+        const gesture = reconnectRef.current;
+        if (!gesture || gesture.id !== edge.id) return;
+        // An attempted drop must never subsequently remove the old connection,
+        // even when a concurrent graph edit makes the commit stale.
+        gesture.attempted = true;
+        reconnectEdge(edge.id, connection, gesture.context);
+    }, [reconnectEdge]);
+
+    const onReconnectEnd = useCallback((event, edge, _handleType, connectionState) => {
+        const gesture = reconnectRef.current;
+        reconnectRef.current = null;
+        if (!gesture || gesture.id !== edge.id || gesture.attempted) return;
+        if (isBlankCanvasDrop(event, connectionState, wrapperRef.current)) {
+            removeEdgeStore(edge.id, gesture.context);
+        }
+    }, [removeEdgeStore]);
+
+    const validateConnection = useCallback((connection) => {
+        const graph = useArchitectureStore.getState().getViewGraph();
+        return isValidConnection(graph, connection, reconnectRef.current?.id);
+    }, []);
 
     const onDragOver = useCallback((e) => {
         e.preventDefault();
@@ -326,6 +348,16 @@ const Inner = ({ children, overlay }) => {
                     onSelectionDragStart={onDragStart}
                     onEdgesChange={onEdgesChange}
                     onConnect={onConnect}
+                    onConnectStart={onConnectStart}
+                    onConnectEnd={() => { connectionContextRef.current = null; }}
+                    isValidConnection={validateConnection}
+                    onReconnectStart={onReconnectStart}
+                    onReconnect={onReconnect}
+                    onReconnectEnd={onReconnectEnd}
+                    connectionLineType={ConnectionLineType.SmoothStep}
+                    connectionLineStyle={{ stroke: '#111', strokeWidth: 2 }}
+                    connectionDragThreshold={4}
+                    reconnectRadius={12}
                     onDragOver={onDragOver}
                     onDrop={onDrop}
                     onMoveEnd={handleMoveEnd}
@@ -340,7 +372,7 @@ const Inner = ({ children, overlay }) => {
                     multiSelectionKeyCode={['Meta', 'Shift']}
                     deleteKeyCode={['Delete', 'Backspace']}
                     edgesFocusable
-                    edgesReconnectable={false}
+                    edgesReconnectable
                     minZoom={0.2}
                     maxZoom={2}
                     fitViewOptions={{ padding: 0.2, minZoom: 0.2, maxZoom: 1 }}

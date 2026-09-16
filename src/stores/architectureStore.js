@@ -9,11 +9,13 @@ import {
     createSuperNodeInstance,
     createTemplate,
     emptyGraph,
+    isValidConnection,
     moveNode,
     moveNodes,
     patchEdge,
     patchLayerParameters,
     patchNode,
+    reconnectEdge,
     removeEdge,
     removeNode,
     resolveGraphLevel,
@@ -74,6 +76,13 @@ export const useArchitectureStore = create(
                     const graph = transform(tpl.graph);
                     if (graph !== tpl.graph) tplStore.patchTemplate(level.templateId, { graph });
                 }
+            };
+
+            const matchesContext = (expected) => {
+                if (!expected) return true;
+                const state = get();
+                return expected.levelKey === JSON.stringify(state.currentPath) &&
+                    (!expected.graph || expected.graph === getViewGraph(state));
             };
 
             return {
@@ -214,14 +223,28 @@ export const useArchitectureStore = create(
                     return true;
                 },
 
-                connect: ({ source, target, sourceHandle, targetHandle }) => {
-                    if (!source || !target || source === target) return null;
-                    const edge = createEdge({ source, target, sourceHandle, targetHandle });
+                connect: (connection, expected) => {
+                    if (!matchesContext(expected) || !isValidConnection(getViewGraph(get()), connection)) return null;
+                    const edge = createEdge(connection);
                     updateCurrentGraph((g) => addEdge(g, edge));
                     return edge.id;
                 },
 
-                removeEdge: (edgeId) => updateCurrentGraph((g) => removeEdge(g, edgeId)),
+                reconnectEdge: (edgeId, connection, expected) => {
+                    if (!matchesContext(expected)) return false;
+                    const graph = getViewGraph(get());
+                    if (!graph.edges.some((edge) => edge.id === edgeId) || !isValidConnection(graph, connection, edgeId)) return false;
+                    updateCurrentGraph((g) => reconnectEdge(g, edgeId, connection));
+                    return true;
+                },
+
+                removeEdge: (edgeId, expected) => {
+                    if (!matchesContext(expected)) return false;
+                    const graph = getViewGraph(get());
+                    if (!graph.edges.some((edge) => edge.id === edgeId)) return false;
+                    updateCurrentGraph((g) => removeEdge(g, edgeId));
+                    return true;
+                },
 
                 patchEdge: (edgeId, patch) => updateCurrentGraph((g) => patchEdge(g, edgeId, patch)),
 

@@ -102,11 +102,29 @@ export function moveNodes(graph, moves) {
  * @param {import('./types.js').ArchitectureGraph} graph
  * @param {import('./types.js').ArchEdge} edge
  */
+export function isValidConnection(graph, { source, target }, ignoredEdgeId) {
+    return !!source && !!target && source !== target &&
+        !!graph.nodes[source] && !!graph.nodes[target] &&
+        !graph.edges.some((edge) => edge.id !== ignoredEdgeId && edge.source === source && edge.target === target);
+}
+
 export function addEdge(graph, edge) {
-    if (graph.edges.some((e) => e.source === edge.source && e.target === edge.target)) {
-        return graph;
-    }
+    if (!isValidConnection(graph, edge)) return graph;
     return { ...graph, edges: [...graph.edges, edge] };
+}
+
+/** Rewiring preserves the edge id and training metadata. Invalid drops are no-ops. */
+export function reconnectEdge(graph, edgeId, connection) {
+    const existing = graph.edges.find((edge) => edge.id === edgeId);
+    if (!existing || !isValidConnection(graph, connection, edgeId)) return graph;
+    const endpoints = {
+        source: connection.source,
+        target: connection.target,
+        sourceHandle: connection.sourceHandle ?? undefined,
+        targetHandle: connection.targetHandle ?? undefined,
+    };
+    if (Object.entries(endpoints).every(([key, value]) => (existing[key] ?? undefined) === value)) return graph;
+    return patchEdge(graph, edgeId, endpoints);
 }
 
 /**
@@ -114,7 +132,8 @@ export function addEdge(graph, edge) {
  * @param {string} edgeId
  */
 export function removeEdge(graph, edgeId) {
-    return { ...graph, edges: graph.edges.filter((e) => e.id !== edgeId) };
+    const edges = graph.edges.filter((e) => e.id !== edgeId);
+    return edges.length === graph.edges.length ? graph : { ...graph, edges };
 }
 
 /**

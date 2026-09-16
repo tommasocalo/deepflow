@@ -1,0 +1,5 @@
+.df-architecture-workspace .react-flow__edge:focus { outline: none; }
+.df-architecture-workspace .react-flow__edgeupdater { cursor: grab; }
+.df-architecture-workspace .react-flow__edge.updating .react-flow__edgeupdater { cursor: grabbing; }
+.df-architecture-workspace .react-flow__handle.connectingfrom,
+.df-architecture-workspace .react-flow__handle.valid { background: #f472b6; }

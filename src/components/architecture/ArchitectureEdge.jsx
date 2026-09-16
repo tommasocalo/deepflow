@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, getBezierPath } from '@xyflow/react';
+import { BaseEdge, getSmoothStepPath } from '@xyflow/react';
 
 
 const DETOUR_OFFSET = 190;
@@ -27,30 +27,25 @@ function detourPath(sourceX, sourceY, targetX, targetY) {
     return [path, laneX, (top + bottom) / 2];
 }
 
-/** Architecture shows forward tensor flow. Gradient controls belong to Training. */
+/** Offset the visible grip into the native reconnect hit area, clear of node ports. */
+function gripPosition(x, y, position) {
+    return {
+        cx: x + (position === 'left' ? -12 : position === 'right' ? 12 : 0),
+        cy: y + (position === 'top' ? -12 : position === 'bottom' ? 12 : 0),
+    };
+}
+
+/** A single connection carries tensor flow. Shapes belong to the node. */
 function ArchitectureEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd, selected, interactionWidth }) {
-    const [path, labelX, labelY] = data?.detour
+    const [path] = data?.detour
         ? detourPath(sourceX, sourceY, targetX, targetY)
         : getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: CORNER, offset: 12 });
-    const showLabel = selected && !!data?.activation;
-    const stream = data?.featureStream && !data.detour && targetY > sourceY + 8;
     return <>
-        {stream && <g className="df-feature-stream" pointerEvents="none" aria-hidden="true">
-            {[-.48, -.32, -.16, .16, .32, .48].map((offset) => {
-                const [strand] = getBezierPath({
-                    sourceX: sourceX + offset * (data.sourceSpan ?? 0), sourceY,
-                    targetX: targetX + offset * (data.targetSpan ?? 0), targetY,
-                    sourcePosition, targetPosition, curvature: .35,
-                });
-                return <path key={offset} d={strand} fill="none" stroke={data.accent ?? '#666'} strokeWidth={selected ? 1.5 : 1} opacity={selected ? .7 : .4} />;
-            })}
+        <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={interactionWidth ?? 20} style={{ stroke: selected ? '#9d174d' : '#111', strokeWidth: 2 }} />
+        {selected && <g className="df-connection-grips" pointerEvents="none" aria-hidden="true" fill="white" stroke="#9d174d" strokeWidth="1.5">
+            <circle {...gripPosition(sourceX, sourceY, sourcePosition)} r="3.5" />
+            <circle {...gripPosition(targetX, targetY, targetPosition)} r="3.5" />
         </g>}
-        <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={interactionWidth ?? 20} style={{ stroke: '#111', strokeWidth: selected ? 2.5 : stream ? 1 : 2 }} />
-        {showLabel && <EdgeLabelRenderer>
-            <div className="df-activation" style={{ transform: `translate(12px, -50%) translate(${labelX}px, ${labelY}px)` }}>
-                {data.activation}
-            </div>
-        </EdgeLabelRenderer>}
     </>;
 }
 

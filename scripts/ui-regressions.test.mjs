@@ -57,7 +57,6 @@ try {
                 export { default as BlockPalette } from './src/components/architecture/BlockPalette.jsx';
                 export { default as ArchitectureCanvas } from './src/components/architecture/ArchitectureCanvas.jsx';
                 export { default as ArchitectureEdge } from './src/components/architecture/ArchitectureEdge.jsx';
-                export { default as TensorPreview } from './src/components/architecture/TensorPreview.jsx';
                 export { default as NodeInspector } from './src/components/architecture/NodeInspector.jsx';
                 export { useArchitectureStore } from './src/stores/architectureStore.js';
                 export { useTemplatesStore } from './src/stores/templatesStore.js';
@@ -79,7 +78,7 @@ try {
 } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
 }
-const { ParameterField, LayerNodeView, BlockPalette, ArchitectureCanvas, ArchitectureEdge, NodeInspector, TensorPreview, useArchitectureStore, useTemplatesStore, createLayerNode, createTemplate, createEdge, emptyGraph, getEntry } = app;
+const { ParameterField, LayerNodeView, BlockPalette, ArchitectureCanvas, ArchitectureEdge, NodeInspector, useArchitectureStore, useTemplatesStore, createLayerNode, createTemplate, createEdge, emptyGraph, getEntry } = app;
 let container;
 let root;
 
@@ -299,14 +298,13 @@ function EdgeHarness({ selected, tensorFlow = false, shape = [null, 1024, 768] }
     }))));
 }
 
-test('architecture edges show tensor shapes without gradient controls or mutations', async () => {
+test('architecture edges stay unlabeled and preserve training semantics', async () => {
     const edge = createEdge({ id: 'connection', source: 'a', target: 'b', gradientOp: 'reverse', gradientOpLambda: 0.5 });
     useArchitectureStore.setState({ graph: { nodes: {}, edges: [edge] } });
     await render(h(EdgeHarness, { selected: true }));
-    assert.equal(container.querySelector('.df-activation').textContent, 'B × 1024 × 768');
+    assert.equal(container.querySelector('.df-activation'), null);
     assert.equal(container.querySelector('.df-gradient-picker'), null);
     assert.equal(container.querySelector('.df-activation-op'), null);
-    assert.equal(container.querySelector('.react-flow__edge-path').style.stroke, 'rgb(17, 17, 17)');
     assert.equal(useArchitectureStore.getState().graph.edges[0], edge, 'Existing training semantics must survive display changes');
     await render(h(EdgeHarness, { selected: false }));
     assert.equal(container.querySelector('.df-gradient-picker'), null);
@@ -391,21 +389,7 @@ test('canvas keeps 60 multi-drag frames local, persists on release and recovers 
     }
 });
 
-test('node feature previews use a common grouping scale and stay bounded', async () => {
-    await render(h(TensorPreview, { shape: [null, 1024, 768] }));
-    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 48);
-    assert.equal(container.querySelector('.df-tensor-features').textContent, '768');
-    assert.match(container.querySelector('title').textContent, /16 adjacent features/);
-    assert.match(container.querySelector('title').textContent, /One token/);
-    await render(h(TensorPreview, { shape: [null, 1024, 3072] }));
-    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 192);
-    await render(h(TensorPreview, { shape: [null, 1000000, 1000000] }));
-    assert.ok(container.querySelectorAll('.df-tensor-grid rect').length <= 192, 'Large tensors stay aggregated');
-    await render(h(TensorPreview, { shape: null }));
-    assert.equal(container.querySelector('svg'), null);
-});
-
-test('feature previews live in operation nodes; connections show dimensions only on selection', async () => {
+test('operation nodes expose dimensions and inspector; selected connections stay unlabeled', async () => {
     const entry = getEntry('torch.nn.Linear');
     const input = createLayerNode({ id: 'input', libraryKey: 'deepflow.io.Input', position: { x: 100, y: 0 }, parameters: { shape: '(1024, 768)', dtype: 'float32' } });
     const linear = createLayerNode({ id: 'linear', libraryKey: entry.key, entry, position: { x: 100, y: 100 }, parameters: { in_features: 768, out_features: 3072, bias: true } });
@@ -414,16 +398,16 @@ test('feature previews live in operation nodes; connections show dimensions only
     useArchitectureStore.setState({ graph });
     await render(h(GraphHarness));
     const block = container.querySelector('.react-flow__node[data-id="linear"] .df-block');
-    assert.equal(block.querySelectorAll('.df-tensor-grid rect').length, 192);
+    assert.equal(block.querySelector('.df-block-shape').textContent, 'B × 1024 × 3072');
     assert.equal(block.querySelector('input'), null);
     await click(byAria('Inspect Linear'));
     assert.ok(byAria('Linear inspector'));
-    assert.equal(block.querySelectorAll('.df-tensor-grid rect').length, 192);
+    assert.equal(block.querySelector('.df-block-shape').textContent, 'B × 1024 × 3072');
     await render(h(EdgeHarness, { selected: false }));
     assert.equal(container.querySelector('.df-tensor-preview'), null);
     assert.equal(container.querySelector('.df-activation'), null);
     await render(h(EdgeHarness, { selected: true }));
-    assert.ok(container.querySelector('.df-activation'));
+    assert.equal(container.querySelector('.df-activation'), null);
     assert.equal(container.querySelector('.df-tensor-preview'), null);
     assert.equal(useArchitectureStore.getState().graph, graph);
 });

@@ -7,15 +7,13 @@ import { useValidation } from '../../hooks/useValidation.js';
 import { styleFor } from './categoryStyle.js';
 import { isInteractive, activationLabel } from './nodeGeometry.js';
 
-import TensorPreview from './TensorPreview.jsx';
-import { featurePreview } from './featurePreview.js';
+import OperationIcon from './OperationIcon.jsx';
 
 const INPUT_ONLY = new Set(['deepflow.io.Input', 'deepflow.template.Input']);
 const OUTPUT_ONLY = new Set(['deepflow.io.Output', 'deepflow.template.Output']);
 
 /**
- * Each operation contains a bounded preview of its output feature vector.
- * Configuration remains in the separate inspector.
+ * Compact operation mark and output dimensions. Configuration lives in the inspector.
  */
 const LayerNodeView = ({ id, data, selected }) => {
     const node = data.node;
@@ -29,11 +27,8 @@ const LayerNodeView = ({ id, data, selected }) => {
     const outputShape = validation.shapes[id];
     const style = styleFor(entry?.category ?? 'IO');
     const isIO = entry?.category === 'IO';
-    const channelFirst = ['Convolution', 'Pooling'].includes(entry?.category) && outputShape?.length > 2;
-    const featureAxis = channelFirst ? 1 : outputShape?.length - 1;
-    const preview = isIO ? null : featurePreview(outputShape, featureAxis);
     const isBoundary = node.libraryKey.startsWith('deepflow.template.');
-    const width = preview ? preview.width + 6 : 184;
+    const shapeLabel = activationLabel(outputShape) ?? '—';
     const tone = errors.length ? 'error' : warnings.length ? 'warning' : 'ok';
     const active = expandedNodeId === id;
 
@@ -45,35 +40,32 @@ const LayerNodeView = ({ id, data, selected }) => {
         <div
             className={[
                 'df-block', style.card,
-                preview ? 'df-block--features' : '',
                 `df-block--${tone}`,
                 selected ? 'is-selected' : '',
                 active ? 'is-active' : '',
                 isBoundary ? 'df-block--boundary' : '',
             ].join(' ')}
-            style={{ width, '--tensor-accent': style.accent }}
+            style={{ '--node-accent': style.accent }}
             onClick={onClick}
-            title={entry?.description}
+            title={`${node.label} · ${entry?.name ?? node.libraryKey}\n${entry?.description ?? ''}`}
         >
-            <div className={preview ? "df-feature-tools" : "df-block-heading"}>
-            {tone === 'error' && <AlertCircle size={14} strokeWidth={3} className="df-block-icon df-block-icon--error" />}
-            {tone === 'warning' && <AlertTriangle size={14} strokeWidth={3} className="df-block-icon df-block-icon--warning" />}
-            <span className={preview ? "df-feature-name" : "df-block-label"}>{node.label}</span>
-            {isIO && !isBoundary && (
-                <span className="df-block-tag">{INPUT_ONLY.has(node.libraryKey) ? 'in' : 'out'}</span>
-            )}
-
+            <OperationIcon libraryKey={node.libraryKey} size={34} />
+            <div className="df-block-content">
+                <span className="sr-only">{node.label}</span>
+                <span className="df-block-caption">{isIO ? (INPUT_ONLY.has(node.libraryKey) ? 'input' : 'output') : 'output'}</span>
+                <span className="df-block-shape" title={`Output dimensions: ${shapeLabel}`}>{shapeLabel}</span>
+            </div>
+            {tone === 'error' && <AlertCircle size={12} strokeWidth={3} className="df-block-status df-block-icon--error" />}
+            {tone === 'warning' && <AlertTriangle size={12} strokeWidth={3} className="df-block-status df-block-icon--warning" />}
             <button
                 type="button"
                 className="nodrag df-block-inspect"
                 aria-label={`Inspect ${node.label}`}
                 aria-expanded={active}
-                title="Inspect block"
+                title={`Configure ${node.label}`}
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={(event) => { event.stopPropagation(); toggleExpanded(id); }}
             ><SlidersHorizontal size={13} strokeWidth={2.5} aria-hidden="true" /></button>
-            </div>
-            {preview ? <TensorPreview shape={outputShape} featureAxis={featureAxis} featureLabel={channelFirst ? 'channels' : 'features'} /> : <div className="df-block-shape">{activationLabel(outputShape) ?? 'Shape unresolved'}</div>}
 
             <button
                 aria-label={`Delete ${node.label}`}
