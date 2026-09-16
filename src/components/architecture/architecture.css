@@ -28,8 +28,11 @@
 img.df-operation-icon { mix-blend-mode: multiply; }
 .df-block-name { min-width: 0; font-size: 12px; line-height: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .df-block:focus-visible, .df-op:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
-/* Plain annotation tucked above the first bend of residual connections. */
-.df-port-shape { position: absolute; z-index: 5; left: calc(50% + 10px); top: calc(100% + 3px); width: max-content; color: #000; font: 500 11px/12px ui-sans-serif, system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; user-select: none; }
+/* Small white frames straddle each wire without intercepting connector drags. */
+.df-port-shape { position: absolute; z-index: 5; left: 50%; transform: translateX(-50%); width: max-content; padding: 0 4px; border: 1px solid #e5e5e5; border-radius: 2px; background: #fff; color: #000; font: 700 10px/12px ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; pointer-events: none; user-select: none; }
+.df-port-shape--input { bottom: calc(100% + 6px); }
+.df-port-shape--output { top: calc(100% + 6px); }
+.df-repeat > .df-port-shape--output { top: calc(100% + var(--repeat-stack-depth, 0px) + 6px); }
 .df-block-status { position: absolute; top: -7px; left: -7px; background: white; border-radius: 50%; }
 .df-block-icon--error { color: #dc2626; }
 .df-block-icon--warning { color: #b45309; }

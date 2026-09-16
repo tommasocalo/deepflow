@@ -5,6 +5,7 @@ import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
 import { isInteractive } from './nodeGeometry.js';
+import PortShapeLabels from './PortShapeLabels.jsx';
 
 /** A supernode instance: hatched container, label, "open" affordance. */
 const SuperNodeInstanceView = ({ id, data, selected }) => {
@@ -53,6 +54,7 @@ const SuperNodeInstanceView = ({ id, data, selected }) => {
             >
                 <X size={10} strokeWidth={3} />
             </button>
+            <PortShapeLabels node={node} shapes={validation.shapes} />
             <Handle type="target" position={Position.Top} className="df-handle" />
             <Handle type="source" position={Position.Bottom} className="df-handle" />
         </div>

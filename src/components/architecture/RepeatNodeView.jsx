@@ -5,6 +5,7 @@ import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
 import { isInteractive } from './nodeGeometry.js';
+import PortShapeLabels from './PortShapeLabels.jsx';
 
 /**
  * A repeated template: the container is drawn as a short stack so the
@@ -30,6 +31,7 @@ const RepeatNodeView = ({ id, data, selected }) => {
     return (
         <div
             className={['df-repeat', `df-repeat--${tone}`, selected ? 'is-selected' : '', expandedNodeId === id ? 'is-active' : ''].join(' ')}
+            style={{ '--repeat-stack-depth': `${ghosts * 5}px` }}
             onClick={onClick}
             onDoubleClick={(e) => { if (!isInteractive(e.target)) { e.stopPropagation(); enterSupernode(id); } }}
             title={template ? `${template.name} × ${count} — double-click to open` : 'Template missing'}
@@ -60,6 +62,7 @@ const RepeatNodeView = ({ id, data, selected }) => {
             >
                 <X size={10} strokeWidth={3} />
             </button>
+            <PortShapeLabels node={node} shapes={validation.shapes} />
             <Handle type="target" position={Position.Top} className="df-handle" />
             <Handle type="source" position={Position.Bottom} className="df-handle" />
         </div>
