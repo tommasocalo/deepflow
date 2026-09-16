@@ -5,48 +5,48 @@ import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 
 /**
- * Cards for every level currently open — `main` plus one card per
- * supernode entered — shown as a strip under the Architecture tab. Closing
- * a card returns to its parent level.
+ * Open graph views stay in the strip independently of the active view.
+ * Selecting main or another supernode does not close any cards.
  */
 export default function LevelTabs() {
     const rootGraph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
+    const openPaths = useArchitectureStore((s) => s.openPaths);
     const templates = useTemplatesStore((s) => s.templates);
-    const goToLevel = useArchitectureStore((s) => s.goToLevel);
+    const openLevel = useArchitectureStore((s) => s.openLevel);
+    const closeLevel = useArchitectureStore((s) => s.closeLevel);
 
-    const level = resolveGraphLevel(rootGraph, currentPath, templates);
-    const cards = [{ id: 'root', label: 'main', depth: 0, kind: 'root' }];
-    let graph = rootGraph;
-    for (const seg of level.segments ?? []) {
-        const node = graph?.nodes?.[seg.id];
-        const tpl = node ? templates[node.templateId] : null;
+    const activeKey = JSON.stringify(currentPath);
+    const cards = [{ key: '[]', path: [], label: 'main', kind: 'root', title: 'Top level' }];
+    for (const path of openPaths ?? []) {
+        const level = resolveGraphLevel(rootGraph, path, templates);
+        if (level.isRoot) continue;
+        const parent = resolveGraphLevel(rootGraph, path.slice(0, -1), templates);
+        const node = parent.graph.nodes[path.at(-1)];
         cards.push({
-            id: seg.id,
-            depth: seg.depth,
-            label: seg.label,
-            kind: node?.kind ?? 'supernode',
+            key: JSON.stringify(path),
+            path,
+            label: level.label,
+            kind: node.kind,
             count: node?.kind === 'repeat' ? node.count : null,
-            template: tpl?.name,
+            title: ['main', ...level.segments.map((segment) => segment.label)].join(' / '),
         });
-        graph = tpl?.graph;
     }
-    const activeDepth = cards.length - 1;
 
     return (
         <div className="df-levels" role="tablist" aria-label="Open levels">
             {cards.map((card, i) => {
-                const active = i === activeDepth;
+                const active = card.key === activeKey;
                 const Icon = card.kind === 'root' ? Home : card.kind === 'repeat' ? Repeat : Boxes;
                 return (
-                    <div key={`${card.depth}:${card.id}`} className={`df-level-card${active ? ' is-active' : ''}`}>
+                    <div key={card.key} className={`df-level-card${active ? ' is-active' : ''}`}>
                         <button
                             type="button"
                             role="tab"
                             aria-selected={active}
                             className="df-level-tab"
-                            onClick={() => goToLevel(card.depth)}
-                            title={card.template ? `Template: ${card.template}` : 'Top level'}
+                            onClick={() => openLevel(card.path)}
+                            title={card.title}
                         >
                             <Icon size={12} strokeWidth={2.5} />
                             <span className="df-level-label">{card.label}</span>
@@ -56,7 +56,7 @@ export default function LevelTabs() {
                             <button
                                 type="button"
                                 className="df-level-close"
-                                onClick={() => goToLevel(card.depth - 1)}
+                                onClick={() => closeLevel(card.path)}
                                 aria-label={`Close ${card.label}`}
                                 title="Close"
                             >
@@ -66,7 +66,7 @@ export default function LevelTabs() {
                     </div>
                 );
             })}
-            {cards.length > 1 && (
+            {currentPath.length > 0 && (
                 <span className="df-levels-hint">Edits inside a template apply to every instance.</span>
             )}
         </div>

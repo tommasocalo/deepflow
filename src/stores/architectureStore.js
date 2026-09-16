@@ -21,6 +21,7 @@ import {
     resolveGraphLevel,
 } from '../domain/architecture/index.js';
 import { getEntry } from '../domain/library/index.js';
+import { isValidLevelPath, nearestOpenAncestor, reconcileOpenLevels, sameLevelPath } from '../domain/architecture/levelNavigation.js';
 import { useTemplatesStore } from './templatesStore.js';
 
 const STORAGE_KEY = 'deepflow:architecture-graph';
@@ -60,6 +61,19 @@ function getViewGraph(state) {
     return resolveLevel(state).graph;
 }
 
+/** Only return changed navigation fields: moving nodes must not cause extra writes. */
+function navigationPatch(state, graph = state.graph) {
+    const next = reconcileOpenLevels(graph, useTemplatesStore.getState().templates, state.openPaths, state.currentPath);
+    const patch = {};
+    if (next.openPaths !== state.openPaths) patch.openPaths = next.openPaths;
+    if (next.currentPath !== state.currentPath) {
+        patch.currentPath = next.currentPath;
+        patch.selectedNodeIds = [];
+        patch.expandedNodeId = null;
+    }
+    return patch;
+}
+
 export const useArchitectureStore = create(
     persist(
         (set, get) => {
@@ -68,7 +82,7 @@ export const useArchitectureStore = create(
                 const level = resolveLevel(state);
                 if (level.isRoot) {
                     const graph = transform(state.graph);
-                    if (graph !== state.graph) set({ graph });
+                    if (graph !== state.graph) set({ graph, ...navigationPatch(state, graph) });
                 } else {
                     const tplStore = useTemplatesStore.getState();
                     const tpl = tplStore.getTemplate(level.templateId);
@@ -93,6 +107,8 @@ export const useArchitectureStore = create(
                 expandedNodeId: null,
                 /** @type {string[]} ids of supernode or repeat instances entered, root → leaf */
                 currentPath: [],
+                /** @type {string[][]} open non-root levels, in insertion order */
+                openPaths: [],
                 /** @type {string[]} library keys of recently-added blocks (most recent first) */
                 recentLibraryKeys: [],
 
@@ -278,7 +294,7 @@ export const useArchitectureStore = create(
                 resetCurrentGraph: () => {
                     const level = resolveLevel(get());
                     if (level.isRoot) {
-                        set({ graph: initialGraph(), selectedNodeIds: [], expandedNodeId: null, currentPath: [] });
+                        set({ graph: initialGraph(), selectedNodeIds: [], expandedNodeId: null, currentPath: [], openPaths: [] });
                     } else {
                         useTemplatesStore.getState().patchTemplate(level.templateId, { graph: emptyGraph() });
                         set({ selectedNodeIds: [], expandedNodeId: null });
@@ -287,26 +303,37 @@ export const useArchitectureStore = create(
 
                 // ---- navigation ----
 
-                enterSupernode: (supernodeId) => {
-                    const view = getViewGraph(get());
-                    const node = view.nodes[supernodeId];
-                    if (!node || !['supernode', 'repeat'].includes(node.kind)) return;
-                    if (!useTemplatesStore.getState().getTemplate(node.templateId)?.graph) return;
-                    set({
-                        currentPath: [...get().currentPath, supernodeId],
-                        selectedNodeIds: [],
-                        expandedNodeId: null,
-                    });
+                openLevel: (path) => {
+                    const state = get();
+                    if (!isValidLevelPath(state.graph, useTemplatesStore.getState().templates, path)) return false;
+                    const currentPath = [...path];
+                    const openPaths = currentPath.length && !state.openPaths.some((open) => sameLevelPath(open, currentPath))
+                        ? [...state.openPaths, currentPath] : state.openPaths;
+                    if (sameLevelPath(state.currentPath, currentPath) && openPaths === state.openPaths) return true;
+                    set({ currentPath, openPaths, selectedNodeIds: [], expandedNodeId: null });
+                    return true;
                 },
+
+                closeLevel: (path) => {
+                    const state = get();
+                    const openPaths = state.openPaths.filter((open) => !sameLevelPath(open, path));
+                    if (openPaths.length === state.openPaths.length) return false;
+                    if (sameLevelPath(state.currentPath, path)) {
+                        set({ openPaths, currentPath: nearestOpenAncestor(path, openPaths), selectedNodeIds: [], expandedNodeId: null });
+                    } else {
+                        set({ openPaths });
+                    }
+                    return true;
+                },
+
+                enterSupernode: (supernodeId) => get().openLevel([...get().currentPath, supernodeId]),
 
                 exitSupernode: () => {
                     const path = get().currentPath;
-                    if (path.length === 0) return;
-                    set({ currentPath: path.slice(0, -1), selectedNodeIds: [], expandedNodeId: null });
+                    if (path.length) get().openLevel(path.slice(0, -1));
                 },
 
-                goToLevel: (depth) =>
-                    set({ currentPath: get().currentPath.slice(0, Math.max(0, depth)), selectedNodeIds: [], expandedNodeId: null }),
+                goToLevel: (depth) => get().openLevel(get().currentPath.slice(0, Math.max(0, depth))),
 
                 // ---- grouping ----
 
@@ -441,7 +468,29 @@ export const useArchitectureStore = create(
         },
         {
             name: STORAGE_KEY,
-            partialize: (state) => ({ graph: state.graph, currentPath: state.currentPath }),
+            partialize: (state) => ({ graph: state.graph, currentPath: state.currentPath, openPaths: state.openPaths }),
+            merge: (persisted, current) => {
+                const saved = persisted ?? {};
+                const graph = saved.graph ?? current.graph;
+                const currentPath = Array.isArray(saved.currentPath) ? saved.currentPath : [];
+                // Earlier workspaces only saved a breadcrumb. Keep its visible
+                // ancestors as tabs when restoring that older format.
+                const savedPaths = saved.openPaths ?? currentPath.map((_, index) => currentPath.slice(0, index + 1));
+                const openPaths = [...(Array.isArray(savedPaths) ? savedPaths : []), currentPath];
+                const navigation = reconcileOpenLevels(graph, useTemplatesStore.getState().templates, openPaths, currentPath);
+                return { ...current, ...saved, graph, ...navigation };
+            },
         },
     ),
 );
+
+// Shared templates can be deleted or structurally edited independently of the
+// architecture store. Only persist if such an edit actually invalidates tabs.
+const unsubscribeTemplateNavigation = useTemplatesStore.subscribe((state, previous) => {
+    if (state.templates === previous.templates) return;
+    const architecture = useArchitectureStore.getState();
+    if (!architecture.openPaths.length && !architecture.currentPath.length) return;
+    const patch = navigationPatch(architecture);
+    if (Object.keys(patch).length) useArchitectureStore.setState(patch);
+});
+if (import.meta.hot) import.meta.hot.dispose(unsubscribeTemplateNavigation);

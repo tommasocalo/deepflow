@@ -58,9 +58,10 @@ try {
                 export { default as ArchitectureCanvas } from './src/components/architecture/ArchitectureCanvas.jsx';
                 export { default as ArchitectureEdge } from './src/components/architecture/ArchitectureEdge.jsx';
                 export { default as NodeInspector } from './src/components/architecture/NodeInspector.jsx';
+                export { default as LevelTabs } from './src/components/architecture/LevelTabs.jsx';
                 export { useArchitectureStore } from './src/stores/architectureStore.js';
                 export { useTemplatesStore } from './src/stores/templatesStore.js';
-                export { createLayerNode, createTemplate, createEdge, emptyGraph } from './src/domain/architecture/index.js';
+                export { createLayerNode, createSuperNodeInstance, createTemplate, createEdge, emptyGraph } from './src/domain/architecture/index.js';
                 export { getEntry } from './src/domain/library/index.js';
             `,
             resolveDir: projectRoot,
@@ -78,7 +79,7 @@ try {
 } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
 }
-const { ParameterField, LayerNodeView, BlockPalette, ArchitectureCanvas, ArchitectureEdge, NodeInspector, useArchitectureStore, useTemplatesStore, createLayerNode, createTemplate, createEdge, emptyGraph, getEntry } = app;
+const { ParameterField, LayerNodeView, BlockPalette, ArchitectureCanvas, ArchitectureEdge, NodeInspector, LevelTabs, useArchitectureStore, useTemplatesStore, createLayerNode, createSuperNodeInstance, createTemplate, createEdge, emptyGraph, getEntry } = app;
 let container;
 let root;
 
@@ -86,7 +87,7 @@ beforeEach(() => {
     jsdomErrors.length = 0;
     localStorage.clear();
     useTemplatesStore.setState({ templates: {} });
-    useArchitectureStore.setState({ graph: emptyGraph(), currentPath: [], selectedNodeIds: [], expandedNodeId: null, recentLibraryKeys: [] });
+    useArchitectureStore.setState({ graph: emptyGraph(), currentPath: [], openPaths: [], selectedNodeIds: [], expandedNodeId: null, recentLibraryKeys: [] });
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
@@ -287,6 +288,38 @@ test('collapsed library reopens and focuses search with the keyboard shortcut', 
     assert.equal(graphNodes().length, 0);
 });
 
+
+test('open level tabs survive main navigation and close independently of selection', async () => {
+    const template = createTemplate({ id: 'shared', name: 'Shared block', graph: emptyGraph() });
+    const first = createSuperNodeInstance({ id: 'first', templateId: template.id, label: 'Encoder' });
+    const second = createSuperNodeInstance({ id: 'second', templateId: template.id, label: 'Decoder' });
+    const graph = { nodes: { first, second }, edges: [] };
+    useTemplatesStore.setState({ templates: { [template.id]: template } });
+    useArchitectureStore.setState({ graph });
+    await render(h(LevelTabs));
+    const tab = (name) => [...container.querySelectorAll('[role="tab"]')].find((el) => el.textContent === name);
+    const state = useArchitectureStore.getState();
+
+    await act(() => state.enterSupernode('first'));
+    await click(tab('main'));
+    assert.ok(tab('Encoder'), 'Returning to main keeps the supernode tab open');
+    assert.equal(tab('main').getAttribute('aria-selected'), 'true');
+    assert.equal(tab('Encoder').getAttribute('aria-selected'), 'false');
+    assert.equal(container.querySelector('.df-levels-hint'), null);
+
+    await act(() => state.enterSupernode('second'));
+    await click(tab('Encoder'));
+    assert.deepEqual(useArchitectureStore.getState().currentPath, ['first']);
+    assert.equal(container.querySelectorAll('[role="tab"]').length, 3);
+    await click(byAria('Close Decoder'));
+    assert.equal(tab('Decoder'), undefined);
+    assert.equal(tab('Encoder').getAttribute('aria-selected'), 'true', 'Closing an inactive tab leaves the current view alone');
+
+    await click(byAria('Close Encoder'));
+    assert.equal(container.querySelectorAll('[role="tab"]').length, 1);
+    assert.equal(tab('main').getAttribute('aria-selected'), 'true');
+    assert.equal(useArchitectureStore.getState().graph, graph, 'Closing tabs never deletes architecture nodes');
+});
 
 function EdgeHarness({ selected, tensorFlow = false, shape = [null, 1024, 768] }) {
     const edge = useArchitectureStore((state) => state.graph.edges[0]);

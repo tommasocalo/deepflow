@@ -41,7 +41,7 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
             try {
                 const data = JSON.parse(await file.text());
                 goToLevel(0);
-                if (data?.architecture) useArchitectureStore.setState((s) => ({ ...s, graph: data.architecture }));
+                if (data?.architecture) useArchitectureStore.setState({ graph: data.architecture, currentPath: [], openPaths: [], selectedNodeIds: [], expandedNodeId: null });
                 if (data?.templates) useTemplatesStore.setState((s) => ({ ...s, templates: data.templates }));
                 if (data?.training) useTrainingStore.setState((s) => ({ ...s, graph: data.training }));
             } catch (err) {
