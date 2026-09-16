@@ -2,6 +2,36 @@ const intersectionArea = (a, b) => Math.max(0, Math.min(a.x + a.width, b.x + b.w
     * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
+/** Freeze the overlay while any node moves, then measure the final graph once. */
+export function createInspectorPlacementScheduler({ getNodes, position, requestFrame, cancelFrame }) {
+    let frame = null;
+    let disposed = false;
+    const dragging = () => getNodes().some((node) => node.dragging);
+    const cancel = () => {
+        if (frame !== null) cancelFrame(frame);
+        frame = null;
+    };
+    const flush = () => {
+        cancel();
+        if (!disposed && !dragging()) position();
+    };
+    return {
+        flush,
+        schedule() {
+            if (disposed) return;
+            if (dragging()) {
+                cancel();
+                return;
+            }
+            if (frame === null) frame = requestFrame(flush);
+        },
+        dispose() {
+            disposed = true;
+            cancel();
+        },
+    };
+}
+
 /** Place a panel next to its node, preferring empty canvas over other nodes or UI. */
 export function placeInspector({ anchor, panel, bounds, obstacles = [], nodes = [], margin = 12, gap = 18 }) {
     const width = Math.min(panel.width, Math.max(0, bounds.width - margin * 2));

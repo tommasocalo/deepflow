@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { useStoreApi } from '@xyflow/react';
-import { placeInspector } from './inspectorPlacement.js';
+import { createInspectorPlacementScheduler, placeInspector } from './inspectorPlacement.js';
 
 const relativeRect = (element, origin) => {
     const rect = element.getBoundingClientRect();
@@ -30,9 +30,10 @@ export function useInspectorPlacement(nodeId) {
         const panel = panelRef.current;
         const canvas = panel?.closest('[data-architecture-canvas]');
         if (!panel || !canvas || !nodeId) return;
-        let frame = null;
+        // A panel first opened during a drag waits for a valid position. Panels
+        // already on screen retain their exact position until the drag ends.
+        if (!panel.dataset.placement) panel.style.visibility = 'hidden';
         const position = () => {
-            frame = null;
             const origin = canvas.getBoundingClientRect();
             if (!origin.width || !origin.height) return;
             panel.style.maxHeight = `${Math.min(460, Math.max(120, origin.height - 24))}px`;
@@ -51,8 +52,15 @@ export function useInspectorPlacement(nodeId) {
             panel.style.left = `${Math.round(placement.x)}px`;
             panel.style.top = `${Math.round(placement.y)}px`;
             panel.dataset.placement = placement.side;
+            panel.style.visibility = '';
         };
-        const schedule = () => { if (frame === null) frame = requestAnimationFrame(position); };
+        const scheduler = createInspectorPlacementScheduler({
+            getNodes: () => flowStore.getState().nodes,
+            position,
+            requestFrame: requestAnimationFrame,
+            cancelFrame: cancelAnimationFrame,
+        });
+        const schedule = scheduler.schedule;
         const resizeObserver = new ResizeObserver(schedule);
         resizeObserver.observe(canvas);
         resizeObserver.observe(panel);
@@ -62,12 +70,12 @@ export function useInspectorPlacement(nodeId) {
         const mutationObserver = new window.MutationObserver(schedule);
         mutationObserver.observe(canvas, { childList: true, subtree: true });
         const unsubscribe = flowStore.subscribe(schedule);
-        position();
+        scheduler.flush();
         return () => {
             unsubscribe();
             resizeObserver.disconnect();
             mutationObserver.disconnect();
-            if (frame !== null) cancelAnimationFrame(frame);
+            scheduler.dispose();
         };
     }, [nodeId, flowStore]);
     return panelRef;
