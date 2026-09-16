@@ -1,14 +1,13 @@
 import React from 'react';
-import { AlertCircle, AlertTriangle, Boxes, ChevronRight, Layers3, Repeat, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Boxes, ChevronRight, Repeat, X } from 'lucide-react';
 import { PYTORCH_BLOCKS, getEntry } from '../../domain/library/index.js';
 import { createVariantPatch, getNodeFamily } from '../../domain/library/nodeFamilies.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
-import { formatShape } from '../../validation/index.js';
-import { styleFor } from './categoryStyle.js';
 import ParameterField from './ParameterField.jsx';
+import OperationIcon from './OperationIcon.jsx';
 import { useInspectorPlacement } from './useInspectorPlacement.js';
 import './nodes.css';
 import './inspector.css';
@@ -16,23 +15,38 @@ import './inspector.css';
 const SHAPE_PRIORITY = [
     'in_channels', 'out_channels', 'in_features', 'out_features', 'embed_dim', 'num_heads',
     'd_model', 'nhead', 'hidden_size', 'input_size', 'num_features', 'num_embeddings', 'embedding_dim',
-    'max_len', 'normalized_shape', 'kernel_size', 'p', 'shape', 'name',
+    'max_len', 'normalized_shape', 'kernel_size', 'p', 'shape', 'name', 'start_dim', 'end_dim', 'dim',
 ];
 const TEMPLATE_ONLY = new Set(['deepflow.template.Input', 'deepflow.template.Output']);
 
-function InspectorField({ param, value, ...props }) {
+const FIELD_LABELS = {
+    in_features: 'Input', out_features: 'Output', in_channels: 'In channels', out_channels: 'Out channels',
+    embed_dim: 'Width', embedding_dim: 'Width', num_heads: 'Heads', d_model: 'Width', nhead: 'Heads',
+    input_size: 'Input', hidden_size: 'Hidden', num_features: 'Features', num_embeddings: 'Vocabulary',
+    max_len: 'Context', normalized_shape: 'Shape', kernel_size: 'Kernel', p: 'Dropout',
+    start_dim: 'Start dim', end_dim: 'End dim', dim: 'Axis', iterationVariable: 'Index',
+    split_size_or_sections: 'Sections', padding_idx: 'Padding index',
+};
+
+function InspectorField({ param, value, label, ...props }) {
     const text = Array.isArray(value) ? value.join(', ') : String(value ?? '');
-    const wide = param.name === 'shape' || (text.length > 14 && param.type !== 'enum' && param.type !== 'bool');
+    const wide = param.name === 'shape' || (text.length > 18 && param.type !== 'enum' && param.type !== 'bool');
     return (
-        <div className={`df-inspector-field${wide ? ' is-wide' : ''}`}>
-            <ParameterField param={param} value={value} {...props} />
+        <div className={`df-inspector-field${wide ? ' is-wide' : ''}`} data-parameter={param.name}>
+            <ParameterField
+                param={{ ...param, description: `${param.name}${param.description ? ` — ${param.description}` : ''}` }}
+                value={value}
+                label={label ?? FIELD_LABELS[param.name] ?? param.name.replaceAll('_', ' ')}
+                ariaLabel={param.name}
+                {...props}
+            />
         </div>
     );
 }
 
-function ParamGroup({ title, params, values, errors, onPatch, collapsed = false }) {
+function ParamGroup({ params, values, errors, onPatch, collapsed = false }) {
     if (!params.length) return null;
-    const fields = params.map((p) => (
+    const fields = <div className="df-inspector-fields">{params.map((p) => (
         <InspectorField
             key={p.name}
             param={p}
@@ -40,21 +54,13 @@ function ParamGroup({ title, params, values, errors, onPatch, collapsed = false 
             onChange={(v) => onPatch({ [p.name]: v })}
             error={errors.some((e) => e.toLowerCase().includes(p.name.toLowerCase()))}
         />
-    ));
-    if (collapsed) {
-        return (
-            <details className="df-inspector-group">
-                <summary>{title} <span className="df-inspector-count">{params.length}</span></summary>
-                <div className="df-inspector-fields">{fields}</div>
-            </details>
-        );
-    }
-    return (
-        <section className="df-inspector-group">
-            <h3>{title}</h3>
-            <div className="df-inspector-fields">{fields}</div>
-        </section>
-    );
+    ))}</div>;
+    return collapsed ? (
+        <details className="df-inspector-group df-inspector-options">
+            <summary>Options <span className="df-inspector-count">{params.length}</span></summary>
+            {fields}
+        </details>
+    ) : fields;
 }
 
 function Issues({ errors, warnings }) {
@@ -72,8 +78,7 @@ function LayerBody({ id, node, errors }) {
     const patchNode = useArchitectureStore((s) => s.patchNode);
     const patchLayerParameters = useArchitectureStore((s) => s.patchLayerParameters);
     const params = entry?.parameters ?? [];
-    const required = params.filter((p) => p.required);
-    const shape = params.filter((p) => !p.required && SHAPE_PRIORITY.includes(p.name));
+    const primary = params.filter((p) => p.required || SHAPE_PRIORITY.includes(p.name));
     const options = params.filter((p) => !p.required && !SHAPE_PRIORITY.includes(p.name));
     const family = getNodeFamily(node.libraryKey);
     const moduleOptions = family?.variants ?? (entry && entry.category !== 'IO'
@@ -96,9 +101,8 @@ function LayerBody({ id, node, errors }) {
             )}
             {params.length ? (
                 <>
-                    <ParamGroup title="Required" params={required} values={node.parameters} errors={errors} onPatch={onPatch} />
-                    <ParamGroup title={required.length ? 'Shape' : 'Parameters'} params={shape} values={node.parameters} errors={errors} onPatch={onPatch} />
-                    <ParamGroup title="Options" params={options} values={node.parameters} errors={errors} onPatch={onPatch} collapsed={required.length > 0 || shape.length > 0} />
+                    <ParamGroup params={primary} values={node.parameters} errors={errors} onPatch={onPatch} />
+                    <ParamGroup params={options} values={node.parameters} errors={errors} onPatch={onPatch} collapsed />
                 </>
             ) : <p className="df-inspector-note">No parameters.</p>}
         </>
@@ -109,7 +113,6 @@ function Bindings({ freeParams, values, onChange, hint }) {
     if (!freeParams.length) return <p className="df-inspector-note">No configurable parameters.</p>;
     return (
         <section className="df-inspector-group">
-            <h3>Parameters</h3>
             <div className="df-inspector-fields">
                 {freeParams.map((p) => (
                     <InspectorField
@@ -135,7 +138,7 @@ function SupernodeBody({ id, node }) {
     const values = node.parameterValues ?? {};
     return (
         <>
-            <p className="df-inspector-note">{template ? (template.description || `Instance of “${template.name}”.`) : 'Template missing — re-create or delete this node.'}</p>
+            {!template && <p className="df-inspector-note">Template missing — re-create or delete this node.</p>}
             <div className="df-inspector-actions">
                 <button type="button" disabled={!template} onClick={() => enterSupernode(id)}><ChevronRight size={12} strokeWidth={3} /> Open</button>
                 <button type="button" disabled={!template} onClick={() => convertInstanceToRepeat(id, 2)} title="Repeat this template N times"><Repeat size={12} strokeWidth={3} /> Repeat</button>
@@ -158,13 +161,12 @@ function RepeatBody({ id, node }) {
     const iterVar = node.iterationVariable || 'i';
     return (
         <>
-            <p className="df-inspector-note">{template ? (template.description || `Repeats “${template.name}”.`) : 'Template missing — re-create or delete this node.'}</p>
+            {!template && <p className="df-inspector-note">Template missing — re-create or delete this node.</p>}
             <div className="df-inspector-actions">
                 <button type="button" disabled={!template} onClick={() => enterSupernode(id)}><ChevronRight size={12} strokeWidth={3} /> Open template</button>
                 <button type="button" disabled={!template} onClick={() => convertRepeatToInstance(id)} title="Back to a single instance"><Boxes size={12} strokeWidth={3} /> Single</button>
             </div>
             <section className="df-inspector-group">
-                <h3>Repetition</h3>
                 <div className="df-inspector-fields">
                     <InspectorField
                         param={{ name: 'count', type: 'int', description: 'Number of iterations' }}
@@ -191,8 +193,8 @@ function RepeatBody({ id, node }) {
 }
 
 /**
- * Floating panel with everything that used to live inside an expanded node:
- * name, module, parameters, bindings, issues, output activation.
+ * Floating settings card with a shared operation icon, paired primary fields,
+ * and secondary options in a disclosure.
  */
 export default function NodeInspector() {
     const rootGraph = useArchitectureStore((s) => s.graph);
@@ -212,21 +214,16 @@ export default function NodeInspector() {
     const id = node.id;
     const errors = validation.errors[id] ?? [];
     const warnings = validation.warnings[id] ?? [];
-    const outShape = validation.shapes[id];
-    const entry = node.kind === 'layer' ? getEntry(node.libraryKey) : null;
-    const accent = node.kind === 'layer' ? styleFor(entry?.category ?? 'IO').accent : '#f59e0b';
-    const kind = node.kind === 'layer' ? (entry?.category ?? 'block') : node.kind === 'repeat' ? 'repeat' : 'template';
-    const Icon = node.kind === 'repeat' ? Repeat : node.kind === 'supernode' ? Boxes : Layers3;
+    const ContainerIcon = node.kind === 'repeat' ? Repeat : Boxes;
     const rename = (label) => (node.kind === 'repeat' ? patchRepeatNode(id, { label }) : patchNode(id, { label }));
 
     return (
         <aside ref={panelRef} className="df-inspector df-panel-subtle nodrag nopan nowheel" aria-label={`${node.label} inspector`} onKeyDown={(e) => e.stopPropagation()}>
             <header className="df-inspector-header">
-                <span className="df-inspector-accent" style={{ background: accent }} />
-                <div className="df-inspector-heading">
-                    <div className="df-inspector-kind"><Icon size={12} strokeWidth={2.5} aria-hidden="true" /><span>{kind}</span></div>
-                    <input aria-label="Block name" value={node.label} onChange={(e) => rename(e.target.value)} />
-                </div>
+                {node.kind === 'layer'
+                    ? <OperationIcon libraryKey={node.libraryKey} size={24} />
+                    : <ContainerIcon size={22} strokeWidth={2.5} aria-hidden="true" />}
+                <input aria-label="Block name" title="Block name" value={node.label} onChange={(e) => rename(e.target.value)} />
                 <button type="button" className="df-inspector-close" onClick={clearExpanded} aria-label="Close inspector"><X size={13} strokeWidth={3} /></button>
             </header>
             <div className="df-inspector-body">
@@ -235,10 +232,6 @@ export default function NodeInspector() {
                 {node.kind === 'repeat' && <RepeatBody id={id} node={node} />}
                 <Issues errors={errors} warnings={warnings} />
             </div>
-            <footer className="df-inspector-footer">
-                <span>Output shape</span>
-                <code>{outShape ? formatShape(outShape) : '—'}</code>
-            </footer>
         </aside>
     );
 }

@@ -1,140 +1,149 @@
-/* Scoped rules keep the inspector independent of node-card field sizing. */
+/* Settings use a compact two-column form, independent of node-card fields. */
 .df-inspector.df-panel-subtle {
-    width: 272px;
-    max-width: calc(100% - 2rem);
-    background: #fff;
+    width: 260px;
+    max-width: calc(100% - 24px);
     max-height: min(460px, calc(100% - 24px));
+    background: #fff;
     border: 2px solid #111;
-    border-radius: 6px;
+    border-radius: 5px;
     box-shadow: 3px 3px 0 #111;
 }
-
 .df-inspector .df-inspector-header {
     display: grid;
-    grid-template-columns: 3px minmax(0, 1fr) 28px;
+    grid-template-columns: 24px minmax(0, 1fr) 23px;
     align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
+    gap: 6px;
+    padding: 5px 7px;
+    min-height: 35px;
+    flex-shrink: 0;
+    border-bottom: 1px solid #111;
 }
-.df-inspector .df-inspector-accent { width: 3px; height: 31px; }
-.df-inspector .df-inspector-heading { min-width: 0; }
-.df-inspector .df-inspector-kind {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    min-width: 0;
-    color: #6b7280;
-    font-size: 9px;
-    font-weight: 700;
-    line-height: 14px;
-}
-.df-inspector .df-inspector-heading input {
+.df-inspector .df-inspector-header > .df-operation-icon { display: block; width: 24px; height: 24px; object-fit: contain; }
+.df-inspector .df-inspector-header > input {
     display: block;
     box-sizing: border-box;
     width: 100%;
-    height: 23px;
-    padding: 2px 0;
-    font-size: 13px;
+    min-width: 0;
+    height: 24px;
+    padding: 1px 0;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    font-size: 12px;
     font-weight: 700;
     text-overflow: ellipsis;
 }
-.df-inspector .df-inspector-close { width: 28px; height: 28px; }
-.df-inspector .df-inspector-body { padding: 10px; overflow-x: hidden; }
-.df-inspector .df-inspector-note {
-    margin: 0 0 12px;
-    font-size: 11px;
-    line-height: 1.45;
-    overflow-wrap: anywhere;
-}
-
+.df-inspector .df-inspector-header > input:focus { border-bottom-color: #111; }
+.df-inspector .df-inspector-close { width: 23px; height: 23px; border-radius: 3px; color: #111; }
+.df-inspector .df-inspector-body { padding: 7px 8px 6px; overflow-x: hidden; }
 .df-inspector .df-inspector-module {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 146px;
+    grid-template-columns: 45px minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
+    gap: 6px;
+    margin: 0 0 7px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #555;
 }
 .df-inspector .df-inspector-module select {
     box-sizing: border-box;
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    height: 28px;
-    padding: 0 7px;
-    border: 1px solid #d1d5db;
-    border-radius: 5px;
+    height: 24px;
+    padding: 0 5px;
+    border: 1px solid #aaa;
+    border-radius: 3px;
+    background: #fafaf8;
     box-shadow: none;
     font-size: 11px;
 }
-.df-inspector .df-inspector-group { margin-top: 10px; padding-top: 10px; }
-.df-inspector .df-inspector-group:first-of-type { margin-top: 0; padding-top: 0; }
-.df-inspector .df-inspector-group h3,
-.df-inspector .df-inspector-group summary { margin-bottom: 7px; font-size: 10px; }
-.df-inspector .df-inspector-group summary { display: flex; align-items: center; gap: 6px; }
-.df-inspector .df-inspector-group summary::before {
-    content: '';
-    width: 5px;
-    height: 5px;
-    border-right: 1px solid currentColor;
-    border-bottom: 1px solid currentColor;
-    transform: rotate(-45deg);
-}
-.df-inspector details[open] > summary::before { transform: rotate(45deg); }
-.df-inspector .df-inspector-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; }
+.df-inspector .df-inspector-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; }
 .df-inspector .df-inspector-field { min-width: 0; }
+.df-inspector .df-inspector-field.is-wide,
+.df-inspector .df-inspector-field:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .df-inspector .df-param-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 112px;
-    align-items: center;
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
     width: 100%;
-    min-height: 28px;
+    min-height: 0;
     padding: 0;
-    border-radius: 4px;
+    border-radius: 0;
 }
+.df-inspector .df-inspector-fields .df-param-row:hover { background: transparent; }
 .df-inspector .df-param-label {
-    font-size: 10px;
-    line-height: 14px;
-    color: #4b5563;
+    display: block;
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 600;
+    color: #555;
     opacity: 1;
     overflow-wrap: anywhere;
 }
+.df-inspector .df-param-required { display: none; }
 .df-inspector .df-param-input {
     box-sizing: border-box;
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    height: 28px;
-    padding: 4px 7px;
-    border: 1px solid #d1d5db;
-    border-radius: 5px;
+    height: 25px;
+    padding: 3px 6px;
+    border: 1px solid #aaa;
+    border-radius: 3px;
     background: #fff;
     box-shadow: none;
     font-size: 11px;
-    line-height: 18px;
+    line-height: 17px;
+    text-align: left;
 }
-.df-inspector select.df-param-input { text-align: left; }
-.df-inspector .df-param-input:focus {
-    border-color: #4b5563;
-    box-shadow: 0 0 0 2px #11182712;
-}
+.df-inspector .df-param-input:focus { outline: 1px solid #111; outline-offset: 0; border-color: #111; box-shadow: none; }
 .df-inspector .df-param-input.is-invalid { border-color: #dc2626; }
 .df-inspector .df-param-row.has-error .df-param-label { color: #b91c1c; }
-.df-inspector .df-param-bool { justify-content: flex-end; min-height: 28px; padding-right: 4px; }
-.df-inspector .df-inspector-field.is-wide .df-param-row { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 3px 0; }
-.df-inspector .df-inspector-field.is-wide .df-param-input { text-align: left; }
-.df-inspector .df-inspector-fields + .df-inspector-note { margin-top: 8px; margin-bottom: 0; font-size: 10px; }
-
-.df-inspector .df-inspector-actions { gap: 6px; margin-bottom: 12px; }
+.df-inspector .df-param-bool { justify-content: flex-start; min-height: 25px; gap: 5px; font-size: 10px; }
+.df-inspector .df-inspector-group { margin: 7px 0 0; padding: 0; border: 0; }
+.df-inspector .df-inspector-group:first-child { margin-top: 0; }
+.df-inspector .df-inspector-options { border-top: 1px solid #e5e5e5; }
+.df-inspector .df-inspector-options > summary {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 22px;
+    margin: 0;
+    padding: 3px 0 0;
+    font-size: 9px;
+    line-height: 13px;
+    font-weight: 600;
+    color: #555;
+    text-transform: none;
+    letter-spacing: 0;
+    list-style: none;
+}
+.df-inspector .df-inspector-options > summary::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-right: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    transform: rotate(-45deg);
+}
+.df-inspector .df-inspector-options[open] > summary::before { transform: rotate(45deg); }
+.df-inspector .df-inspector-options[open] > .df-inspector-fields { padding-top: 5px; }
+.df-inspector .df-inspector-note { margin: 0 0 6px; font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
+.df-inspector .df-inspector-fields + .df-inspector-note { margin-top: 6px; margin-bottom: 0; font-size: 9px; }
+.df-inspector .df-inspector-actions { gap: 6px; margin-bottom: 7px; }
 .df-inspector .df-inspector-actions button {
-    height: 28px;
+    height: 25px;
     min-width: 0;
-    border: 1px solid #9ca3af;
-    border-radius: 5px;
+    border: 1px solid #111;
+    border-radius: 3px;
     box-shadow: none;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
 }
-.df-inspector .df-inspector-footer { gap: 10px; padding: 7px 10px; }
-.df-inspector .df-inspector-footer > span { flex-shrink: 0; }
-.df-inspector .df-inspector-footer code { min-width: 0; text-align: right; overflow-wrap: anywhere; }
+.df-inspector .df-inspector-issues { margin-top: 6px; gap: 3px; }
+.df-inspector .df-inspector-issue { padding: 4px 5px; font-size: 9px; line-height: 1.3; }

@@ -2,7 +2,7 @@ import { useId } from 'react';
 
 const NUMBER_LITERAL = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
-const ParameterField = ({ param, value, onChange, error, label, placeholder }) => {
+const ParameterField = ({ param, value, onChange, error, label, ariaLabel, placeholder }) => {
     const id = useId();
     const display = value === null || value === undefined ? '' : value;
     const numeric = param.type === 'int' || param.type === 'float';
@@ -14,6 +14,7 @@ const ParameterField = ({ param, value, onChange, error, label, placeholder }) =
         style: { '--parameter-width': `${widthCh}ch` },
         id,
         'aria-invalid': !!error,
+        'aria-label': ariaLabel,
         className,
         onClick: (event) => event.stopPropagation(),
         onMouseDown: (event) => event.stopPropagation(),
