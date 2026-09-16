@@ -454,7 +454,7 @@ test('canvas keeps 60 multi-drag frames local, persists on release and recovers 
     const b = createLayerNode({ id: 'b', libraryKey: entry.key, entry, position: { x: 200, y: 250 } });
     const c = createLayerNode({ id: 'c', libraryKey: entry.key, entry, position: { x: 200, y: 400 } });
     const edge = createEdge({ id: 'skip', source: 'a', target: 'c' });
-    const graph = { nodes: { a, b, c }, edges: [edge] };
+    const graph = { nodes: { a, b, c }, edges: [edge, createEdge({ source: 'a', target: 'b' }), createEdge({ source: 'b', target: 'c' })] };
     useArchitectureStore.setState({ graph });
     let flow;
     const onReady = (store) => { flow = store; };

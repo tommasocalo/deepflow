@@ -1,9 +1,6 @@
 /** Positions use top-centre origin so nodes share a flow axis. */
 export const OP_SIZE = 36;
 
-/** Half-width used to decide whether an edge passes "through" other nodes. */
-export const COLUMN_HALF_WIDTH = 150;
-
 export function isInteractive(target) {
     return !!target?.closest?.('input, button, select, textarea, label, a, summary, .react-flow__handle');
 }

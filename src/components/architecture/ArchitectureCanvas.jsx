@@ -19,7 +19,7 @@ import SuperNodeInstanceView from './SuperNodeInstanceView.jsx';
 import RepeatNodeView from './RepeatNodeView.jsx';
 import ArchitectureEdge from './ArchitectureEdge.jsx';
 import GraphStatusPanel from './GraphStatusPanel.jsx';
-import { COLUMN_HALF_WIDTH } from './nodeGeometry.js';
+import { residualEdgeIds } from './residualEdges.js';
 import { tensorFlowNodeIds } from './tensorFlow.js';
 import { createDragBatcher, syncFlowNodes } from './flowAdapter.js';
 import { isBlankCanvasDrop } from './connectionGesture.js';
@@ -46,35 +46,15 @@ function viewportKey(currentPath) {
     return `${VIEWPORT_KEY_PREFIX}:${currentPath.join('/')}`;
 }
 
-/**
- * An edge "skips" when another node sits vertically between its endpoints
- * in the same column — a residual / skip connection. Those are routed
- * around the column so they stay legible.
- */
-function edgeSkips(edge, nodes) {
-    const src = nodes[edge.source];
-    const tgt = nodes[edge.target];
-    if (!src || !tgt) return false;
-    const top = Math.min(src.position.y, tgt.position.y) + 20;
-    const bottom = Math.max(src.position.y, tgt.position.y) - 20;
-    if (bottom - top < 40) return false;
-    const cx = (src.position.x + tgt.position.x) / 2;
-    return Object.values(nodes).some((n) =>
-        n.id !== src.id && n.id !== tgt.id &&
-        n.position.y > top && n.position.y < bottom &&
-        Math.abs(n.position.x - cx) < COLUMN_HALF_WIDTH,
-    );
-}
-
-function toFlowEdges(graph, selectedEdgeSet) {
-    return graph.edges.map((edge) => ({
+function toFlowEdges(edges, selectedEdgeSet, residuals) {
+    return edges.map((edge) => ({
         id: edge.id,
         source: edge.source,
         target: edge.target,
         sourceHandle: edge.sourceHandle,
         targetHandle: edge.targetHandle,
         type: 'archEdge',
-        data: { detour: edgeSkips(edge, graph.nodes) },
+        data: { detour: residuals.has(edge.id) },
         selected: selectedEdgeSet.has(edge.id),
         animated: false,
         interactionWidth: 20,
@@ -123,11 +103,11 @@ const Inner = ({ children, overlay }) => {
     const tensorFlowIds = useMemo(() => tensorFlowNodeIds(viewGraph), [viewGraph]);
     const [initialNodes] = useState(() => syncFlowNodes([], viewGraph, selectedNodeIds, tensorFlowIds, levelKey));
     const selectedEdgeSet = useMemo(() => new Set(selectedEdgeIds), [selectedEdgeIds]);
-    // Edges use committed geometry: their routing classification stays stable
-    // while ReactFlow moves only the endpoint coordinates during a drag.
+    // Moving nodes does not change the topology or rebuild stationary wires.
+    const residuals = useMemo(() => residualEdgeIds(viewGraph.edges), [viewGraph.edges]);
     const edges = useMemo(
-        () => toFlowEdges(viewGraph, selectedEdgeSet),
-        [viewGraph, selectedEdgeSet],
+        () => toFlowEdges(viewGraph.edges, selectedEdgeSet, residuals),
+        [viewGraph.edges, selectedEdgeSet, residuals],
     );
     const showPanCursor = interactionMode === 'pan' || spacePressed;
     const graphIsEmpty = Object.keys(viewGraph.nodes).length === 0;
@@ -353,7 +333,7 @@ const Inner = ({ children, overlay }) => {
                     onReconnectStart={onReconnectStart}
                     onReconnect={onReconnect}
                     onReconnectEnd={onReconnectEnd}
-                    connectionLineType={ConnectionLineType.SmoothStep}
+                    connectionLineType={ConnectionLineType.Bezier}
                     connectionLineStyle={{ stroke: '#111', strokeWidth: 2 }}
                     connectionDragThreshold={4}
                     reconnectRadius={12}
