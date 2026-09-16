@@ -1,19 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Boxes, Check, ChevronDown, ChevronRight, Layers3, Plus, Search, X } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
-import { PYTORCH_BLOCKS, getEntry } from '../../domain/library/index.js';
+import { getPaletteEntries } from '../../domain/library/nodeFamilies.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
-import { styleFor } from './categoryStyle.js';
-import TemplateInspector from './TemplateInspector.jsx';
+import OperationIcon from './OperationIcon.jsx';
 import './palette.css';
 
-const TEMPLATE_ONLY = new Set(['deepflow.template.Input', 'deepflow.template.Output']);
-const CATEGORIES = ['IO', 'Linear', 'Attention', 'Normalization', 'Activation', 'Regularization', 'Convolution', 'Pooling', 'Reshape', 'Recurrent', 'Element-wise', 'Combine'];
-const FAVORITES = ['torch.nn.Linear', 'torch.nn.Conv2d', 'torch.nn.ReLU', 'torch.nn.LayerNorm'];
+const CATEGORIES = ['IO', 'Attention', 'Normalization', 'Activation', 'Regularization', 'Convolution', 'Pooling', 'Recurrent'];
+const PALETTE_ENTRIES = getPaletteEntries();
 const normalize = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-const matches = (entry, query) => query.trim().split(/\s+/).every((word) => normalize(`${entry.name} ${entry.category} ${entry.description} ${entry.key}`).includes(normalize(word)));
+const matches = (entry, query) => query.trim().split(/\s+/).every((word) => normalize(`${entry.name} ${entry.category} ${entry.description} ${entry.key} ${(entry.aliases ?? []).join(' ')}`).includes(normalize(word)));
 
 function containsTemplate(templateId, targetId, templates, visited = new Set()) {
     if (templateId === targetId) return true;
@@ -22,20 +20,18 @@ function containsTemplate(templateId, targetId, templates, visited = new Set()) 
     return Object.values(templates[templateId]?.graph?.nodes ?? {}).some((node) => node.templateId && containsTemplate(node.templateId, targetId, templates, visited));
 }
 
-function LibraryRow({ entry, onAdd, template = false, disabled = false }) {
-    const accent = template ? '#a855f7' : styleFor(entry.category).accent;
+function LibraryRow({ entry, onAdd, template = false, disabled = false, operation = false }) {
     return (
-        <button type="button" className="df-library-row" data-library-key={entry.key} disabled={disabled} draggable={!disabled}
+        <button type="button" className={`df-library-row${operation ? ' df-library-operation' : ''}`} data-library-key={entry.key} disabled={disabled} draggable={!disabled}
             onDragStart={(event) => {
                 event.dataTransfer.setData(template ? 'application/deepflow-template-id' : 'application/deepflow-lib-key', entry.key);
                 event.dataTransfer.effectAllowed = 'copy';
             }}
             onClick={() => onAdd(entry, template)} title={disabled ? 'This template would contain itself.' : entry.description}
             aria-label={`Add ${entry.name}${template ? ' template' : ''}`}>
-            <span className="df-library-dot" style={{ background: accent }} />
-            {template ? <Boxes size={11} aria-hidden="true" /> : <Layers3 size={11} aria-hidden="true" />}
-            <span className="df-library-name">{entry.name}</span>
-            <Plus className="df-library-add" size={11} aria-hidden="true" />
+            {template ? <Boxes size={22} aria-hidden="true" /> : <OperationIcon libraryKey={entry.key} size={operation ? 25 : 28} className="df-library-icon" />}
+            <span className="df-library-name">{entry.name}{entry.family && <small>{entry.family.variants.length} variants · settings</small>}</span>
+            {!operation && <Plus className="df-library-add" size={11} aria-hidden="true" />}
         </button>
     );
 }
@@ -57,10 +53,12 @@ export default function BlockPalette() {
     const selectOnly = useArchitectureStore((s) => s.selectOnly);
     const setExpanded = useArchitectureStore((s) => s.setExpanded);
     const editingTemplateId = resolveGraphLevel(rootGraph, currentPath, templates).templateId;
-    const groups = useMemo(() => CATEGORIES.map((category) => ({ category, items: PYTORCH_BLOCKS.filter((entry) => entry.category === category && !TEMPLATE_ONLY.has(entry.key) && matches(entry, query)) })).filter((group) => group.items.length), [query]);
-    const entries = groups.flatMap((group) => group.items);
+    const matchingEntries = useMemo(() => PALETTE_ENTRIES.filter((entry) => matches(entry, query)), [query]);
+    const families = matchingEntries.filter((entry) => entry.family);
+    const operations = matchingEntries.filter((entry) => entry.category === 'Operations');
+    const groups = CATEGORIES.map((category) => ({ category, items: matchingEntries.filter((entry) => entry.category === category && !entry.family) })).filter((group) => group.items.length);
+    const entries = [...families, ...operations, ...groups.flatMap((group) => group.items)];
     const templateEntries = Object.values(templates).map((template) => ({ key: template.id, name: template.name, category: 'Template', description: template.description || 'Reusable graph template' })).filter((entry) => matches(entry, query));
-    const favorites = FAVORITES.map(getEntry).filter(Boolean);
     const templateDisabled = (entry) => !!editingTemplateId && containsTemplate(entry.key, editingTemplateId, templates);
 
     useEffect(() => {
@@ -128,12 +126,12 @@ export default function BlockPalette() {
             <header className="df-library-header"><h2>Architecture</h2><span className="df-library-kind">blocks</span><button className="df-library-collapse" onClick={() => setCollapsed(true)} aria-label="Collapse block library" title="Collapse library"><ChevronDown size={13} /></button></header>
             <div className="df-library-search"><Search size={12} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={onSearchKeyDown} placeholder="Search blocks…" aria-label="Search blocks" autoComplete="off" spellCheck={false} />{query ? <button onClick={() => { setQuery(''); searchRef.current?.focus(); }} className="df-search-clear" aria-label="Clear search"><X size={12} /></button> : <kbd>/</kbd>}</div>
             <div className="df-library-scroll">
-                {currentPath.length > 0 && <TemplateInspector embedded />}
-                {!query && <section className="df-library-group"><div className="df-library-section-label">Frequently used</div>{favorites.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} />)}</section>}
+                {families.length > 0 && <section className="df-library-group"><div className="df-library-section-label">Layers</div>{families.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} />)}</section>}
+                {operations.length > 0 && <section className="df-library-group"><div className="df-library-section-label">Operations</div><div className="df-library-operations">{operations.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} operation />)}</div></section>}
                 {groups.map(({ category, items }) => {
                     const open = !!query || openGroups.includes(category);
                     const groupId = `library-${category.toLowerCase().replace(/[^a-z]/g, '-')}`;
-                    return <section key={category} className="df-library-group"><button className="df-library-category" aria-expanded={open} aria-controls={groupId} onClick={() => toggleGroup(category)}>{open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}<span>{category === 'IO' ? 'Inputs & outputs' : category}</span><span className="df-library-category-count">{items.length}</span></button>{open && <div id={groupId} className="df-library-group-items">{items.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} />)}</div>}</section>;
+                    return <section key={category} className="df-library-group"><button className="df-library-category" aria-expanded={open} aria-controls={groupId} onClick={() => toggleGroup(category)}>{open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}<span>{category === 'IO' ? 'Inputs & outputs' : category === 'Attention' ? 'Transformer' : category}</span><span className="df-library-category-count">{items.length}</span></button>{open && <div id={groupId} className="df-library-group-items">{items.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} />)}</div>}</section>;
                 })}
                 {templateEntries.length > 0 && <section className="df-library-group"><button className="df-library-category" aria-expanded={!!query || openGroups.includes('Templates')} aria-controls="library-templates" onClick={() => toggleGroup('Templates')}>{query || openGroups.includes('Templates') ? <ChevronDown size={11} /> : <ChevronRight size={11} />}<span>Templates</span><span className="df-library-category-count">{templateEntries.length}</span></button>{(query || openGroups.includes('Templates')) && <div id="library-templates" className="df-library-group-items">{templateEntries.map((entry) => <LibraryRow key={entry.key} entry={entry} onAdd={addEntry} template disabled={templateDisabled(entry)} />)}</div>}</section>}
                 {!entries.length && !templateEntries.length && <p className="df-library-empty">No matching blocks.</p>}

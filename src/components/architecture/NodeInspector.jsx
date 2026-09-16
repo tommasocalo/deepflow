@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertCircle, AlertTriangle, Boxes, ChevronRight, Layers3, Repeat, X } from 'lucide-react';
-import { PYTORCH_BLOCKS, defaultParameterValues, getEntry } from '../../domain/library/index.js';
+import { PYTORCH_BLOCKS, getEntry } from '../../domain/library/index.js';
+import { createVariantPatch, getNodeFamily } from '../../domain/library/nodeFamilies.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
@@ -8,6 +9,7 @@ import { useValidation } from '../../hooks/useValidation.js';
 import { formatShape } from '../../validation/index.js';
 import { styleFor } from './categoryStyle.js';
 import ParameterField from './ParameterField.jsx';
+import { useInspectorPlacement } from './useInspectorPlacement.js';
 import './nodes.css';
 import './inspector.css';
 
@@ -73,28 +75,25 @@ function LayerBody({ id, node, errors }) {
     const required = params.filter((p) => p.required);
     const shape = params.filter((p) => !p.required && SHAPE_PRIORITY.includes(p.name));
     const options = params.filter((p) => !p.required && !SHAPE_PRIORITY.includes(p.name));
-    const moduleOptions = entry && entry.category !== 'IO'
+    const family = getNodeFamily(node.libraryKey);
+    const moduleOptions = family?.variants ?? (entry && entry.category !== 'IO'
         ? PYTORCH_BLOCKS.filter((c) => c.category === entry.category && !TEMPLATE_ONLY.has(c.key))
-        : [];
+        : []);
     const switchModule = (libraryKey) => {
-        const next = getEntry(libraryKey);
-        if (!next || next.key === node.libraryKey) return;
-        const parameters = defaultParameterValues(next);
-        for (const p of next.parameters) if (Object.hasOwn(node.parameters, p.name)) parameters[p.name] = node.parameters[p.name];
-        patchNode(id, { libraryKey: next.key, label: node.label === entry?.name ? next.name : node.label, parameters });
+        const patch = createVariantPatch(node, libraryKey);
+        if (patch) patchNode(id, patch);
     };
     const onPatch = (patch) => patchLayerParameters(id, patch);
     return (
         <>
             {moduleOptions.length > 1 && (
                 <label className="df-inspector-module">
-                    <span>module</span>
-                    <select value={node.libraryKey} onChange={(e) => switchModule(e.target.value)} className="df-input">
+                    <span>{family ? 'Variant' : 'Module'}</span>
+                    <select aria-label={family ? "Operation type" : "Module"} value={node.libraryKey} onChange={(e) => switchModule(e.target.value)} className="df-input">
                         {moduleOptions.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
                     </select>
                 </label>
             )}
-            {entry?.description && <p className="df-inspector-note">{entry.description}</p>}
             {params.length ? (
                 <>
                     <ParamGroup title="Required" params={required} values={node.parameters} errors={errors} onPatch={onPatch} />
@@ -107,7 +106,7 @@ function LayerBody({ id, node, errors }) {
 }
 
 function Bindings({ freeParams, values, onChange, hint }) {
-    if (!freeParams.length) return <p className="df-inspector-note">This template exposes no parameters yet. Open it and add some under “Template parameters”.</p>;
+    if (!freeParams.length) return <p className="df-inspector-note">No configurable parameters.</p>;
     return (
         <section className="df-inspector-group">
             <h3>Parameters</h3>
@@ -204,6 +203,7 @@ export default function NodeInspector() {
     const patchNode = useArchitectureStore((s) => s.patchNode);
     const patchRepeatNode = useArchitectureStore((s) => s.patchRepeatNode);
     const validation = useValidation();
+    const panelRef = useInspectorPlacement(expandedNodeId);
 
     const graph = resolveGraphLevel(rootGraph, currentPath, templates).graph;
     const node = expandedNodeId ? graph?.nodes?.[expandedNodeId] : null;
@@ -220,7 +220,7 @@ export default function NodeInspector() {
     const rename = (label) => (node.kind === 'repeat' ? patchRepeatNode(id, { label }) : patchNode(id, { label }));
 
     return (
-        <aside className="df-inspector df-panel-subtle nodrag nopan nowheel" aria-label={`${node.label} inspector`} onKeyDown={(e) => e.stopPropagation()}>
+        <aside ref={panelRef} className="df-inspector df-panel-subtle nodrag nopan nowheel" aria-label={`${node.label} inspector`} onKeyDown={(e) => e.stopPropagation()}>
             <header className="df-inspector-header">
                 <span className="df-inspector-accent" style={{ background: accent }} />
                 <div className="df-inspector-heading">

@@ -1,18 +1,22 @@
 /* Scoped rules keep the inspector independent of node-card field sizing. */
 .df-inspector.df-panel-subtle {
-    width: 288px;
+    width: 272px;
     max-width: calc(100% - 2rem);
     background: #fff;
+    max-height: min(460px, calc(100% - 24px));
+    border: 2px solid #111;
+    border-radius: 6px;
+    box-shadow: 3px 3px 0 #111;
 }
 
 .df-inspector .df-inspector-header {
     display: grid;
     grid-template-columns: 3px minmax(0, 1fr) 28px;
     align-items: center;
-    gap: 9px;
-    padding: 10px 12px;
+    gap: 8px;
+    padding: 7px 10px;
 }
-.df-inspector .df-inspector-accent { width: 3px; height: 38px; }
+.df-inspector .df-inspector-accent { width: 3px; height: 31px; }
 .df-inspector .df-inspector-heading { min-width: 0; }
 .df-inspector .df-inspector-kind {
     display: flex;
@@ -28,14 +32,14 @@
     display: block;
     box-sizing: border-box;
     width: 100%;
-    height: 28px;
+    height: 23px;
     padding: 2px 0;
     font-size: 13px;
     font-weight: 700;
     text-overflow: ellipsis;
 }
 .df-inspector .df-inspector-close { width: 28px; height: 28px; }
-.df-inspector .df-inspector-body { padding: 12px; overflow-x: hidden; }
+.df-inspector .df-inspector-body { padding: 10px; overflow-x: hidden; }
 .df-inspector .df-inspector-note {
     margin: 0 0 12px;
     font-size: 11px;
@@ -45,8 +49,9 @@
 
 .df-inspector .df-inspector-module {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 5px;
+    grid-template-columns: minmax(0, 1fr) 146px;
+    align-items: center;
+    gap: 8px;
     margin-bottom: 10px;
 }
 .df-inspector .df-inspector-module select {
@@ -130,6 +135,6 @@
     font-size: 11px;
     font-weight: 600;
 }
-.df-inspector .df-inspector-footer { gap: 10px; padding: 9px 12px; }
+.df-inspector .df-inspector-footer { gap: 10px; padding: 7px 10px; }
 .df-inspector .df-inspector-footer > span { flex-shrink: 0; }
 .df-inspector .df-inspector-footer code { min-width: 0; text-align: right; overflow-wrap: anywhere; }
