@@ -391,28 +391,39 @@ test('canvas keeps 60 multi-drag frames local, persists on release and recovers 
     }
 });
 
-test('MLP tensor sketches encode feature expansion with bounded uniform cells', async () => {
-    await render(h(TensorPreview, { shape: [null, 1024, 768], compact: true }));
-    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 24);
-    assert.equal(container.querySelector('.df-tensor-dimensions').textContent, 'B × 1024 × 768');
-    assert.match(container.querySelector('title').textContent, /shape only/);
-    assert.match(container.querySelector('title').textContent, /128 features/);
-    await render(h(TensorPreview, { shape: [null, 1024, 3072], compact: true }));
-    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 96);
-    await render(h(TensorPreview, { shape: [null, 1000000, 1000000], compact: true }));
-    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 144, 'Large tensors must not create one DOM cell per value');
+test('node feature previews use a common grouping scale and stay bounded', async () => {
+    await render(h(TensorPreview, { shape: [null, 1024, 768] }));
+    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 48);
+    assert.equal(container.querySelector('.df-tensor-features').textContent, '768');
+    assert.match(container.querySelector('title').textContent, /16 adjacent features/);
+    assert.match(container.querySelector('title').textContent, /One token/);
+    await render(h(TensorPreview, { shape: [null, 1024, 3072] }));
+    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 192);
+    await render(h(TensorPreview, { shape: [null, 1000000, 1000000] }));
+    assert.ok(container.querySelectorAll('.df-tensor-grid rect').length <= 192, 'Large tensors stay aggregated');
     await render(h(TensorPreview, { shape: null }));
     assert.equal(container.querySelector('svg'), null);
 });
 
-test('only opted-in MLP edges render tensor grids and keep stored model data intact', async () => {
-    const edge = createEdge({ id: 'connection', source: 'a', target: 'b' });
-    const graph = { nodes: {}, edges: [edge] };
+test('feature previews live in operation nodes; connections show dimensions only on selection', async () => {
+    const entry = getEntry('torch.nn.Linear');
+    const input = createLayerNode({ id: 'input', libraryKey: 'deepflow.io.Input', position: { x: 100, y: 0 }, parameters: { shape: '(1024, 768)', dtype: 'float32' } });
+    const linear = createLayerNode({ id: 'linear', libraryKey: entry.key, entry, position: { x: 100, y: 100 }, parameters: { in_features: 768, out_features: 3072, bias: true } });
+    const edge = createEdge({ id: 'connection', source: 'input', target: 'linear' });
+    const graph = { nodes: { input, linear }, edges: [edge] };
     useArchitectureStore.setState({ graph });
-    await render(h(EdgeHarness, { tensorFlow: false, selected: false }));
+    await render(h(GraphHarness));
+    const block = container.querySelector('.react-flow__node[data-id="linear"] .df-block');
+    assert.equal(block.querySelectorAll('.df-tensor-grid rect').length, 192);
+    assert.equal(block.querySelector('input'), null);
+    await click(byAria('Inspect Linear'));
+    assert.ok(byAria('Linear inspector'));
+    assert.equal(block.querySelectorAll('.df-tensor-grid rect').length, 192);
+    await render(h(EdgeHarness, { selected: false }));
     assert.equal(container.querySelector('.df-tensor-preview'), null);
-    await render(h(EdgeHarness, { tensorFlow: true, selected: true }));
-    assert.equal(container.querySelectorAll('.df-tensor-grid rect').length, 24);
-    assert.equal(container.querySelector('.df-tensor-edge').tabIndex, 0);
+    assert.equal(container.querySelector('.df-activation'), null);
+    await render(h(EdgeHarness, { selected: true }));
+    assert.ok(container.querySelector('.df-activation'));
+    assert.equal(container.querySelector('.df-tensor-preview'), null);
     assert.equal(useArchitectureStore.getState().graph, graph);
 });

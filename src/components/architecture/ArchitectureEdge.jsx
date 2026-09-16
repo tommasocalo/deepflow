@@ -1,9 +1,6 @@
 import { memo } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useStore } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, getBezierPath } from '@xyflow/react';
 
-import TensorPreview from './TensorPreview.jsx';
-
-const showTensorDetail = (state) => state.transform[2] >= 0.45;
 
 const DETOUR_OFFSET = 190;
 const CORNER = 10;
@@ -35,21 +32,24 @@ function ArchitectureEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositi
     const [path, labelX, labelY] = data?.detour
         ? detourPath(sourceX, sourceY, targetX, targetY)
         : getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: CORNER, offset: 12 });
-    const detailVisible = useStore(showTensorDetail);
-    const showTensor = data?.tensorFlow && data?.shape && !data?.detour && detailVisible && targetY - sourceY >= 40;
-    const showLabel = !!data?.activation && Math.abs(targetY - sourceY) > 40;
+    const showLabel = selected && !!data?.activation;
+    const stream = data?.featureStream && !data.detour && targetY > sourceY + 8;
     return <>
-        <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={interactionWidth ?? 20} style={{ stroke: '#111', strokeWidth: selected ? 3 : 2 }} />
-        {(showTensor || showLabel) && <EdgeLabelRenderer>
-            {showTensor ? (
-                <div className="df-tensor-edge nodrag nopan" tabIndex={0} style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>
-                    <TensorPreview shape={data.shape} compact />
-                </div>
-            ) : (
-                <div className="df-activation" style={{ transform: `translate(12px, -50%) translate(${labelX}px, ${labelY}px)` }}>
-                    {data.activation}
-                </div>
-            )}
+        {stream && <g className="df-feature-stream" pointerEvents="none" aria-hidden="true">
+            {[-.48, -.32, -.16, .16, .32, .48].map((offset) => {
+                const [strand] = getBezierPath({
+                    sourceX: sourceX + offset * (data.sourceSpan ?? 0), sourceY,
+                    targetX: targetX + offset * (data.targetSpan ?? 0), targetY,
+                    sourcePosition, targetPosition, curvature: .35,
+                });
+                return <path key={offset} d={strand} fill="none" stroke={data.accent ?? '#666'} strokeWidth={selected ? 1.5 : 1} opacity={selected ? .7 : .4} />;
+            })}
+        </g>}
+        <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={interactionWidth ?? 20} style={{ stroke: '#111', strokeWidth: selected ? 2.5 : stream ? 1 : 2 }} />
+        {showLabel && <EdgeLabelRenderer>
+            <div className="df-activation" style={{ transform: `translate(12px, -50%) translate(${labelX}px, ${labelY}px)` }}>
+                {data.activation}
+            </div>
         </EdgeLabelRenderer>}
     </>;
 }

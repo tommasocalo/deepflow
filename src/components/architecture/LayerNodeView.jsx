@@ -1,18 +1,21 @@
 import React, { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { AlertCircle, AlertTriangle, GripVertical, SlidersHorizontal, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, SlidersHorizontal, X } from 'lucide-react';
 import { getEntry } from '../../domain/library/index.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
 import { styleFor } from './categoryStyle.js';
-import { BLOCK_HEIGHT, isInteractive, widthForShape } from './nodeGeometry.js';
+import { isInteractive, activationLabel } from './nodeGeometry.js';
+
+import TensorPreview from './TensorPreview.jsx';
+import { featurePreview } from './featurePreview.js';
 
 const INPUT_ONLY = new Set(['deepflow.io.Input', 'deepflow.template.Input']);
 const OUTPUT_ONLY = new Set(['deepflow.io.Output', 'deepflow.template.Output']);
 
 /**
- * Compact block: category colour, label, nothing else. Parameters live in
- * the NodeInspector; activations live on the edges.
+ * Each operation contains a bounded preview of its output feature vector.
+ * Configuration remains in the separate inspector.
  */
 const LayerNodeView = ({ id, data, selected }) => {
     const node = data.node;
@@ -26,9 +29,11 @@ const LayerNodeView = ({ id, data, selected }) => {
     const outputShape = validation.shapes[id];
     const style = styleFor(entry?.category ?? 'IO');
     const isIO = entry?.category === 'IO';
-    const tensorFlow = data.tensorFlow || node.visualization === 'tensor-flow';
+    const channelFirst = ['Convolution', 'Pooling'].includes(entry?.category) && outputShape?.length > 2;
+    const featureAxis = channelFirst ? 1 : outputShape?.length - 1;
+    const preview = isIO ? null : featurePreview(outputShape, featureAxis);
     const isBoundary = node.libraryKey.startsWith('deepflow.template.');
-    const width = isIO ? 220 : widthForShape(outputShape, 200);
+    const width = preview ? preview.width + 6 : 184;
     const tone = errors.length ? 'error' : warnings.length ? 'warning' : 'ok';
     const active = expandedNodeId === id;
 
@@ -40,21 +45,20 @@ const LayerNodeView = ({ id, data, selected }) => {
         <div
             className={[
                 'df-block', style.card,
-                tensorFlow ? 'df-block--tensor-flow' : '',
+                preview ? 'df-block--features' : '',
                 `df-block--${tone}`,
                 selected ? 'is-selected' : '',
                 active ? 'is-active' : '',
                 isBoundary ? 'df-block--boundary' : '',
             ].join(' ')}
-            style={{ width, height: BLOCK_HEIGHT, ...(tensorFlow ? { '--tensor-accent': style.accent } : {}) }}
+            style={{ width, '--tensor-accent': style.accent }}
             onClick={onClick}
-            title={tensorFlow ? `${entry?.description ?? node.label} · Drag to move, click to inspect` : entry?.description}
+            title={entry?.description}
         >
+            <div className={preview ? "df-feature-tools" : "df-block-heading"}>
             {tone === 'error' && <AlertCircle size={14} strokeWidth={3} className="df-block-icon df-block-icon--error" />}
             {tone === 'warning' && <AlertTriangle size={14} strokeWidth={3} className="df-block-icon df-block-icon--warning" />}
-            <span className="df-block-label">{node.label}</span>
-            {tensorFlow && entry?.name.toLowerCase() !== node.label.toLowerCase() && <span className="df-tensor-layer-kind">{entry?.name}</span>}
-            {tensorFlow && <GripVertical size={12} className="df-tensor-drag" aria-hidden="true" />}
+            <span className={preview ? "df-feature-name" : "df-block-label"}>{node.label}</span>
             {isIO && !isBoundary && (
                 <span className="df-block-tag">{INPUT_ONLY.has(node.libraryKey) ? 'in' : 'out'}</span>
             )}
@@ -67,7 +71,9 @@ const LayerNodeView = ({ id, data, selected }) => {
                 title="Inspect block"
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={(event) => { event.stopPropagation(); toggleExpanded(id); }}
-            ><SlidersHorizontal size={12} aria-hidden="true" /></button>
+            ><SlidersHorizontal size={13} strokeWidth={2.5} aria-hidden="true" /></button>
+            </div>
+            {preview ? <TensorPreview shape={outputShape} featureAxis={featureAxis} featureLabel={channelFirst ? 'channels' : 'features'} /> : <div className="df-block-shape">{activationLabel(outputShape) ?? 'Shape unresolved'}</div>}
 
             <button
                 aria-label={`Delete ${node.label}`}

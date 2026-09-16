@@ -19,7 +19,10 @@ import RepeatNodeView from './RepeatNodeView.jsx';
 import ArchitectureEdge from './ArchitectureEdge.jsx';
 import GraphStatusPanel from './GraphStatusPanel.jsx';
 import { useValidation } from '../../hooks/useValidation.js';
-import { COLUMN_HALF_WIDTH, activationLabel } from './nodeGeometry.js';
+import { COLUMN_HALF_WIDTH, activationLabel, isOpKey } from './nodeGeometry.js';
+import { featurePreview } from './featurePreview.js';
+import { getEntry } from '../../domain/library/index.js';
+import { styleFor } from './categoryStyle.js';
 import { tensorFlowNodeIds } from './tensorFlow.js';
 import { createDragBatcher, syncFlowNodes } from './flowAdapter.js';
 import './architecture.css';
@@ -67,6 +70,15 @@ function edgeSkips(edge, nodes) {
 function toFlowEdges(graph, selectedEdgeSet, shapes, tensorFlowIds) {
     return graph.edges.map((e) => {
         const detour = edgeSkips(e, graph.nodes);
+        const previewFor = (id) => {
+            const node = graph.nodes[id];
+            const category = getEntry(node?.libraryKey)?.category;
+            if (!node || node.kind !== 'layer' || category === 'IO' || isOpKey(node.libraryKey)) return null;
+            const shape = shapes?.[id];
+            return featurePreview(shape, ['Convolution', 'Pooling'].includes(category) && shape?.length > 2 ? 1 : shape?.length - 1);
+        };
+        const sourcePreview = previewFor(e.source);
+        const targetPreview = previewFor(e.target);
         return {
             id: e.id,
             source: e.source,
@@ -79,6 +91,10 @@ function toFlowEdges(graph, selectedEdgeSet, shapes, tensorFlowIds) {
                 shape: shapes?.[e.source],
                 tensorFlow: tensorFlowIds.has(e.source) && !detour,
                 detour,
+                featureStream: !!(sourcePreview || targetPreview) && !detour,
+                sourceSpan: sourcePreview?.width ?? 0,
+                targetSpan: targetPreview?.width ?? 0,
+                accent: styleFor(getEntry(graph.nodes[e.source]?.libraryKey)?.category).accent,
             },
             animated: false,
             selected: selectedEdgeSet.has(e.id),

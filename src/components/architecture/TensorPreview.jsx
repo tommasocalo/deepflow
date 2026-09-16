@@ -1,41 +1,30 @@
 import { useId } from 'react';
 import { activationLabel } from './nodeGeometry.js';
+import { featurePreview } from './featurePreview.js';
 import './tensor-preview.css';
 
-const MAX_ROWS = 6;
-const MAX_COLUMNS = 24;
-
-function groupedAxis(size, preferredGroupSize, limit) {
-    if (!Number.isInteger(size) || size < 1) return { count: 1, groupSize: null };
-    const groupSize = Math.max(preferredGroupSize, Math.ceil(size / limit));
-    return { count: Math.min(limit, Math.ceil(size / groupSize)), groupSize };
-}
-
-/** A bounded shape sketch. Uniform tiles encode dimensions, never tensor values. */
-export default function TensorPreview({ shape, compact = false, contrast = 'light' }) {
+/** Feature-vector slice, grouped without inventing numerical activation values. */
+export default function TensorPreview({ shape, featureAxis = shape?.length - 1, featureLabel = 'features' }) {
     const descriptionId = useId();
-    const label = activationLabel(shape);
-    if (!label) return null;
-    const features = shape[shape.length - 1];
-    const sequence = shape.length > 1 ? shape[shape.length - 2] : 1;
-    const columns = groupedAxis(features, 128, MAX_COLUMNS);
-    const rows = groupedAxis(sequence, 256, MAX_ROWS);
-    const rowAxis = shape.length === 3 ? 'tokens' : 'entries on the preceding axis';
-    const cell = compact ? 3 : 4;
-    const step = cell + 1;
-    const width = columns.count * step + 1;
-    const height = rows.count * step + 1;
-    const description = `${label}. ${rows.groupSize ? `Each row groups up to ${Math.min(rows.groupSize, sequence)} ${rowAxis}` : 'The preceding dimension is unknown'}; ${columns.groupSize ? `each column groups up to ${Math.min(columns.groupSize, features)} features` : 'the feature dimension is unknown'}. Uniform cells show shape only; activation values are not displayed.`;
-
+    const preview = featurePreview(shape, featureAxis);
+    if (!preview) return null;
+    const { features, groupSize, count, columns, width, height } = preview;
+    const tokenSlice = shape.length === 3 && featureAxis === 2;
+    const context = tokenSlice ? `${shape[1] ?? '?'} tokens` : activationLabel(shape);
+    const description = `${activationLabel(shape)}. One ${tokenSlice ? 'token' : 'position'} across ${features} ${featureLabel}. Each square groups up to ${groupSize} adjacent ${featureLabel}; the last square may contain fewer. Shape preview; numerical activation values are not loaded.`;
     return (
-        <span className={`df-tensor-preview${compact ? ' is-compact' : ''}${contrast === 'dark' ? ' is-dark' : ''}`} title={description}>
+        <div className="df-tensor-preview" title={description}>
             <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={descriptionId} className="df-tensor-grid">
                 <title id={descriptionId}>{description}</title>
-                {Array.from({ length: rows.count }, (_, row) => Array.from({ length: columns.count }, (_, column) => (
-                    <rect key={`${row}-${column}`} x={1 + column * step} y={1 + row * step} width={cell} height={cell} rx="0.4" />
-                )))}
+                {Array.from({ length: count }, (_, index) => (
+                    <rect key={index} x={(index % columns) * 7} y={Math.floor(index / columns) * 7} width={6} height={6} rx=".4" />
+                ))}
             </svg>
-            <span className="df-tensor-dimensions" aria-hidden="true">{label}</span>
-        </span>
+            <div className="df-tensor-key" aria-hidden="true">
+                <strong className="df-tensor-features">{features.toLocaleString('en-US')}</strong>
+                <span className="df-tensor-grouping"><i /> ×{groupSize.toLocaleString('en-US')}</span>
+            </div>
+            <span className="sr-only">{context} · {features} {featureLabel}</span>
+        </div>
     );
 }
