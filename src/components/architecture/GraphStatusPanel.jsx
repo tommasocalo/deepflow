@@ -54,7 +54,8 @@ export default function GraphStatusPanel() {
     useEffect(() => {
         if (!visible || !hoverNodeId) return;
         // IDs may come from imported graphs; do not interpolate them into a selector.
-        const element = Array.from(document.querySelectorAll('.react-flow__node'))
+        const canvas = ref.current?.closest('[data-architecture-canvas]');
+        const element = Array.from(canvas?.querySelectorAll('.react-flow__node') ?? [])
             .find((candidate) => candidate.dataset.id === hoverNodeId);
         if (!element) return;
         element.classList.add('deepflow-hover-issue');

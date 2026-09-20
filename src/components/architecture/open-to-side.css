@@ -1,0 +1,39 @@
+.df-open-side-menu {
+    position: fixed;
+    z-index: 10000;
+    min-width: 228px;
+    max-width: calc(100vw - 16px);
+    padding: 4px;
+    border: 1.5px solid #111;
+    border-radius: 6px;
+    background: #fff;
+    color: #111;
+    box-shadow: 3px 3px 0 #111;
+}
+
+.df-open-side-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.df-open-side-menu button:hover,
+.df-open-side-menu button:focus-visible {
+    outline: none;
+    background: #111;
+    color: #fff;
+}
+
+.df-open-side-menu kbd {
+    margin-left: auto;
+    padding-left: 14px;
+    font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+    opacity: .65;
+}

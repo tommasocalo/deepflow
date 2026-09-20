@@ -10,7 +10,7 @@ import {
     useReactFlow,
 } from '@xyflow/react';
 import { Hand, MousePointer2 } from 'lucide-react';
-import { useArchitectureStore } from '../../stores/architectureStore.js';
+import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { isValidConnection, resolveGraphLevel } from '../../domain/architecture/index.js';
 import LayerNodeView from './LayerNodeView.jsx';
@@ -41,9 +41,10 @@ const NODE_ORIGIN = [0.5, 0];
 
 const VIEWPORT_KEY_PREFIX = 'deepflow:architecture-viewport';
 
-function viewportKey(currentPath) {
-    if (!currentPath || currentPath.length === 0) return `${VIEWPORT_KEY_PREFIX}:root`;
-    return `${VIEWPORT_KEY_PREFIX}:${currentPath.join('/')}`;
+function viewportKey(currentPath, paneId) {
+    const prefix = paneId === 'main' ? VIEWPORT_KEY_PREFIX : `${VIEWPORT_KEY_PREFIX}:${paneId}`;
+    if (!currentPath || currentPath.length === 0) return `${prefix}:root`;
+    return `${prefix}:${currentPath.join('/')}`;
 }
 
 function toFlowEdges(edges, selectedEdgeSet, residuals) {
@@ -62,7 +63,9 @@ function toFlowEdges(edges, selectedEdgeSet, residuals) {
     }));
 }
 
-const Inner = ({ children, overlay }) => {
+const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) => {
+    const architectureStore = useArchitectureStoreApi();
+    const storeId = useMemo(() => architectureStore.getState().getMutationContext().storeId, [architectureStore]);
     const rootGraph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const selectedNodeIds = useArchitectureStore((s) => s.selectedNodeIds);
@@ -79,7 +82,7 @@ const Inner = ({ children, overlay }) => {
     const addLayerByLibraryKey = useArchitectureStore((s) => s.addLayerByLibraryKey);
     const addSuperNodeInstance = useArchitectureStore((s) => s.addSuperNodeInstance);
 
-    const { screenToFlowPosition, setViewport, setNodes, fitView } = useReactFlow();
+    const { screenToFlowPosition, getViewport, setViewport, setNodes, fitView } = useReactFlow();
     const nodesInitialized = useNodesInitialized();
     const wrapperRef = useRef(null);
     const lastViewportKeyRef = useRef(null);
@@ -99,7 +102,7 @@ const Inner = ({ children, overlay }) => {
     );
 
     const levelKey = JSON.stringify(currentPath);
-    const dragContext = useMemo(() => ({ graph: viewGraph, levelKey }), [viewGraph, levelKey]);
+    const dragContext = useMemo(() => ({ graph: viewGraph, levelKey, storeId }), [viewGraph, levelKey, storeId]);
     const tensorFlowIds = useMemo(() => tensorFlowNodeIds(viewGraph), [viewGraph]);
     const [initialNodes] = useState(() => syncFlowNodes([], viewGraph, selectedNodeIds, tensorFlowIds, levelKey));
     const selectedEdgeSet = useMemo(() => new Set(selectedEdgeIds), [selectedEdgeIds]);
@@ -109,7 +112,7 @@ const Inner = ({ children, overlay }) => {
         () => toFlowEdges(viewGraph.edges, selectedEdgeSet, residuals),
         [viewGraph.edges, selectedEdgeSet, residuals],
     );
-    const showPanCursor = interactionMode === 'pan' || spacePressed;
+    const showPanCursor = interactionMode === 'pan' || (keyboardActive && spacePressed);
     const graphIsEmpty = Object.keys(viewGraph.nodes).length === 0;
 
     useEffect(() => {
@@ -150,6 +153,7 @@ const Inner = ({ children, overlay }) => {
         const isEditable = (target) =>
             target?.closest?.('input, textarea, select, [contenteditable="true"]');
         const onKeyDown = (event) => {
+            if (!keyboardActive) return;
             if (event.code === 'Space' && !isEditable(event.target)) setSpacePressed(true);
             if (event.key === 'Escape') {
                 reconnectRef.current = null;
@@ -168,12 +172,29 @@ const Inner = ({ children, overlay }) => {
             window.removeEventListener('keyup', onKeyUp);
             window.removeEventListener('blur', onBlur);
         };
-    }, []);
+    }, [keyboardActive]);
+
+    // Keep the same graph point centred as a split opens, closes or resizes.
+    useEffect(() => {
+        const canvas = wrapperRef.current;
+        let previous = canvas.getBoundingClientRect();
+        const observer = new ResizeObserver(() => {
+            const next = canvas.getBoundingClientRect();
+            if (previous.width > 0 && previous.height > 0 && next.width > 0 && next.height > 0
+                && (next.width !== previous.width || next.height !== previous.height)) {
+                const viewport = getViewport();
+                setViewport({ ...viewport, x: viewport.x + (next.width - previous.width) / 2, y: viewport.y + (next.height - previous.height) / 2 }, { duration: 0 });
+            }
+            previous = next;
+        });
+        observer.observe(canvas);
+        return () => observer.disconnect();
+    }, [getViewport, setViewport]);
 
     // Restore viewport per level; movement is saved once in onMoveEnd.
     useEffect(() => {
         if (!nodesInitialized && !graphIsEmpty) return;
-        const key = viewportKey(currentPath);
+        const key = viewportKey(currentPath, paneId);
         if (lastViewportKeyRef.current === key) return;
         lastViewportKeyRef.current = key;
 
@@ -191,18 +212,18 @@ const Inner = ({ children, overlay }) => {
         } else {
             fitView({ padding: 0.2, minZoom: 0.2, maxZoom: 1, duration: 0 });
         }
-    }, [currentPath, nodesInitialized, graphIsEmpty, setViewport, fitView]);
+    }, [currentPath, paneId, nodesInitialized, graphIsEmpty, setViewport, fitView]);
 
     const handleMoveEnd = useCallback(
         (_event, vp) => {
-            const key = viewportKey(currentPath);
+            const key = viewportKey(currentPath, paneId);
             try {
                 localStorage.setItem(key, JSON.stringify(vp));
             } catch {
                 // Viewport persistence is optional when storage is unavailable.
             }
         },
-        [currentPath],
+        [currentPath, paneId],
     );
 
     const onNodesChange = useCallback(
@@ -210,7 +231,7 @@ const Inner = ({ children, overlay }) => {
             if (!mountedRef.current) return;
             const transaction = dragBatcher.consume(changes, dragContext);
             if (transaction) {
-                const expected = transaction.isDrag ? transaction.context : { levelKey };
+                const expected = transaction.isDrag ? transaction.context : { levelKey, storeId };
                 if (transaction.cancelled || !moveNodes(transaction.moves, expected)) restorePositions();
             }
             for (const change of changes) {
@@ -221,16 +242,16 @@ const Inner = ({ children, overlay }) => {
                 }
             }
         },
-        [dragBatcher, dragContext, levelKey, viewGraph, moveNodes, restorePositions, removeNodeStore, setNodeSelected],
+        [dragBatcher, dragContext, levelKey, storeId, viewGraph, moveNodes, restorePositions, removeNodeStore, setNodeSelected],
     );
 
     const onDragStart = useCallback((_event, nodeOrNodes) => {
         // Dismiss on actual movement, leaving a simple click free to inspect.
-        if (useArchitectureStore.getState().expandedNodeId) clearExpanded();
+        if (architectureStore.getState().expandedNodeId) clearExpanded();
         dragBatcher.begin(dragContext);
         const dragged = Array.isArray(nodeOrNodes) ? nodeOrNodes : [nodeOrNodes];
         if (dragged.some((node) => node?.data.levelKey !== levelKey)) dragBatcher.cancel();
-    }, [clearExpanded, dragBatcher, dragContext, levelKey]);
+    }, [architectureStore, clearExpanded, dragBatcher, dragContext, levelKey]);
 
     const onEdgesChange = useCallback(
         (changes) => {
@@ -281,9 +302,9 @@ const Inner = ({ children, overlay }) => {
     }, [removeEdgeStore]);
 
     const validateConnection = useCallback((connection) => {
-        const graph = useArchitectureStore.getState().getViewGraph();
+        const graph = architectureStore.getState().getViewGraph();
         return isValidConnection(graph, connection, reconnectRef.current?.id);
-    }, []);
+    }, [architectureStore]);
 
     const onDragOver = useCallback((e) => {
         e.preventDefault();
@@ -319,6 +340,7 @@ const Inner = ({ children, overlay }) => {
             >
                 <GraphStatusPanel />
                 <ReactFlow
+                    id={`architecture-${paneId}`}
                     defaultNodes={initialNodes}
                     edges={edges}
                     nodeTypes={nodeTypes}
@@ -349,9 +371,9 @@ const Inner = ({ children, overlay }) => {
                     }}
                     selectionOnDrag={interactionMode === 'select'}
                     panOnDrag={interactionMode === 'pan'}
-                    panActivationKeyCode="Space"
+                    panActivationKeyCode={keyboardActive ? 'Space' : null}
                     multiSelectionKeyCode={['Meta', 'Shift']}
-                    deleteKeyCode={['Delete', 'Backspace']}
+                    deleteKeyCode={keyboardActive ? ['Delete', 'Backspace'] : null}
                     edgesFocusable
                     edgesReconnectable
                     minZoom={0.2}
@@ -381,15 +403,15 @@ const Inner = ({ children, overlay }) => {
                     </Controls>
                 </ReactFlow>
                 {overlay}
-                {spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
+                {keyboardActive && spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
             </div>
         </div>
     );
 };
 
-const ArchitectureCanvas = ({ children, overlay }) => (
+const ArchitectureCanvas = ({ children, overlay, ...props }) => (
     <ReactFlowProvider>
-        <Inner overlay={overlay}>{children}</Inner>
+        <Inner overlay={overlay} {...props}>{children}</Inner>
     </ReactFlowProvider>
 );
 

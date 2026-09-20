@@ -1,11 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from './Navbar.jsx';
 import ToolbarStrip from './ToolbarStrip.jsx';
-import ArchitectureCanvas from './architecture/ArchitectureCanvas.jsx';
-import BlockPalette from './architecture/BlockPalette.jsx';
-import LevelTabs from './architecture/LevelTabs.jsx';
-import NodeInspector from './architecture/NodeInspector.jsx';
-import SelectionToolbar from './architecture/SelectionToolbar.jsx';
+import ArchitectureWorkspace from './architecture/ArchitectureWorkspace.jsx';
 import TrainingCanvas from './training/TrainingCanvas.jsx';
 import TrainingPalette from './training/TrainingPalette.jsx';
 import CodePanel from './CodePanel.jsx';
@@ -41,20 +37,7 @@ const Layout = () => {
             <div className="df-app-main">
                 <div key={activeTab} className="df-tab-pane">
                     {activeTab === 'architecture' && (
-                        <div className="df-architecture-pane">
-                            <LevelTabs />
-                            <div className="df-architecture-body">
-                                <ArchitectureCanvas
-                                    overlay={(
-                                        <>
-                                            <NodeInspector />
-                                            <BlockPalette />
-                                            <SelectionToolbar />
-                                        </>
-                                    )}
-                                />
-                            </div>
-                        </div>
+                        <ArchitectureWorkspace />
                     )}
                     {activeTab === 'training' && <TrainingCanvas />}
                     {activeTab === 'data' && (

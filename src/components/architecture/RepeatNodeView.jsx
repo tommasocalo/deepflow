@@ -6,6 +6,7 @@ import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
 import { isInteractive } from './nodeGeometry.js';
 import PortShapeLabels from './PortShapeLabels.jsx';
+import { useOpenToSideNode } from './OpenToSideContext.jsx';
 
 /**
  * A repeated template: the container is drawn as a short stack so the
@@ -18,6 +19,8 @@ const RepeatNodeView = ({ id, data, selected }) => {
     const enterSupernode = useArchitectureStore((s) => s.enterSupernode);
     const toggleExpanded = useArchitectureStore((s) => s.toggleExpanded);
     const expandedNodeId = useArchitectureStore((s) => s.expandedNodeId);
+    const currentPath = useArchitectureStore((s) => s.currentPath);
+    const sideMenuProps = useOpenToSideNode([...currentPath, id], { disabled: !template });
     const validation = useValidation();
     const errors = validation.errors[id] ?? [];
     const warnings = validation.warnings[id] ?? [];
@@ -30,6 +33,7 @@ const RepeatNodeView = ({ id, data, selected }) => {
 
     return (
         <div
+            {...sideMenuProps}
             className={['df-repeat', `df-repeat--${tone}`, selected ? 'is-selected' : '', expandedNodeId === id ? 'is-active' : ''].join(' ')}
             style={{ '--repeat-stack-depth': `${ghosts * 5}px` }}
             onClick={onClick}

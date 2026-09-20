@@ -3,6 +3,7 @@ import { Boxes, Check, ChevronDown, Layers3, Search, X } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { getPaletteEntries, NODE_FAMILIES } from '../../domain/library/nodeFamilies.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
+import { containsTemplate } from '../../domain/architecture/templateReferences.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import OperationIcon from './OperationIcon.jsx';
@@ -13,13 +14,6 @@ const PALETTE_ENTRIES = getPaletteEntries().map((entry) => entry.key === 'torch.
     ? { ...entry, name: 'Transformer', aliases: [entry.name] } : entry);
 const normalize = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const matches = (entry, query) => query.trim().split(/\s+/).every((word) => normalize(`${entry.name} ${entry.category} ${entry.description} ${entry.key} ${(entry.aliases ?? []).join(' ')}`).includes(normalize(word)));
-
-function containsTemplate(templateId, targetId, templates, visited = new Set()) {
-    if (templateId === targetId) return true;
-    if (visited.has(templateId)) return false;
-    visited.add(templateId);
-    return Object.values(templates[templateId]?.graph?.nodes ?? {}).some((node) => node.templateId && containsTemplate(node.templateId, targetId, templates, visited));
-}
 
 function LibraryTile({ entry, onAdd, template = false }) {
     return (
@@ -36,9 +30,9 @@ function LibraryTile({ entry, onAdd, template = false }) {
     );
 }
 
-export default function BlockPalette() {
+export default function BlockPalette({ initiallyCollapsed = false, keyboardActive = true }) {
     const [query, setQuery] = useState('');
-    const [collapsed, setCollapsed] = useState(false);
+    const [collapsed, setCollapsed] = useState(initiallyCollapsed);
     const [notice, setNotice] = useState('');
     const panelRef = useRef(null);
     const searchRef = useRef(null);
@@ -64,6 +58,7 @@ export default function BlockPalette() {
 
     useEffect(() => {
         const focusSearch = (event) => {
+            if (!keyboardActive) return;
             const editing = event.target?.closest?.('input, textarea, select, [contenteditable="true"]');
             if ((!editing && event.key === '/') || ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k')) {
                 event.preventDefault();
@@ -73,7 +68,7 @@ export default function BlockPalette() {
         };
         window.addEventListener('keydown', focusSearch);
         return () => { window.removeEventListener('keydown', focusSearch); clearTimeout(noticeTimer.current); };
-    }, []);
+    }, [keyboardActive]);
 
     function addEntry(entry, isTemplate) {
         const bounds = panelRef.current?.closest('[data-architecture-canvas]')?.getBoundingClientRect();
