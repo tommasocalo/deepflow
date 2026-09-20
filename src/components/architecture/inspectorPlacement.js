@@ -2,7 +2,7 @@ const intersectionArea = (a, b) => Math.max(0, Math.min(a.x + a.width, b.x + b.w
     * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
-/** Freeze the overlay while any node moves, then measure the final graph once. */
+/** Coalesce placement requests and avoid measuring transient drag positions. */
 export function createInspectorPlacementScheduler({ getNodes, position, requestFrame, cancelFrame }) {
     let frame = null;
     let disposed = false;

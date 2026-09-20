@@ -30,8 +30,7 @@ export function useInspectorPlacement(nodeId) {
         const panel = panelRef.current;
         const canvas = panel?.closest('[data-architecture-canvas]');
         if (!panel || !canvas || !nodeId) return;
-        // A panel first opened during a drag waits for a valid position. Panels
-        // already on screen retain their exact position until the drag ends.
+        // Wait for valid geometry before showing a newly opened inspector.
         if (!panel.dataset.placement) panel.style.visibility = 'hidden';
         const position = () => {
             const origin = canvas.getBoundingClientRect();

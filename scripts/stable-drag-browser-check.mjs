@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const directory = 'screenshots/stable-drag';
+const directory = 'screenshots/close-inspector-on-drag';
 await mkdir(directory, { recursive: true });
 const browser = await chromium.launch();
 try {
@@ -13,7 +13,10 @@ try {
     await page.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
     const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const panel = page.locator('.df-inspector');
-    const panelPosition = () => panel.evaluate((el) => [el.style.left, el.style.top, el.dataset.placement]);
+    const assertClosed = async (message) => {
+        assert.equal(await panel.count(), 0, message);
+        assert.equal(await page.evaluate(() => window.__deepflow.architectureStore.getState().expandedNodeId), null);
+    };
     const paths = () => page.locator('.react-flow__edge').evaluateAll((edges) => Object.fromEntries(edges.map((edge) => [edge.dataset.id, edge.querySelector('.react-flow__edge-path').getAttribute('d')])));
     const graph = () => page.evaluate(() => window.__deepflow.architectureStore.getState().getViewGraph());
     const block = (id) => page.locator(`.react-flow__node[data-id="${id}"] .df-block`);
@@ -25,7 +28,6 @@ try {
 
     await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);
-    await page.screenshot({ path: `${directory}/03-main-curves.png` });
     await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).click();
     await page.getByRole('button', { name: 'Inspect mlp fc', exact: true }).click();
     await settle();
@@ -33,39 +35,44 @@ try {
     const fc = Object.values(initial.nodes).find((node) => node.label === 'mlp fc');
     const unrelated = initial.edges.filter((edge) => edge.source !== fc.id && edge.target !== fc.id);
     const originalPaths = await paths();
-    const frozen = await panelPosition();
+    assert.equal(await panel.isVisible(), true);
     const start = await center(block(fc.id));
-    await page.screenshot({ path: `${directory}/04-transformer-curves.png` });
+    await page.screenshot({ path: `${directory}/01-before-drag.png` });
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
+    assert.equal(await panel.isVisible(), true, 'Pressing without dragging keeps the inspector open');
     for (const [dx, dy] of [[-280, -80], [-150, 50], [160, 60], [100, 25]]) {
         await page.mouse.move(start.x + dx, start.y + dy, { steps: 10 });
         await settle();
-        assert.deepEqual(await panelPosition(), frozen, 'Inspector stays fixed throughout the node drag');
+        await assertClosed('Inspector closes as soon as a node moves and stays closed throughout the drag');
         const movedPaths = await paths();
         for (const edge of unrelated) assert.equal(movedPaths[edge.id], originalPaths[edge.id], 'Unrelated wire stays identical');
     }
-    await page.screenshot({ path: `${directory}/05-during-drag.png` });
+    await page.screenshot({ path: `${directory}/02-during-drag.png` });
     await page.mouse.up();
     await settle();
-    assert.notDeepEqual(await panelPosition(), frozen, 'Inspector repositions after release');
+    await assertClosed('Release does not reopen the inspector');
     const committed = await graph();
     assert.notDeepEqual(committed.nodes[fc.id].position, initial.nodes[fc.id].position);
     const releasedPaths = await paths();
     for (const edge of unrelated) assert.equal(releasedPaths[edge.id], originalPaths[edge.id], 'Unrelated wire also stays identical after commit');
-    await page.screenshot({ path: `${directory}/06-after-release.png` });
+    await page.screenshot({ path: `${directory}/03-after-release.png` });
+    await block(fc.id).click();
+    await settle();
+    assert.equal(await panel.isVisible(), true, 'An explicit click reopens the inspector');
+    await page.screenshot({ path: `${directory}/04-reopened-on-click.png` });
 
-    // Keep the inspector on fc while dragging a different node.
+    // Dragging a different node also dismisses the open inspector.
     const gelu = Object.values(committed.nodes).find((node) => node.label === 'gelu');
-    const frozenOther = await panelPosition();
     const otherStart = await center(block(gelu.id));
     await page.mouse.move(otherStart.x, otherStart.y);
     await page.mouse.down();
     await page.mouse.move(otherStart.x - 200, otherStart.y + 20, { steps: 15 });
     await settle();
-    assert.deepEqual(await panelPosition(), frozenOther, 'Dragging a different node also freezes the open inspector');
+    await assertClosed('Dragging a different node closes the open inspector');
     await page.mouse.up();
     await settle();
+    await assertClosed('Dragging a different node does not reopen the inspector on release');
 
     // An isolated fixture reproduces the old geometric false-positive: a
     // disconnected node moves through the corridor of a stationary wire.
@@ -94,17 +101,21 @@ try {
     const stray = fixture.getByRole('button', { name: 'Inspect Unconnected', exact: true });
     const strayStart = await center(stray);
     const fixturePanel = fixture.locator('.df-inspector');
-    const before = await fixturePanel.boundingBox();
+    assert.equal(await fixturePanel.isVisible(), true);
     await fixture.mouse.move(strayStart.x, strayStart.y);
     await fixture.mouse.down();
     await fixture.mouse.move(strayStart.x - 450, strayStart.y, { steps: 25 });
-    assert.deepEqual(await fixturePanel.boundingBox(), before);
+    assert.equal(await fixturePanel.count(), 0);
     assert.equal(await wire.getAttribute('d'), original);
     await fixture.mouse.up();
     await fixture.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     assert.equal(await wire.getAttribute('d'), original, 'Unconnected node cannot reclassify a stationary wire on drop');
 
-    // Cancellation resets positions and unfreezes the overlay for the next drag.
+    assert.equal(await fixturePanel.count(), 0);
+
+    // Cancellation resets positions without reopening the inspector.
+    await fixture.getByRole('button', { name: 'Inspect Source', exact: true }).click();
+    assert.equal(await fixturePanel.isVisible(), true);
     const cancelStart = await center(stray);
     await fixture.mouse.move(cancelStart.x, cancelStart.y);
     await fixture.mouse.down();
@@ -114,9 +125,11 @@ try {
     await fixture.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const restored = await center(stray);
     assert.ok(Math.abs(restored.x - cancelStart.x) < 1 && Math.abs(restored.y - cancelStart.y) < 1);
-    assert.equal(await fixturePanel.isVisible(), true);
+    assert.equal(await fixturePanel.count(), 0);
+    await stray.click();
+    assert.equal(await fixturePanel.isVisible(), true, 'A click can inspect the node again after cancellation');
     assert.deepEqual(errors, []);
-    console.log('Stable dragging passed: frozen inspector, release/cancel recovery, unchanged unrelated wires, disconnected-node corridor, GPT-2 curve screenshots.');
+    console.log('Stable dragging passed: inspector closes on movement, stays closed after release/cancel, reopens on click; unrelated wires remain stable.');
 } finally {
     await browser.close();
 }

@@ -225,10 +225,12 @@ const Inner = ({ children, overlay }) => {
     );
 
     const onDragStart = useCallback((_event, nodeOrNodes) => {
+        // Dismiss on actual movement, leaving a simple click free to inspect.
+        if (useArchitectureStore.getState().expandedNodeId) clearExpanded();
         dragBatcher.begin(dragContext);
         const dragged = Array.isArray(nodeOrNodes) ? nodeOrNodes : [nodeOrNodes];
         if (dragged.some((node) => node?.data.levelKey !== levelKey)) dragBatcher.cancel();
-    }, [dragBatcher, dragContext, levelKey]);
+    }, [clearExpanded, dragBatcher, dragContext, levelKey]);
 
     const onEdgesChange = useCallback(
         (changes) => {
