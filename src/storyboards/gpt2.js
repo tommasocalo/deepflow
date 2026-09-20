@@ -13,6 +13,9 @@ import { getEntry } from '../domain/library/index.js';
 const X = 400;       // main column (node centre)
 const X_BRANCH = 820; // positional-embedding branch
 
+// Leave room between the two external dimension labels on each wire.
+const ROW_GAP = 130;
+
 function layer(key, position, parameters = {}, label) {
     const entry = getEntry(key);
     const node = createLayerNode({ libraryKey: key, position, entry, label });
@@ -23,16 +26,16 @@ function layer(key, position, parameters = {}, label) {
 /** Pre-LN GPT-2 block, expressed as a template graph with boundary blocks. */
 export function buildTransformerBlockGraph() {
     const tin  = layer('deepflow.template.Input',        { x: X, y: 0 },   {}, 'block input');
-    const ln1  = layer('torch.nn.LayerNorm',             { x: X, y: 95 },  { normalized_shape: '$d_model' }, 'ln_1');
-    const attn = layer('deepflow.nn.CausalSelfAttention',{ x: X, y: 185 }, { embed_dim: '$d_model', num_heads: '$n_heads', dropout: 0.1 }, 'causal self-attention');
-    const add1 = layer('deepflow.op.Add',                { x: X, y: 280 }, {}, 'residual');
-    const ln2  = layer('torch.nn.LayerNorm',             { x: X, y: 360 }, { normalized_shape: '$d_model' }, 'ln_2');
-    const fc   = layer('torch.nn.Linear',                { x: X, y: 470 }, { in_features: '$d_model', out_features: '4 * d_model' }, 'mlp fc');
-    const gelu = layer('torch.nn.GELU',                  { x: X, y: 580 }, {}, 'gelu');
-    const proj = layer('torch.nn.Linear',                { x: X, y: 690 }, { in_features: '4 * d_model', out_features: '$d_model' }, 'mlp proj');
-    const drop = layer('torch.nn.Dropout',               { x: X, y: 800 }, { p: 0.1 }, 'dropout');
-    const add2 = layer('deepflow.op.Add',                { x: X, y: 910 }, {}, 'residual');
-    const tout = layer('deepflow.template.Output',       { x: X, y: 995 }, {}, 'block output');
+    const ln1  = layer('torch.nn.LayerNorm',             { x: X, y: ROW_GAP },     { normalized_shape: '$d_model' }, 'ln_1');
+    const attn = layer('deepflow.nn.CausalSelfAttention',{ x: X, y: ROW_GAP * 2 }, { embed_dim: '$d_model', num_heads: '$n_heads', dropout: 0.1 }, 'causal self-attention');
+    const add1 = layer('deepflow.op.Add',                { x: X, y: ROW_GAP * 3 }, {}, 'residual');
+    const ln2  = layer('torch.nn.LayerNorm',             { x: X, y: ROW_GAP * 4 }, { normalized_shape: '$d_model' }, 'ln_2');
+    const fc   = layer('torch.nn.Linear',                { x: X, y: ROW_GAP * 5 }, { in_features: '$d_model', out_features: '4 * d_model' }, 'mlp fc');
+    const gelu = layer('torch.nn.GELU',                  { x: X, y: ROW_GAP * 6 }, {}, 'gelu');
+    const proj = layer('torch.nn.Linear',                { x: X, y: ROW_GAP * 7 }, { in_features: '4 * d_model', out_features: '$d_model' }, 'mlp proj');
+    const drop = layer('torch.nn.Dropout',               { x: X, y: ROW_GAP * 8 }, { p: 0.1 }, 'dropout');
+    const add2 = layer('deepflow.op.Add',                { x: X, y: ROW_GAP * 9 }, {}, 'residual');
+    const tout = layer('deepflow.template.Output',       { x: X, y: ROW_GAP * 10 }, {}, 'block output');
 
     // Presentation-only metadata: the experimental treatment is limited to
     // this MLP segment; parameters and generated PyTorch remain unchanged.
@@ -70,16 +73,16 @@ export function gpt2Storyboard({ architectureStore, templatesStore, trainingStor
     arch.patchNode(inputId, { label: 'tokens' });
     arch.patchLayerParameters(inputId, { shape: '(1024,)', dtype: 'int64' });
 
-    const wte = arch.addLayerByLibraryKey('torch.nn.Embedding', { x: X, y: 110 });
+    const wte = arch.addLayerByLibraryKey('torch.nn.Embedding', { x: X, y: ROW_GAP });
     arch.patchNode(wte, { label: 'token embedding' });
     arch.patchLayerParameters(wte, { num_embeddings: 50257, embedding_dim: 768 });
 
-    const wpe = arch.addLayerByLibraryKey('deepflow.nn.PositionalEmbedding', { x: X_BRANCH, y: 110 });
+    const wpe = arch.addLayerByLibraryKey('deepflow.nn.PositionalEmbedding', { x: X_BRANCH, y: ROW_GAP });
     arch.patchNode(wpe, { label: 'positional embedding' });
     arch.patchLayerParameters(wpe, { max_len: 1024, embedding_dim: 768 });
 
-    const add  = arch.addLayerByLibraryKey('deepflow.op.Add',   { x: X, y: 215 });
-    const drop = arch.addLayerByLibraryKey('torch.nn.Dropout',  { x: X, y: 290 });
+    const add  = arch.addLayerByLibraryKey('deepflow.op.Add',   { x: X, y: ROW_GAP * 2 });
+    const drop = arch.addLayerByLibraryKey('torch.nn.Dropout',  { x: X, y: ROW_GAP * 3 });
     arch.patchLayerParameters(drop, { p: 0.1 });
 
     const tplId = tpl.createTemplate({
@@ -90,17 +93,18 @@ export function gpt2Storyboard({ architectureStore, templatesStore, trainingStor
     tpl.addFreeParameter(tplId, { name: 'd_model', type: 'int', description: 'Model width', default: 768 });
     tpl.addFreeParameter(tplId, { name: 'n_heads', type: 'int', description: 'Attention heads', default: 12 });
 
-    const blocks = arch.addRepeatNode(tplId, { x: X, y: 380 }, { count: 12, label: 'Transformer blocks' });
+    const blocks = arch.addRepeatNode(tplId, { x: X, y: ROW_GAP * 4 }, { count: 12, label: 'Transformer blocks' });
 
-    const lnf = arch.addLayerByLibraryKey('torch.nn.LayerNorm', { x: X, y: 495 });
+    // The repeated stack extends 15px below its face.
+    const lnf = arch.addLayerByLibraryKey('torch.nn.LayerNorm', { x: X, y: ROW_GAP * 5 + 15 });
     arch.patchNode(lnf, { label: 'ln_f' });
     arch.patchLayerParameters(lnf, { normalized_shape: 768 });
 
-    const head = arch.addLayerByLibraryKey('torch.nn.Linear', { x: X, y: 585 });
+    const head = arch.addLayerByLibraryKey('torch.nn.Linear', { x: X, y: ROW_GAP * 6 + 15 });
     arch.patchNode(head, { label: 'lm_head' });
     arch.patchLayerParameters(head, { in_features: 768, out_features: 50257, bias: false });
 
-    arch.moveNode(outputId, { x: X, y: 690 });
+    arch.moveNode(outputId, { x: X, y: ROW_GAP * 7 + 15 });
     arch.patchNode(outputId, { label: 'logits' });
 
     arch.connect({ source: inputId, target: wte });

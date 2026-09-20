@@ -16,27 +16,28 @@ export function ganStoryboard({ architectureStore, trainingStore }) {
     const outputId = Object.values(root.nodes).find((n) => n.libraryKey === 'deepflow.io.Output').id;
 
     arch.moveNode(inputId,  { x: 280, y: 40 });
-    arch.moveNode(outputId, { x: 280, y: 760 });
+    arch.moveNode(outputId, { x: 280, y: 960 });
     arch.patchLayerParameters(inputId, { shape: '(64,)' });
     arch.patchNode(inputId,  { label: 'noise z' });
     arch.patchNode(outputId, { label: 'D logits' });
 
+    // Keep 130px between rows so both external dimension labels fit comfortably.
     // Generator: Linear(64 → 128) → ReLU → Linear(128 → 784)
     const g1Id = arch.addLayerByLibraryKey('torch.nn.Linear', { x: 280, y: 180 });
     arch.patchNode(g1Id, { label: 'G linear 1' });
     arch.patchLayerParameters(g1Id, { in_features: 64, out_features: 128 });
-    const g1ReluId = arch.addLayerByLibraryKey('torch.nn.ReLU', { x: 280, y: 300 });
-    const g2Id = arch.addLayerByLibraryKey('torch.nn.Linear', { x: 280, y: 380 });
+    const g1ReluId = arch.addLayerByLibraryKey('torch.nn.ReLU', { x: 280, y: 310 });
+    const g2Id = arch.addLayerByLibraryKey('torch.nn.Linear', { x: 280, y: 440 });
     arch.patchNode(g2Id, { label: 'G linear 2' });
     arch.patchLayerParameters(g2Id, { in_features: 128, out_features: 784 });
 
     // Discriminator: Linear(784 → 128) → LeakyReLU → Linear(128 → 1)
-    const d1Id = arch.addLayerByLibraryKey('torch.nn.Linear', { x: 280, y: 500 });
+    const d1Id = arch.addLayerByLibraryKey('torch.nn.Linear', { x: 280, y: 570 });
     arch.patchNode(d1Id, { label: 'D linear 1' });
     arch.patchLayerParameters(d1Id, { in_features: 784, out_features: 128 });
-    const d1LeakyId = arch.addLayerByLibraryKey('torch.nn.LeakyReLU', { x: 280, y: 600 });
+    const d1LeakyId = arch.addLayerByLibraryKey('torch.nn.LeakyReLU', { x: 280, y: 700 });
     arch.patchLayerParameters(d1LeakyId, { negative_slope: 0.2 });
-    const d2Id = arch.addLayerByLibraryKey('torch.nn.Linear', { x: 280, y: 680 });
+    const d2Id = arch.addLayerByLibraryKey('torch.nn.Linear', { x: 280, y: 830 });
     arch.patchNode(d2Id, { label: 'D linear 2' });
     arch.patchLayerParameters(d2Id, { in_features: 128, out_features: 1 });
 

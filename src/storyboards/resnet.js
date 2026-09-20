@@ -23,8 +23,8 @@ export function resnetStoryboard({ architectureStore, templatesStore, trainingSt
 
     // Build a parametric ConvBlock = Conv2d → BatchNorm2d → ReLU
     const convId = arch.addLayerByLibraryKey('torch.nn.Conv2d',      { x: 320, y: 200 });
-    const bnId   = arch.addLayerByLibraryKey('torch.nn.BatchNorm2d', { x: 320, y: 320 });
-    const reluId = arch.addLayerByLibraryKey('torch.nn.ReLU',        { x: 320, y: 440 });
+    const bnId   = arch.addLayerByLibraryKey('torch.nn.BatchNorm2d', { x: 320, y: 330 });
+    const reluId = arch.addLayerByLibraryKey('torch.nn.ReLU',        { x: 320, y: 460 });
     arch.patchLayerParameters(convId, { in_channels: 3, out_channels: 64, kernel_size: 3, padding: 1, bias: false });
     arch.patchLayerParameters(bnId,   { num_features: 64 });
     arch.connect({ source: inputId, target: convId });
@@ -33,6 +33,14 @@ export function resnetStoryboard({ architectureStore, templatesStore, trainingSt
     arch.connect({ source: reluId, target: outputId });
 
     const tplId = arch.groupSelection([convId, bnId, reluId], 'ConvBlock');
+
+    // Grouping inserts generic boundary positions; align this example's
+    // boundaries with its layers and maintain the same 130px row spacing.
+    const templateNodes = Object.values(tpl.getTemplate(tplId).graph.nodes);
+    const templateInput = templateNodes.find((n) => n.libraryKey === 'deepflow.template.Input');
+    const templateOutput = templateNodes.find((n) => n.libraryKey === 'deepflow.template.Output');
+    tpl.moveTemplateNode(tplId, templateInput.id, { x: 200, y: 30 });
+    tpl.moveTemplateNode(tplId, templateOutput.id, { x: 200, y: 550 });
 
     // Free parameters: in_channels, out_channels
     tpl.addFreeParameter(tplId, { name: 'in',  type: 'int', description: 'Input channels',  default: 3 });
