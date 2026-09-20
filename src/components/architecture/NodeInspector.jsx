@@ -165,7 +165,7 @@ function SupernodeBody({ id, node }) {
         <>
             {!template && <p className="df-inspector-note">Template missing — re-create or delete this node.</p>}
             <div className="df-inspector-actions">
-                <button type="button" disabled={!template} onClick={() => enterSupernode(id)}><ChevronRight size={12} strokeWidth={3} /> Open</button>
+                <button type="button" disabled={!template} onClick={() => enterSupernode(id)}><ChevronRight size={12} strokeWidth={3} /> Open template</button>
                 <button type="button" disabled={!template} onClick={() => convertInstanceToRepeat(id, 2)} title="Repeat this template N times"><Repeat size={12} strokeWidth={3} /> Repeat</button>
             </div>
             <Bindings
@@ -192,20 +192,22 @@ function RepeatBody({ id, node }) {
                 <button type="button" disabled={!template} onClick={() => convertRepeatToInstance(id)} title="Back to a single instance"><Boxes size={12} strokeWidth={3} /> Single</button>
             </div>
             <section className="df-inspector-group">
+                <p className="df-inspector-note"><strong>Sequential repeat</strong><br />Each block feeds the next. Output from the last block.</p>
                 <div className="df-inspector-fields">
                     <InspectorField
-                        param={{ name: 'count', type: 'int', description: 'Number of iterations' }}
-                        label="count"
+                        param={{ name: 'count', type: 'int', description: 'Number of blocks connected in sequence, each with its own weights' }}
+                        label="Count"
                         value={node.count}
                         onChange={(v) => { const n = Number(v); if (Number.isInteger(n) && n > 0) patchRepeatNode(id, { count: n }); }}
                     />
                     <InspectorField
                         param={{ name: 'iterationVariable', type: 'string', description: 'Name bound to the iteration index in formulas' }}
-                        label="index"
+                        label="Index name"
                         value={iterVar}
                         onChange={(v) => patchRepeatNode(id, { iterationVariable: (v || 'i').trim() || 'i' })}
                     />
                 </div>
+                <p className="df-inspector-note"><code>{iterVar} = 0…{Math.max(0, Number(node.count) - 1)}</code> in parameter formulas.</p>
             </section>
             <Bindings
                 freeParams={template?.freeParameters ?? []}

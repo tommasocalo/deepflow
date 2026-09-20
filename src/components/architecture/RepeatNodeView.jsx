@@ -42,7 +42,7 @@ const RepeatNodeView = ({ id, data, selected }) => {
             <div className="df-repeat-face">
                 <Repeat size={14} strokeWidth={2.75} className="df-container-icon" />
                 <span className="df-container-label" title={node.label}>{node.label}</span>
-                <span className="df-repeat-count">× {count}</span>
+                <span className="df-repeat-count" title={`${count} blocks in sequence; output from the last block`}>× {count}</span>
                 <button
                     className="nodrag df-container-open"
                     aria-label={`Open ${node.label}`}

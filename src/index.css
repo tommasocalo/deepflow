@@ -48,6 +48,7 @@
 .df-brand { display: flex; align-items: center; gap: 8px; }
 .df-brand-name { font-size: 16px; font-weight: 800; letter-spacing: -.025em; }
 .df-navbar-divider { width: 1px; height: 20px; background: #00000026; }
+.df-examples-menu { position: fixed; z-index: 50; width: 288px; max-width: calc(100vw - 16px); overflow-y: auto; overscroll-behavior: contain; }
 .df-panel { background: #fff; border: 2px solid #000; border-radius: 8px; box-shadow: var(--shadow-hard); }
 .df-panel-subtle { background: #fff; border: 1px solid var(--border-subtle); border-radius: 8px; box-shadow: var(--shadow-soft); }
 .df-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 32px; padding: 0 12px; border: 1px solid var(--border-subtle); border-radius: 7px; background: white; color: #111; font-size: 12px; font-weight: 700; transition: background .12s; white-space: nowrap; }

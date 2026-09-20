@@ -15,8 +15,10 @@ const TONES = {
     accent:  'df-button df-button-accent',
 };
 
-const NavButton = ({ icon: Icon, label, onClick, tone = 'default', title, children }) => (
+const NavButton = ({ icon: Icon, label, onClick, tone = 'default', title, children, ...buttonProps }) => (
     <button
+        type="button"
+        {...buttonProps}
         onClick={onClick}
         title={title ?? label}
         className={[
