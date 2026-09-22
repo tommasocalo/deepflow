@@ -16,9 +16,7 @@ export function describePorts(graph, node, shapes) {
     const inputs = [...groups.values()].map(({ label, count }) => count > 1 ? `${count} × [${label}]` : label);
     return {
         input: INPUTS.has(node.libraryKey) ? null : inputs.length ? inputs.join(' · ') : '—',
-        // Split has no per-output inference yet: don't present its passthrough
-        // validation shape as a computed split-output shape.
-        output: OUTPUTS.has(node.libraryKey) || node.libraryKey === 'deepflow.op.Split'
+        output: OUTPUTS.has(node.libraryKey) || (node.libraryKey === 'deepflow.op.Split' && shapes[node.id]?.kind !== 'collection')
             ? null : activationLabel(shapes[node.id]) ?? '—',
     };
 }

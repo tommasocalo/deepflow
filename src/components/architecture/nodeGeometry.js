@@ -7,11 +7,17 @@ export function isInteractive(target) {
 
 /** "B × 1024 × 768" — output dimensions inside nodes. */
 export function activationLabel(shape) {
+    if (shape?.kind === 'collection') {
+        const labels = shape.items.map(activationLabel);
+        return labels.every((label) => label === labels[0])
+            ? `${labels.length} tensors [${labels[0] ?? '?'}]`
+            : `${labels.length} tensors`;
+    }
     if (!Array.isArray(shape) || !shape.length) return null;
     return shape.map((d, i) => (d === null ? (i === 0 ? 'B' : '?') : String(d))).join(' × ');
 }
 
-export const OP_KEYS = new Set(['deepflow.op.Add', 'deepflow.op.Multiply', 'deepflow.op.Concat', 'deepflow.op.Split', 'torch.nn.Flatten']);
+export const OP_KEYS = new Set(['deepflow.op.Add', 'deepflow.op.Multiply', 'deepflow.op.Concat', 'deepflow.op.Split', 'deepflow.op.Broadcast', 'deepflow.op.Stack', 'deepflow.op.MatMul', 'deepflow.op.Transpose', 'deepflow.op.Scale', 'deepflow.op.CausalMask', 'torch.nn.Flatten']);
 export function isOpKey(libraryKey) {
     return OP_KEYS.has(libraryKey);
 }

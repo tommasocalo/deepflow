@@ -7,6 +7,8 @@ import { useValidation } from '../../hooks/useValidation.js';
 import { isInteractive } from './nodeGeometry.js';
 import PortShapeLabels from './PortShapeLabels.jsx';
 import { useOpenToSideNode } from './OpenToSideContext.jsx';
+import NodeInputPorts from './NodeInputPorts.jsx';
+import { inputPortsFor } from './nodeInputPorts.js';
 
 /** A supernode instance: hatched container, label, "open" affordance. */
 const SuperNodeInstanceView = ({ id, data, selected }) => {
@@ -19,6 +21,8 @@ const SuperNodeInstanceView = ({ id, data, selected }) => {
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const sideMenuProps = useOpenToSideNode([...currentPath, id], { disabled: !template });
     const validation = useValidation();
+    const templates = useTemplatesStore((s) => s.templates);
+    const multiInput = inputPortsFor(node, templates).length > 1;
     const errors = validation.errors[id] ?? [];
     const warnings = validation.warnings[id] ?? [];
     const tone = errors.length ? 'error' : warnings.length ? 'warning' : 'ok';
@@ -33,6 +37,7 @@ const SuperNodeInstanceView = ({ id, data, selected }) => {
         <div
             {...sideMenuProps}
             className={['df-container', `df-container--${tone}`, selected ? 'is-selected' : '', expandedNodeId === id ? 'is-active' : ''].join(' ')}
+            style={multiInput ? { minWidth: 220 * inputPortsFor(node, templates).length, maxWidth: 'none' } : undefined}
             onClick={onClick}
             onDoubleClick={(e) => { if (!isInteractive(e.target)) { e.stopPropagation(); enterSupernode(id); } }}
             title={template ? `${template.name} — double-click to open` : 'Template missing'}
@@ -58,8 +63,8 @@ const SuperNodeInstanceView = ({ id, data, selected }) => {
             >
                 <X size={10} strokeWidth={3} />
             </button>
-            <PortShapeLabels node={node} shapes={validation.shapes} />
-            <Handle type="target" position={Position.Top} className="df-handle" />
+            <PortShapeLabels node={node} shapes={validation.shapes} hideInput={multiInput} />
+            <NodeInputPorts node={node} shapes={validation.shapes} />
             <Handle type="source" position={Position.Bottom} className="df-handle" />
         </div>
     );

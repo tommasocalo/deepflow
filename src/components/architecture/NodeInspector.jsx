@@ -5,7 +5,8 @@ import { createVariantPatch, getNodeFamily } from '../../domain/library/nodeFami
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
-import { useValidation } from '../../hooks/useValidation.js';
+import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
+import { resolveRepeatCount } from '../../domain/expressions.js';
 import ParameterField from './ParameterField.jsx';
 import OperationIcon from './OperationIcon.jsx';
 import { useInspectorPlacement } from './useInspectorPlacement.js';
@@ -16,7 +17,7 @@ import './inspector.css';
 const SHAPE_PRIORITY = [
     'in_channels', 'out_channels', 'in_features', 'out_features', 'embed_dim', 'num_heads',
     'd_model', 'nhead', 'hidden_size', 'input_size', 'num_features', 'num_embeddings', 'embedding_dim',
-    'max_len', 'normalized_shape', 'kernel_size', 'p', 'shape', 'name', 'start_dim', 'end_dim', 'dim',
+    'max_len', 'normalized_shape', 'kernel_size', 'p', 'shape', 'name', 'start_dim', 'end_dim', 'dim', 'dim0', 'dim1', 'chunks', 'count', 'factor',
 ];
 const TEMPLATE_ONLY = new Set(['deepflow.template.Input', 'deepflow.template.Output']);
 
@@ -183,6 +184,9 @@ function RepeatBody({ id, node }) {
     const patchRepeatBinding = useArchitectureStore((s) => s.patchRepeatBinding);
     const enterSupernode = useArchitectureStore((s) => s.enterSupernode);
     const convertRepeatToInstance = useArchitectureStore((s) => s.convertRepeatToInstance);
+    const context = useValidationContext();
+    const { count, error } = resolveRepeatCount(node.count, context?.scope);
+    const mode = node.mode ?? 'sequential';
     const iterVar = node.iterationVariable || 'i';
     return (
         <>
@@ -192,13 +196,22 @@ function RepeatBody({ id, node }) {
                 <button type="button" disabled={!template} onClick={() => convertRepeatToInstance(id)} title="Back to a single instance"><Boxes size={12} strokeWidth={3} /> Single</button>
             </div>
             <section className="df-inspector-group">
-                <p className="df-inspector-note"><strong>Sequential repeat</strong><br />Each block feeds the next. Output from the last block.</p>
+                <label className="df-inspector-module">
+                    <span>Mode</span>
+                    <span className="df-inspector-select">
+                        <select aria-label="Repeat mode" value={mode} onChange={(event) => patchRepeatNode(id, { mode: event.target.value })}>
+                            <option value="sequential">Sequential</option><option value="parallel">Parallel</option>
+                        </select><ChevronDown size={11} strokeWidth={3} />
+                    </span>
+                </label>
+                <p className="df-inspector-note">{mode === 'parallel' ? 'One input slice per instance. Output is a tensor collection: connect Concat, Add or Stack to combine it.' : 'Each block feeds the next. Output from the last block.'}</p>
                 <div className="df-inspector-fields">
                     <InspectorField
-                        param={{ name: 'count', type: 'int', description: 'Number of blocks connected in sequence, each with its own weights' }}
+                        param={{ name: 'count', type: 'int', description: 'Number of instances, or a template parameter such as $H; each instance has its own weights' }}
                         label="Count"
                         value={node.count}
-                        onChange={(v) => { const n = Number(v); if (Number.isInteger(n) && n > 0) patchRepeatNode(id, { count: n }); }}
+                        onChange={(v) => patchRepeatNode(id, { count: v })}
+                        errors={error ? [error] : []}
                     />
                     <InspectorField
                         param={{ name: 'iterationVariable', type: 'string', description: 'Name bound to the iteration index in formulas' }}
@@ -207,7 +220,7 @@ function RepeatBody({ id, node }) {
                         onChange={(v) => patchRepeatNode(id, { iterationVariable: (v || 'i').trim() || 'i' })}
                     />
                 </div>
-                <p className="df-inspector-note"><code>{iterVar} = 0…{Math.max(0, Number(node.count) - 1)}</code> in parameter formulas.</p>
+                <p className="df-inspector-note"><code>{iterVar} = 0…{count ? count - 1 : '?'}</code> in parameter formulas.</p>
             </section>
             <Bindings
                 freeParams={template?.freeParameters ?? []}
@@ -241,9 +254,9 @@ export default function NodeInspector() {
     const id = node.id;
     const errors = validation.errors[id] ?? [];
     const warnings = validation.warnings[id] ?? [];
-    const { fields: fieldErrors, remaining: nodeErrors } = node.kind === 'layer'
-        ? partitionParameterErrors(getEntry(node.libraryKey)?.parameters ?? [], errors)
-        : { fields: {}, remaining: errors };
+    const issueParameters = node.kind === 'layer' ? getEntry(node.libraryKey)?.parameters ?? []
+        : node.kind === 'repeat' ? [{ name: 'count' }] : [];
+    const { fields: fieldErrors, remaining: nodeErrors } = partitionParameterErrors(issueParameters, errors);
     const ContainerIcon = node.kind === 'repeat' ? Repeat : Boxes;
     const rename = (label) => (node.kind === 'repeat' ? patchRepeatNode(id, { label }) : patchNode(id, { label }));
 

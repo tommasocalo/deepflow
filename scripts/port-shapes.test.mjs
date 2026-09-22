@@ -25,3 +25,13 @@ test('boundary ports and uninferred Split outputs do not invent shapes', () => {
     assert.deepEqual(describePorts(graph, { id: 'out', libraryKey: 'deepflow.io.Output' }, shapes), { input: 'B × 768', output: null });
     assert.equal(describePorts(graph, { id: 'out', libraryKey: 'deepflow.op.Split' }, shapes).output, null);
 });
+
+test('collection labels distinguish parallel tensors from a new tensor axis', () => {
+    const graph = { edges: [{ source: 'split', target: 'concat' }] };
+    const collection = { kind: 'collection', items: Array.from({ length: 12 }, () => [null, 128, 64]) };
+    const shapes = { split: collection, concat: [null, 128, 768] };
+    assert.equal(describePorts(graph, { id: 'split', libraryKey: 'deepflow.op.Split' }, shapes).output, '12 tensors [B × 128 × 64]');
+    assert.deepEqual(describePorts(graph, { id: 'concat', libraryKey: 'deepflow.op.Concat' }, shapes), {
+        input: '12 tensors [B × 128 × 64]', output: 'B × 128 × 768',
+    });
+});

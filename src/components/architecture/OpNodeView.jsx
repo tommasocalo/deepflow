@@ -6,6 +6,7 @@ import { OP_SIZE, isInteractive } from './nodeGeometry.js';
 import OperationIcon from './OperationIcon.jsx';
 import PortShapeLabels from './PortShapeLabels.jsx';
 import { getEntry } from '../../domain/library/index.js';
+import NodeInputPorts from './NodeInputPorts.jsx';
 // Keys are listed in nodeGeometry.js (isOpKey) so the canvas can route without importing a component file.
 
 /** Element-wise / combine operators are glyphs on the line, not blocks. */
@@ -43,8 +44,8 @@ const OpNodeView = ({ id, data, selected }) => {
         >
             <OperationIcon libraryKey={node.libraryKey} size={22} />
             <span className="sr-only">{title}</span>
-            <PortShapeLabels node={node} shapes={validation.shapes} />
-            <Handle type="target" position={Position.Top} className="df-handle df-handle--op" />
+            <PortShapeLabels node={node} shapes={validation.shapes} hideInput={node.libraryKey === 'deepflow.op.MatMul'} />
+            <NodeInputPorts node={node} shapes={validation.shapes} />
             <Handle type="source" position={Position.Bottom} className="df-handle df-handle--op" />
         </div>
     );

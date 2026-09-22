@@ -32,6 +32,20 @@ img.df-operation-icon { mix-blend-mode: multiply; }
 .df-port-shape { position: absolute; z-index: 5; left: 50%; transform: translateX(-50%); width: max-content; padding: 0 4px; border: 1px solid #e5e5e5; border-radius: 2px; background: #fff; color: #000; font: 700 10px/10px ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; pointer-events: none; user-select: none; }
 .df-port-shape--input { bottom: calc(100% + 9px); }
 .df-port-shape--output { top: calc(100% + 9px); }
+.df-port-shape--right { left: calc(100% + 12px); top: 50%; transform: translateY(-50%); }
+.df-parallel { position: relative; padding: 8px 10px; border: 2px dashed #111; border-radius: 8px; background: #fffbeb; box-shadow: 3px 3px 0 #111; cursor: pointer; }
+.df-parallel.is-selected, .df-parallel.is-active { box-shadow: 3px 3px 0 #b58a00; }
+.df-parallel--error { border-color: #dc2626; }
+.df-parallel-header { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.df-parallel-mode { margin-left: auto; font: 700 10px ui-monospace, monospace; text-transform: uppercase; }
+.df-parallel-branches { display: grid; gap: 8px; margin: 16px 0 12px; border-top: 1px solid #111; border-bottom: 1px solid #111; padding: 10px 0; }
+.df-parallel-instance { position: relative; display: flex; justify-content: center; align-items: center; gap: 4px; height: 29px; border: 1.5px solid #111; border-radius: 3px; background: white; box-shadow: 2px 2px 0 #111; font: 700 11px ui-monospace, monospace; cursor: pointer; }
+.df-parallel-instance::before, .df-parallel-instance::after { content: ''; position: absolute; left: 50%; height: 11px; width: 1px; background: #111; }
+.df-parallel-instance::before { bottom: 100%; } .df-parallel-instance::after { top: 100%; }
+.df-parallel-instance:hover, .df-parallel-instance:focus-visible { background: #fde68a; outline: 2px solid #111; outline-offset: 2px; }
+.df-parallel-footer { display: flex; justify-content: space-between; gap: 12px; color: #555; font: 600 9px ui-monospace, monospace; }
+.df-parallel-invalid { font-size: 11px; }
+.df-parallel:hover .df-block-delete { opacity: 1; }
 .df-repeat > .df-port-shape--output { top: calc(100% + var(--repeat-stack-depth, 0px) + 9px); }
 .df-block-status { position: absolute; top: -7px; left: -7px; background: white; border-radius: 50%; }
 .df-block-icon--error { color: #dc2626; }

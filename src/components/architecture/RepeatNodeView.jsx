@@ -3,16 +3,20 @@ import { Handle, Position } from '@xyflow/react';
 import { ChevronRight, Repeat, X } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
-import { useValidation } from '../../hooks/useValidation.js';
+import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
+import { resolveRepeatCount } from '../../domain/expressions.js';
 import { isInteractive } from './nodeGeometry.js';
 import PortShapeLabels from './PortShapeLabels.jsx';
 import { useOpenToSideNode } from './OpenToSideContext.jsx';
+import ParallelRepeatNodeView from './ParallelRepeatNodeView.jsx';
+import NodeInputPorts from './NodeInputPorts.jsx';
+import { inputPortsFor } from './nodeInputPorts.js';
 
 /**
  * A repeated template: the container is drawn as a short stack so the
  * repetition is visible; the count is the only number shown.
  */
-const RepeatNodeView = ({ id, data, selected }) => {
+const SequentialRepeatNodeView = ({ id, data, selected }) => {
     const node = data.node;
     const template = useTemplatesStore((s) => s.templates[node.templateId]);
     const removeNode = useArchitectureStore((s) => s.removeNode);
@@ -22,13 +26,16 @@ const RepeatNodeView = ({ id, data, selected }) => {
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const sideMenuProps = useOpenToSideNode([...currentPath, id], { disabled: !template });
     const validation = useValidation();
+    const context = useValidationContext();
+    const templates = useTemplatesStore((s) => s.templates);
+    const multiInput = inputPortsFor(node, templates).length > 1;
     const errors = validation.errors[id] ?? [];
     const warnings = validation.warnings[id] ?? [];
     const tone = errors.length ? 'error' : warnings.length ? 'warning' : 'ok';
     const onClick = useCallback((e) => {
         if (!isInteractive(e.target)) toggleExpanded(id);
     }, [id, toggleExpanded]);
-    const count = Number(node.count) || 0;
+    const count = resolveRepeatCount(node.count, context?.scope).count || 0;
     const ghosts = Math.min(3, Math.max(0, count - 1));
 
     return (
@@ -66,11 +73,14 @@ const RepeatNodeView = ({ id, data, selected }) => {
             >
                 <X size={10} strokeWidth={3} />
             </button>
-            <PortShapeLabels node={node} shapes={validation.shapes} />
-            <Handle type="target" position={Position.Top} className="df-handle" />
+            <PortShapeLabels node={node} shapes={validation.shapes} hideInput={multiInput} />
+            <NodeInputPorts node={node} shapes={validation.shapes} />
             <Handle type="source" position={Position.Bottom} className="df-handle" />
         </div>
     );
 };
+
+const RepeatNodeView = (props) => props.data.node.mode === 'parallel'
+    ? <ParallelRepeatNodeView {...props} /> : <SequentialRepeatNodeView {...props} />;
 
 export default memo(RepeatNodeView);
