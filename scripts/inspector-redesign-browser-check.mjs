@@ -121,7 +121,7 @@ try {
     await screenshot('04-position-table-dimensions-1024');
     await second.fill('$');
     assert.equal(await page.locator('.df-param-shape [aria-invalid="true"]').count(), 0, 'A partial reference is not painted red while typing');
-    assert.match(await page.locator('.df-parameter-source').innerText(), /Unresolved/);
+    assert.match(await page.locator('.df-inspector-field[data-parameter="shape"] .df-parameter-source').innerText(), /Unresolved/);
     assert.equal(await page.getByRole('button', { name: 'Unlink shape', exact: true }).count(), 0, 'An incomplete reference cannot detach into an invalid local value');
     await screenshot('05-shape-variable-suggestions-1024');
     await second.fill('$embedding_dim');
