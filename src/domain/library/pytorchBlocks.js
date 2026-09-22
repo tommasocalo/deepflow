@@ -473,6 +473,84 @@ export const PYTORCH_BLOCKS = [
         pyTorchFn: null,
         parameters: [],
     },
+    {
+        key: 'deepflow.op.Parameter', name: 'Parameter', category: 'Parameters',
+        description: 'A named trainable tensor, frozen parameter, or disabled affine constant.', pyTorchFn: null,
+        parameters: [
+            { name: 'shape', type: 'tuple', description: 'Dimensions, including expressions such as (out_features, in_features)', default: '(1,)', required: true },
+            { name: 'init', type: 'enum', description: 'Initialization', default: 'normal', options: ['normal', 'kaiming_uniform', 'uniform', 'zeros', 'ones'] },
+            { name: 'scale', type: 'float', description: 'Normal standard deviation or uniform bound', default: 1 },
+            { name: 'requires_grad', type: 'bool', description: 'Learn this parameter', default: true },
+            { name: 'enabled', type: 'bool', description: 'Enable this parameter; otherwise use a fixed affine constant', default: true },
+            { name: 'disabled_init', type: 'enum', description: 'Constant when disabled', default: 'zeros', options: ['zeros', 'ones'] },
+            { name: 'padding_idx', type: 'int', description: 'Optional row initialized to zero for an embedding table', default: null },
+        ],
+    },
+    {
+        key: 'deepflow.op.Gather', name: 'Gather', category: 'Indexing',
+        description: 'Look up integer indices in a two-dimensional weight table; gradients flow to the table.', pyTorchFn: 'torch.nn.functional.embedding',
+        parameters: [{ name: 'padding_idx', type: 'int', description: 'Optional table row excluded from gradients', default: null }],
+    },
+    {
+        key: 'deepflow.op.PositionIndices', name: 'Position indices', category: 'Indexing',
+        description: 'Create integer sequence positions for every batch item on the input device, independent of token values.', pyTorchFn: null,
+        parameters: [],
+    },
+    {
+        key: 'deepflow.op.Arange', name: 'Arange', category: 'Parameters',
+        description: 'A fixed floating sequence registered as a buffer that follows the model device.', pyTorchFn: 'torch.arange',
+        parameters: [
+            { name: 'start', type: 'float', description: 'First value', default: 0 },
+            { name: 'end', type: 'float', description: 'Exclusive upper bound', default: 8, required: true },
+            { name: 'step', type: 'float', description: 'Increment', default: 1 },
+        ],
+    },
+    {
+        key: 'deepflow.op.Mean', name: 'Mean', category: 'Reduction',
+        description: 'Average over one dimension or a tuple of dimensions.', pyTorchFn: 'torch.mean',
+        parameters: [
+            { name: 'dim', type: 'tuple', description: 'Reduction dimension or tuple of dimensions', default: -1 },
+            { name: 'keepdim', type: 'bool', description: 'Retain reduced dimensions with size one', default: true },
+        ],
+    },
+    {
+        key: 'deepflow.op.Subtract', name: 'Subtract', category: 'Element-wise',
+        description: 'Subtract input b from input a with broadcasting.', pyTorchFn: 'torch.sub', parameters: [],
+    },
+    {
+        key: 'deepflow.op.AddScalar', name: 'Add scalar', category: 'Element-wise',
+        description: 'Add a scalar to every tensor element.', pyTorchFn: 'torch.add',
+        parameters: [{ name: 'value', type: 'float', description: 'Scalar value', default: 0 }],
+    },
+    {
+        key: 'deepflow.op.Pow', name: 'Power', category: 'Element-wise',
+        description: 'Raise every tensor element to an exponent.', pyTorchFn: 'torch.pow',
+        parameters: [{ name: 'exponent', type: 'float', description: 'Exponent', default: 2 }],
+    },
+    ...[
+        ['Rsqrt', 'Reciprocal square root', 'torch.rsqrt'],
+        ['Exp', 'Exponential', 'torch.exp'],
+        ['Sin', 'Sine', 'torch.sin'],
+        ['Cos', 'Cosine', 'torch.cos'],
+    ].map(([key, name, pyTorchFn]) => ({
+        key: `deepflow.op.${key}`, name, category: 'Element-wise', description: `${name} of every tensor element.`, pyTorchFn, parameters: [],
+    })),
+    {
+        key: 'deepflow.op.Unsqueeze', name: 'Unsqueeze', category: 'Reshape',
+        description: 'Insert a dimension of size one.', pyTorchFn: 'torch.unsqueeze',
+        parameters: [{ name: 'dim', type: 'int', description: 'New dimension position', default: -1 }],
+    },
+    {
+        key: 'deepflow.op.Slice', name: 'Slice', category: 'Indexing',
+        description: 'Select a range along one tensor dimension.', pyTorchFn: null,
+        parameters: [
+            { name: 'dim', type: 'int', description: 'Dimension to slice', default: -1 },
+            { name: 'start', type: 'int', description: 'Inclusive start', default: 0 },
+            { name: 'end', type: 'int', description: 'Exclusive end, or empty for the full dimension', default: null },
+            { name: 'step', type: 'int', description: 'Positive stride', default: 1 },
+        ],
+    },
+
 ];
 
 const BY_KEY = Object.fromEntries(PYTORCH_BLOCKS.map((b) => [b.key, b]));

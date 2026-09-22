@@ -58,8 +58,15 @@ export function mapTemplateInputs(templateGraph, edges, valueForEdge) {
     return Object.fromEntries(Object.entries(ports).map(([id, edge]) => [id, edge ? valueForEdge(edge) : null]));
 }
 
+export function getOperationInputIds(node) {
+    if (node.libraryKey === 'deepflow.op.MatMul' || node.libraryKey === 'deepflow.op.Subtract') return ['a', 'b'];
+    if (node.libraryKey === 'deepflow.op.Gather') return ['indices', 'weight'];
+    return null;
+}
+
 export function orderOperationEdges(node, edges) {
-    if (node.libraryKey !== 'deepflow.op.MatMul') return edges;
-    const mapped = mapInputEdgesToPorts(edges, ['a', 'b'], { broadcastSingle: false });
-    return ['a', 'b'].map((id) => mapped[id]);
+    const ports = getOperationInputIds(node);
+    if (!ports) return edges;
+    const mapped = mapInputEdgesToPorts(edges, ports, { broadcastSingle: false });
+    return ports.map((id) => mapped[id]);
 }

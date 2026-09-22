@@ -1,5 +1,6 @@
-import { createEdge, createLayerNode, createRepeatNode } from '../domain/architecture/index.js';
+import { createEdge, createLayerNode, createRepeatNode, createSuperNodeInstance } from '../domain/architecture/index.js';
 import { getEntry } from '../domain/library/index.js';
+import { ensureStandardTemplate } from '../domain/components/index.js';
 
 export const ATTENTION_HEAD_INPUT_IDS = Object.freeze({ q: 'head_q', k: 'head_k', v: 'head_v' });
 
@@ -33,12 +34,15 @@ export function buildAttentionHeadGraph() {
 }
 
 /** Projection → split → generic parallel Repeat → concat → output projection. */
-export function buildMultiHeadAttentionGraph({ headTemplateId, headInputIds = ATTENTION_HEAD_INPUT_IDS } = {}) {
+export function buildMultiHeadAttentionGraph({ headTemplateId, headInputIds = ATTENTION_HEAD_INPUT_IDS, linearTemplateId } = {}) {
     if (!headTemplateId) throw new Error('A head template is required to build multi-head attention.');
     const input = layer('deepflow.template.Input', 560, 0, {}, 'attention input');
-    const q = layer('torch.nn.Linear', 180, 150, { in_features: '$D', out_features: '$D' }, 'Q projection');
-    const k = layer('torch.nn.Linear', 560, 150, { in_features: '$D', out_features: '$D' }, 'K projection');
-    const v = layer('torch.nn.Linear', 940, 150, { in_features: '$D', out_features: '$D' }, 'V projection');
+    const projectionNode = (x, y, label) => linearTemplateId
+        ? createSuperNodeInstance({ templateId: linearTemplateId, position: { x, y }, label, parameterValues: { in_features: '$D', out_features: '$D', bias: '$bias' } })
+        : layer('torch.nn.Linear', x, y, { in_features: '$D', out_features: '$D' }, label);
+    const q = projectionNode(180, 150, 'Q projection');
+    const k = projectionNode(560, 150, 'K projection');
+    const v = projectionNode(940, 150, 'V projection');
     const qSplit = layer('deepflow.op.Split', 180, 310, { chunks: '$H', dim: -1 }, 'split Q');
     const kSplit = layer('deepflow.op.Split', 560, 310, { chunks: '$H', dim: -1 }, 'split K');
     const vSplit = layer('deepflow.op.Split', 940, 310, { chunks: '$H', dim: -1 }, 'split V');
@@ -47,7 +51,7 @@ export function buildMultiHeadAttentionGraph({ headTemplateId, headInputIds = AT
         mode: 'parallel', count: '$H', bindings: { d_head: '$d_head', dropout: '$dropout' },
     });
     const concat = layer('deepflow.op.Concat', 560, 760, { dim: -1 }, 'concatenate heads');
-    const projection = layer('torch.nn.Linear', 560, 910, { in_features: '$D', out_features: '$D' }, 'output projection');
+    const projection = projectionNode(560, 910, 'output projection');
     const output = layer('deepflow.template.Output', 560, 1060, {}, 'attention output');
     return graphOf([input, q, k, v, qSplit, kSplit, vSplit, heads, concat, projection, output], [
         [input, q], [input, k], [input, v], [q, qSplit], [k, kSplit], [v, vSplit],
@@ -88,7 +92,7 @@ export function attentionStoryboard({ architectureStore, templatesStore, trainin
     arch.goToLevel(0);
     arch.resetCurrentGraph();
     trainingStore.getState().resetGraph();
-    const { attentionTemplateId } = registerAttentionTemplates(templatesStore);
+    const attentionTemplateId = ensureStandardTemplate('attention', templatesStore);
     const root = architectureStore.getState().graph;
     const input = Object.values(root.nodes).find((node) => node.libraryKey === 'deepflow.io.Input');
     const output = Object.values(root.nodes).find((node) => node.libraryKey === 'deepflow.io.Output');

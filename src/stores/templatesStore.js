@@ -5,6 +5,7 @@ import {
     addNode,
     createTemplate,
     moveNode,
+    newDomainId,
     patchLayerParameters,
     patchNode,
     removeEdge,
@@ -24,13 +25,42 @@ export const useTemplatesStore = create(
             /** @type {Object<string, import('../domain/architecture/types.js').ArchitectureTemplate>} */
             templates: {},
 
-            createTemplate: ({ name, description, graph, freeParameters, id }) => {
-                const tpl = createTemplate({ name, description, graph, freeParameters, id });
+            createTemplate: ({ name, description, graph, freeParameters, id, ...metadata }) => {
+                const tpl = { ...metadata, ...createTemplate({ name, description, graph, freeParameters, id }) };
                 set((state) => ({ templates: { ...state.templates, [tpl.id]: tpl } }));
                 return tpl.id;
             },
 
             getTemplate: (id) => get().templates[id],
+
+            /** Copy a reusable definition and all nested definitions without retaining standard identity. */
+            cloneTemplate: (id, name) => {
+                const originals = get().templates;
+                if (!originals[id]) return null;
+                const copies = {};
+                const copiedIds = new Map();
+                const copy = (sourceId) => {
+                    if (copiedIds.has(sourceId)) return copiedIds.get(sourceId);
+                    const original = originals[sourceId];
+                    if (!original) return sourceId;
+                    const nextId = newDomainId();
+                    copiedIds.set(sourceId, nextId);
+                    const cloned = structuredClone(original);
+                    cloned.componentStyleKey = original.componentStyleKey ?? original.standardKey;
+                    delete cloned.standardKey;
+                    cloned.id = nextId;
+                    cloned.name = sourceId === id && name?.trim() ? name.trim() : `${original.name} copy`;
+                    cloned.sourceTemplateId = sourceId;
+                    for (const node of Object.values(cloned.graph.nodes)) {
+                        if (['supernode', 'repeat'].includes(node.kind)) node.templateId = copy(node.templateId);
+                    }
+                    copies[nextId] = cloned;
+                    return nextId;
+                };
+                const copiedId = copy(id);
+                set((state) => ({ templates: { ...state.templates, ...copies } }));
+                return copiedId;
+            },
 
             patchTemplate: (id, patch) =>
                 set((state) =>

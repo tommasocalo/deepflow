@@ -29,9 +29,9 @@ test('palette exposes a single entry for each family and retains searchable vari
     assert.equal(entries.filter((entry) => entry.key === 'torch.nn.Dropout').length, 1);
     assert.equal(entries.filter((entry) => entry.key === 'torch.nn.TransformerEncoderLayer').length, 1);
     assert.deepEqual(entries.filter((entry) => entry.category === 'Operations').map((entry) => entry.key).sort(), [
-        'deepflow.op.Add', 'deepflow.op.Broadcast', 'deepflow.op.CausalMask', 'deepflow.op.Concat', 'deepflow.op.MatMul',
-        'deepflow.op.Multiply', 'deepflow.op.Scale', 'deepflow.op.Split', 'deepflow.op.Stack', 'deepflow.op.Transpose', 'torch.nn.Flatten',
-    ]);
+        'deepflow.op.Add', 'deepflow.op.AddScalar', 'deepflow.op.Arange', 'deepflow.op.Broadcast', 'deepflow.op.CausalMask', 'deepflow.op.Concat', 'deepflow.op.Cos', 'deepflow.op.Exp', 'deepflow.op.Gather', 'deepflow.op.MatMul', 'deepflow.op.Mean',
+        'deepflow.op.Multiply', 'deepflow.op.Parameter', 'deepflow.op.PositionIndices', 'deepflow.op.Pow', 'deepflow.op.Rsqrt', 'deepflow.op.Scale', 'deepflow.op.Sin', 'deepflow.op.Slice', 'deepflow.op.Split', 'deepflow.op.Stack', 'deepflow.op.Subtract', 'deepflow.op.Transpose', 'deepflow.op.Unsqueeze', 'torch.nn.Flatten',
+    ].sort());
     assert.ok(entries.every((entry) => !entry.key.startsWith('deepflow.template.')));
 });
 

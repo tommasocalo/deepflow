@@ -86,6 +86,9 @@
  * @property {string} description
  * @property {ArchitectureGraph} graph        Internal subgraph (incl. boundary nodes)
  * @property {ParamSpec[]} [freeParameters]   Parameters exposed to instances and repeats
+ * @property {string} [standardKey]           Editable catalog identity, unique within the project
+ * @property {string} [componentStyleKey]     Visual family retained by independent copies
+ * @property {string} [sourceTemplateId]      Definition from which a copy was derived
  */
 
 export {};

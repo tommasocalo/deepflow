@@ -2,7 +2,7 @@ import { topologicalSort } from './topology.js';
 import { validateLayerParameters } from './parameters.js';
 import { inferShape } from './shapes.js';
 import { buildParameterScope, resolveLayerParameters, resolveRepeatCount } from '../domain/expressions.js';
-import { getIncomingEdges, getTemplateInputIds, mapTemplateInputs, orderOperationEdges, validateInputPorts } from '../domain/graphInputs.js';
+import { getIncomingEdges, getTemplateInputIds, getOperationInputIds, mapTemplateInputs, orderOperationEdges, validateInputPorts } from '../domain/graphInputs.js';
 import { isShapeCollection, shapeCollection } from '../domain/shapeCollections.js';
 
 const TEMPLATE_INPUT = 'deepflow.template.Input';
@@ -31,16 +31,16 @@ export function validate(graph, opts = {}) {
         const inDeg = adj.inn[id]?.length ?? 0;
         const outDeg = adj.out[id]?.length ?? 0;
         if (node.kind === 'layer') {
-            const isSource = node.libraryKey === TEMPLATE_INPUT || node.libraryKey === 'deepflow.io.Input';
+            const isSource = [TEMPLATE_INPUT, 'deepflow.io.Input', 'deepflow.op.Parameter', 'deepflow.op.Arange'].includes(node.libraryKey);
             const isSink = node.libraryKey === TEMPLATE_OUTPUT || node.libraryKey === 'deepflow.io.Output';
-            if (isSource && inDeg > 0) push(errors, id, 'Input nodes cannot have inputs');
+            if (isSource && inDeg > 0) push(errors, id, 'Source nodes cannot have inputs');
             if (!isSource && inDeg === 0) push(warnings, id, 'No incoming connections');
             if (isSink && outDeg > 0) push(errors, id, 'Output nodes cannot have outgoing connections');
             if (!isSink && outDeg === 0 && Object.keys(graph.nodes).length > 1) push(warnings, id, 'No outgoing connections');
             const resolved = resolveLayerParameters(node, scope);
             for (const issue of validateLayerParameters(resolved)) push(errors, id, issue.message);
             for (const [name, raw] of Object.entries(node.parameters ?? {})) {
-                if (typeof raw === 'string' && raw.trim().startsWith('$') && resolved.parameters[name] === null) {
+                if (typeof raw === 'string' && raw.trim().startsWith('$') && resolved.parameters[name] === null && !Object.hasOwn(scope, raw.trim().slice(1))) {
                     push(errors, id, `${name} has an unresolved parameter reference: ${raw}`);
                 }
             }
@@ -62,10 +62,11 @@ export function validate(graph, opts = {}) {
         const edges = getIncomingEdges(graph, id);
         const inputShapes = orderOperationEdges(node, edges).map((edge) => edge ? shapes[edge.source] ?? null : null);
         if (node.kind === 'layer') {
-            if (node.libraryKey === 'deepflow.op.MatMul') {
-                for (const issue of validateInputPorts(edges, ['a', 'b'])) push(errors, id, issue);
-                if (edges.length !== 2 || orderOperationEdges(node, edges).some((edge) => !edge)) {
-                    push(errors, id, 'MatMul needs two connected inputs (a and b)');
+            const operationPorts = getOperationInputIds(node);
+            if (operationPorts) {
+                for (const issue of validateInputPorts(edges, operationPorts)) push(errors, id, issue);
+                if (edges.length !== operationPorts.length || orderOperationEdges(node, edges).some((edge) => !edge)) {
+                    push(errors, id, `${node.libraryKey.split('.').at(-1)} needs ${operationPorts.length} connected inputs (${operationPorts.join(' and ')})`);
                 }
             }
             if (node.libraryKey === TEMPLATE_INPUT && Object.hasOwn(externalInputs, id)) {
@@ -118,6 +119,8 @@ export function validate(graph, opts = {}) {
             const subScope = buildParameterScope(template.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined);
             for (const parameter of template.freeParameters ?? []) {
                 const value = subScope[parameter.name];
+                if (parameter.nullable && (value === null || value === undefined)) continue;
+                if (parameter.type === 'bool' && typeof value !== 'boolean') childErrors.push(`${parameter.name} must resolve to true or false`);
                 if (parameter.type === 'int' && (value === null || value === undefined || !Number.isSafeInteger(Number(value)))) {
                     childErrors.push(`${parameter.name} must resolve to an integer (got ${String(value)})`);
                 }

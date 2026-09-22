@@ -26,6 +26,7 @@
 // the host cares about.
 const ALLOWED = /^[\s\d+\-*/().,a-zA-Z_$%?:=!<>&|]*$/;
 export const MAX_REPEAT_COUNT = 256;
+const NUMERIC = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 export function evaluateExpression(expr, scope = {}) {
     if (typeof expr === 'number') {
@@ -36,7 +37,7 @@ export function evaluateExpression(expr, scope = {}) {
     if (trimmed === '') return null;
 
     // Pure numeric fast-path
-    if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    if (NUMERIC.test(trimmed)) {
         const n = Number(trimmed);
         return Number.isFinite(n) ? n : null;
     }
@@ -47,14 +48,15 @@ export function evaluateExpression(expr, scope = {}) {
         // Substitute identifiers from scope directly into the expression so
         // we don't pass them as Function parameters — JS reserved words
         // like `in` would otherwise cause a SyntaxError.
-        const substituted = trimmed.replace(/\$?([a-zA-Z_][\w$]*)/g, (token, name) => {
+        const substituted = trimmed.replace(/((?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)|\$?([a-zA-Z_][\w$]*)/g, (token, numeric, name) => {
+            if (numeric) return token;
             const value = scope[name] ?? scope[token];
             if (value === null || value === undefined || typeof value === 'boolean' || value === '') return token;
             const number = Number(value);
             return Number.isFinite(number) ? `(${number})` : token;
         });
         // Any identifier remaining means an unbound name → unevaluable.
-        if (/[a-zA-Z_$]/.test(substituted)) return null;
+        if (/[a-zA-Z_$]/.test(substituted.replace(/(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/g, ''))) return null;
         const fn = new Function(`"use strict"; return (${substituted});`);
         const result = fn();
         return Number.isFinite(result) ? result : null;
@@ -101,10 +103,27 @@ export function resolveParameterValue(value, scope = {}) {
     }
 
     // Numeric string → number
-    if (/^-?\d+(\.\d+)?$/.test(value.trim())) {
+    if (NUMERIC.test(value.trim())) {
         return Number(value.trim());
     }
     return value;
+}
+
+/** Parse numeric tuples without evaluating arbitrary source text. */
+export function resolveDimensionTuple(value, scope = {}) {
+    let dimensions = resolveParameterValue(value, scope);
+    if (typeof dimensions === 'number') return [dimensions];
+    if (typeof dimensions === 'string') {
+        dimensions = dimensions.trim();
+        if (!dimensions) return null;
+        if ((dimensions.startsWith('(') && dimensions.endsWith(')')) || (dimensions.startsWith('[') && dimensions.endsWith(']'))) {
+            dimensions = dimensions.slice(1, -1);
+        }
+        dimensions = dimensions.split(',').map((part) => part.trim()).filter(Boolean);
+    }
+    if (!Array.isArray(dimensions)) return null;
+    const resolved = dimensions.map((dimension) => resolveParameterValue(dimension, scope));
+    return resolved.every((dimension) => typeof dimension === 'number' && Number.isFinite(dimension)) ? resolved : null;
 }
 
 /**
@@ -118,7 +137,11 @@ export function resolveLayerParameters(node, scope) {
     /** @type {Object<string, *>} */
     const out = {};
     for (const [key, value] of Object.entries(node.parameters ?? {})) {
-        out[key] = resolveParameterValue(value, scope);
+        out[key] = node.libraryKey === 'deepflow.op.Parameter' && key === 'shape'
+            ? resolveDimensionTuple(value, scope)
+            : node.libraryKey === 'deepflow.op.Mean' && key === 'dim'
+                ? resolveDimensionTuple(value, scope)
+                : resolveParameterValue(value, scope);
     }
     return { ...node, parameters: out };
 }
@@ -129,7 +152,7 @@ export function buildParameterScope(freeParameters, bindings = {}, parentScope =
     for (const parameter of freeParameters ?? []) {
         let raw = bindings[parameter.name];
         if (Array.isArray(raw) && iterationIndex !== undefined) raw = raw[iterationIndex];
-        if (raw === undefined || raw === null || raw === '') raw = parameter.default;
+        if (raw === undefined || (raw === null && !parameter.nullable) || raw === '') raw = parameter.default;
         result[parameter.name] = resolveParameterValue(raw, result);
     }
     return result;

@@ -1,5 +1,5 @@
 import { isShapeCollection, shapeCollection, flattenShapeInputs } from '../domain/shapeCollections.js';
-import { resolveRepeatCount } from '../domain/expressions.js';
+import { resolveRepeatCount, resolveDimensionTuple } from '../domain/expressions.js';
 
 /**
  * Static shape inference. A shape is an array of dimensions, where each
@@ -115,9 +115,9 @@ const RULES = {
 
     'torch.nn.Flatten': ([s], p) => {
         if (!s) return { output: null, errors: [] };
-        const start = numOrNull(p.start_dim) ?? 1;
-        const end = numOrNull(p.end_dim) ?? -1;
-        const e = end < 0 ? s.length + end : end;
+        const start = normalizeAxis(numOrNull(p.start_dim) ?? 1, s.length);
+        const e = normalizeAxis(numOrNull(p.end_dim) ?? -1, s.length);
+        if (start === null || e === null || start > e) return { output: null, errors: ['Flatten dimensions must be ordered and within the input rank'] };
         let prod = 1;
         let unknown = false;
         for (let i = start; i <= e; i++) {
@@ -217,6 +217,20 @@ const RULES = {
     'torch.nn.Tanh':       passthrough,
     'torch.nn.Softmax':    passthrough,
 
+    'deepflow.op.Parameter': parameterRule,
+    'deepflow.op.Arange': arangeRule,
+    'deepflow.op.PositionIndices': ([shape]) => ({ output: shape ? shape.slice(0, 2) : null, errors: shape && shape.length !== 2 ? ['Position indices expects tokens with shape (B, T)'] : [] }),
+    'deepflow.op.Gather': gatherRule,
+    'deepflow.op.Mean': meanRule,
+    'deepflow.op.Subtract': elementwiseRule,
+    'deepflow.op.AddScalar': passthrough,
+    'deepflow.op.Pow': passthrough,
+    'deepflow.op.Rsqrt': passthrough,
+    'deepflow.op.Exp': passthrough,
+    'deepflow.op.Sin': passthrough,
+    'deepflow.op.Cos': passthrough,
+    'deepflow.op.Unsqueeze': unsqueezeRule,
+    'deepflow.op.Slice': sliceRule,
     'deepflow.op.Add':      elementwiseRule,
     'deepflow.op.Multiply': elementwiseRule,
     'deepflow.op.Concat':   concatRule,
@@ -288,21 +302,15 @@ function elementwiseRule(inputs) {
     const present = inputs.filter(Boolean);
     // Some inputs have unknown shapes: propagate what we know, no error.
     if (present.length < 2) return { output: present[0] ?? null, errors: [] };
-    const ranks = new Set(present.map((s) => s.length));
-    if (ranks.size > 1) {
-        return { output: present[0], errors: [`Element-wise inputs differ in rank: ${[...ranks].join(' vs ')}`] };
+    const rank = Math.max(...present.map((shape) => shape.length));
+    const output = [], errors = [];
+    for (let offset = 1; offset <= rank; offset++) {
+        const dimensions = present.map((shape) => offset <= shape.length ? shape.at(-offset) : 1);
+        const known = [...new Set(dimensions.filter((dim) => dim !== null && dim !== 1))];
+        if (known.length > 1) errors.push(`Element-wise dim ${rank - offset} mismatch: ${known.join(' vs ')}`);
+        output.unshift(known[0] ?? (dimensions.includes(null) ? null : 1));
     }
-    const ref = present[0];
-    /** @type {string[]} */
-    const errors = [];
-    for (let i = 0; i < ref.length; i++) {
-        const dims = present.map((s) => s[i]).filter((d) => d !== null);
-        const unique = new Set(dims);
-        if (unique.size > 1) {
-            errors.push(`Element-wise dim ${i} mismatch: ${[...unique].join(' vs ')}`);
-        }
-    }
-    return { output: ref, errors };
+    return { output, errors };
 }
 
 function concatRule(inputs, p) {
@@ -399,10 +407,10 @@ function stackRule(inputs, parameters) {
     const present = flattened.filter(Boolean);
     if (!present.length) return { output: null, errors: flattened.length ? [] : ['Stack needs at least one input'] };
     const ref = present[0];
-    const result = elementwiseRule([shapeCollection(flattened)]);
+    const errors = present.every((shape) => shape.length === ref.length && shape.every((dim, index) => dim === null || ref[index] === null || dim === ref[index])) ? [] : ['Stack inputs must have the same shape'];
     const axis = normalizeAxis(parameters.dim === undefined ? 0 : Number(parameters.dim), ref.length, true);
     if (axis === null) return { output: null, errors: ['Stack dim is outside the output rank'] };
-    return { output: [...ref.slice(0, axis), flattened.length, ...ref.slice(axis)], errors: result.errors };
+    return { output: [...ref.slice(0, axis), flattened.length, ...ref.slice(axis)], errors };
 }
 
 function transposeRule([shape], parameters) {
@@ -437,4 +445,64 @@ function matmulRule(inputs) {
     if (a.length > 1) output.push(left.at(-2));
     if (b.length > 1) output.push(right.at(-1));
     return { output, errors };
+}
+
+function parameterRule(_inputs, parameters) {
+    const shape = resolveDimensionTuple(parameters.shape);
+    const errors = [];
+    if (!shape || shape.some((dimension) => !Number.isSafeInteger(dimension) || dimension < 1)) {
+        return { output: null, errors: ['Parameter shape must contain positive integer dimensions'] };
+    }
+    if (parameters.init === 'kaiming_uniform' && shape.length < 2) errors.push('Kaiming initialization needs a parameter of rank at least 2');
+    const scale = parameters.scale ?? 1;
+    if (typeof scale !== 'number' || !Number.isFinite(scale) || scale < 0) errors.push('Parameter scale must be a nonnegative finite number');
+    const index = parameters.padding_idx;
+    if (index !== null && index !== undefined && (!Number.isInteger(index) || !shape.length || index < -shape[0] || index >= shape[0])) errors.push('padding_idx is outside the parameter first dimension');
+    return { output: shape, errors };
+}
+
+function arangeRule(_inputs, parameters) {
+    const { start = 0, end = 8, step = 1 } = parameters;
+    if (![start, end, step].every((value) => typeof value === 'number' && Number.isFinite(value)) || step === 0 || (end - start) * step < 0) {
+        return { output: null, errors: ['Arange needs finite bounds and a nonzero step toward its end'] };
+    }
+    const length = Math.ceil((end - start) / step);
+    return Number.isSafeInteger(length) ? { output: [length], errors: [] } : { output: null, errors: ['Arange length must be a finite integer'] };
+}
+
+function gatherRule([indices, weight], parameters) {
+    const errors = [];
+    if (weight && weight.length !== 2) errors.push('Gather weight must be a two-dimensional table');
+    const index = parameters.padding_idx;
+    if (weight && index !== undefined && index !== null && (!Number.isInteger(index) || (weight[0] !== null && (index < -weight[0] || index >= weight[0])))) errors.push('Gather padding_idx is outside the weight table');
+    return { output: indices && weight?.length === 2 ? [...indices, weight[1]] : null, errors };
+}
+
+function meanRule([shape], parameters) {
+    const rawDims = resolveDimensionTuple(parameters.dim ?? -1);
+    if (!rawDims?.length || rawDims.some((dim) => !Number.isInteger(dim))) return { output: null, errors: ['Mean dim must be an integer or a nonempty tuple of integers'] };
+    if (!shape) return { output: null, errors: [] };
+    const dimensions = rawDims.map((dim) => normalizeAxis(dim, shape.length));
+    if (dimensions.includes(null) || new Set(dimensions).size !== dimensions.length) return { output: null, errors: ['Mean dimensions must be distinct and within the input rank'] };
+    const output = parameters.keepdim === false ? shape.filter((_, index) => !dimensions.includes(index)) : shape.map((dim, index) => dimensions.includes(index) ? 1 : dim);
+    return { output, errors: [] };
+}
+
+function unsqueezeRule([shape], parameters) {
+    if (!shape) return { output: null, errors: [] };
+    const axis = normalizeAxis(parameters.dim ?? -1, shape.length, true);
+    if (axis === null) return { output: null, errors: ['Unsqueeze dim is outside the output rank'] };
+    return { output: [...shape.slice(0, axis), 1, ...shape.slice(axis)], errors: [] };
+}
+
+function sliceRule([shape], parameters) {
+    const { start = 0, end = null, step = 1, dim = -1 } = parameters;
+    if (!Number.isInteger(start) || (end !== null && !Number.isInteger(end)) || !Number.isInteger(step) || step < 1) return { output: null, errors: ['Slice needs integer bounds and a positive integer step'] };
+    if (!shape) return { output: null, errors: [] };
+    const axis = normalizeAxis(dim, shape.length);
+    if (axis === null) return { output: null, errors: ['Slice dim is outside the input rank'] };
+    const size = shape[axis];
+    const bound = (value) => Math.max(0, Math.min(size, value < 0 ? size + value : value));
+    const length = size === null ? null : Math.max(0, Math.ceil(((end === null ? size : bound(end)) - bound(start)) / step));
+    return { output: shape.map((value, index) => index === axis ? length : value), errors: [] };
 }

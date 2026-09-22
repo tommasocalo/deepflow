@@ -25,6 +25,7 @@ import {
 import { getEntry } from '../domain/library/index.js';
 import { isValidLevelPath, nearestOpenAncestor, reconcileOpenLevels, sameLevelPath } from '../domain/architecture/levelNavigation.js';
 import { containsTemplate } from '../domain/architecture/templateReferences.js';
+import { componentBindingsForLayer, ensureStandardTemplate, getStandardComponentForLayer, STANDARD_COMPONENTS } from '../domain/components/index.js';
 import { useTemplatesStore } from './templatesStore.js';
 
 const STORAGE_KEY = 'deepflow:architecture-graph';
@@ -113,6 +114,23 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         return level.isRoot || !containsTemplate(templateId, level.templateId, useTemplatesStore.getState().templates);
     };
 
+    const cloneComponentAtPath = (path, name) => {
+        if (!isActive() || !path.length) return null;
+        const state = get();
+        const templates = useTemplatesStore.getState();
+        if (!isValidLevelPath(state.graph, templates.templates, path)) return null;
+        const top = state.graph.nodes[path[0]];
+        // Fork the containing definition too: rebinding a nested component
+        // must not mutate the parent used by another root instance.
+        const copiedTop = templates.cloneTemplate(top.templateId, path.length === 1 ? name : undefined);
+        if (!copiedTop) return null;
+        const graph = patchNode(state.graph, top.id, { templateId: copiedTop });
+        const clonedLevel = resolveGraphLevel(graph, path, useTemplatesStore.getState().templates);
+        if (path.length > 1 && name?.trim()) templates.patchTemplate(clonedLevel.templateId, { name: name.trim() });
+        set({ graph, ...navigationPatch(state, graph) });
+        return clonedLevel.templateId;
+    };
+
     return {
         graph,
         /** @type {string[]} ids of currently-selected nodes in the active view */
@@ -127,6 +145,8 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         recentLibraryKeys: [],
         /** Per-pane previews of a repeat's shared body, keyed by its absolute level path. */
         inspectedIterations: {},
+        showGradientFlow: false,
+        setShowGradientFlow: (value) => set({ showGradientFlow: Boolean(value) }),
 
         /** @returns {import('../domain/architecture/types.js').ArchitectureGraph} */
         getViewGraph: () => getViewGraph(get()),
@@ -154,6 +174,35 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
             updateCurrentGraph((g) => addNode(g, node));
             return node.id;
         },
+
+        addStandardComponent: (key, position) => {
+            if (!isActive()) return null;
+            const component = STANDARD_COMPONENTS.find((item) => item.key === key);
+            if (!component) return null;
+            const templateId = ensureStandardTemplate(key, useTemplatesStore);
+            return get().addSuperNodeInstance(templateId, position, component.label);
+        },
+
+        convertLayerToComponent: (id) => {
+            if (!isActive()) return null;
+            const view = getViewGraph(get());
+            const node = view.nodes[id];
+            const component = getStandardComponentForLayer(node);
+            if (!component || view.edges.filter((edge) => edge.target === id).length > 1) return null;
+            const templateId = ensureStandardTemplate(component.key, useTemplatesStore);
+            if (!canInsertTemplate(templateId)) return null;
+            const converted = { ...node, kind: 'supernode', templateId, parameterValues: componentBindingsForLayer(node) };
+            delete converted.libraryKey;
+            delete converted.parameters;
+            const inputId = Object.values(useTemplatesStore.getState().getTemplate(templateId).graph.nodes).find((item) => item.libraryKey === 'deepflow.template.Input')?.id;
+            updateCurrentGraph((graph) => ({ ...graph, nodes: { ...graph.nodes, [id]: converted },
+                edges: graph.edges.some((edge) => edge.target === id && edge.targetHandle)
+                    ? graph.edges.map((edge) => edge.target === id && edge.targetHandle ? { ...edge, targetHandle: inputId } : edge) : graph.edges }));
+            return id;
+        },
+
+        cloneComponent: (id, name) => cloneComponentAtPath([...get().currentPath, id], name),
+        cloneCurrentComponent: (name) => cloneComponentAtPath(get().currentPath, name),
 
         addRepeatNode: (templateId, position, opts = {}) => {
             const node = createRepeatNode({ templateId, position, ...opts });

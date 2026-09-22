@@ -47,7 +47,10 @@ export function generateArchitectureModule(graph, { templates = {}, className = 
     const exprFor = (id) => (id ? aliasMap[id] || outputName(id) : 'x');
 
     for (const item of plan.items) {
-        if (item.kind === 'input') {
+        if (item.kind === 'constant') {
+            initLines.push(...item.initLines);
+            aliasMap[item.id] = `self.${item.field}`;
+        } else if (item.kind === 'input') {
             aliasMap[item.id] = item.name;
         } else if (item.kind === 'instantiate') {
             const out = outputName(item.id);
@@ -187,7 +190,8 @@ function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, dept
                 if (op === 'reverse') ctx.usesGRL = true;
                 const transform = (x) => op === 'reverse' ? `_grad_reverse(${x}, ${lambda})` : `${x}.detach()`;
                 const type = typeOf(ref);
-                ref = emit(wrapperId, [ref], ([x]) => Array.isArray(type) ? `tuple(${transform('part')} for part in ${x})` : transform(x), type);
+                const transformValue = (x, valueType) => Array.isArray(valueType) ? `(${valueType.map((part, index) => transformValue(`${x}[${index}]`, part)).join(', ')},)` : transform(x);
+                ref = emit(wrapperId, [ref], ([x]) => transformValue(x, type), type);
             }
             edgeRefs.set(edge, ref);
         }
@@ -207,6 +211,65 @@ function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, dept
                 items.push({ id, kind: 'passthrough', inputs: refs });
                 setType(id, typeOf(refs[0]));
                 outRef[nodeId] = id;
+                continue;
+            }
+            if (key === 'deepflow.op.Parameter' || key === 'deepflow.op.Arange') {
+                const field = ctx.nextField(node.label || entry.name);
+                const value = `self.${field}`;
+                const initLines = [];
+                if (key === 'deepflow.op.Arange') {
+                    initLines.push(`self.register_buffer(${toPyLiteral(field)}, torch.arange(${parameters.start ?? 0}, ${parameters.end ?? 8}, ${parameters.step ?? 1}, dtype=torch.float32))`);
+                } else {
+                    const shape = `(${parameters.shape.join(', ')}${parameters.shape.length === 1 ? ',' : ''})`;
+                    const enabled = parameters.enabled !== false;
+                    const initializer = enabled ? parameters.init ?? 'normal' : parameters.disabled_init ?? 'zeros';
+                    if (enabled) initLines.push(`${value} = nn.Parameter(torch.empty(${shape}), requires_grad=${toPyLiteral(parameters.requires_grad ?? true)})`);
+                    else initLines.push(`self.register_buffer(${toPyLiteral(field)}, torch.empty(${shape}))`);
+                    if (initializer === 'normal') initLines.push(`nn.init.normal_(${value}, mean=0.0, std=${parameters.scale ?? 1})`);
+                    else if (initializer === 'uniform') initLines.push(`nn.init.uniform_(${value}, a=-${parameters.scale ?? 1}, b=${parameters.scale ?? 1})`);
+                    else if (initializer === 'kaiming_uniform') initLines.push(`nn.init.kaiming_uniform_(${value}, a=5 ** 0.5)`);
+                    else initLines.push(`nn.init.${initializer}_(${value})`);
+                    if (parameters.padding_idx !== null && parameters.padding_idx !== undefined) initLines.push(`with torch.no_grad():\n    ${value}[${parameters.padding_idx}].zero_()`);
+                }
+                items.push({ id, kind: 'constant', field, initLines });
+                outRef[nodeId] = id;
+                continue;
+            }
+            if (key === 'deepflow.op.PositionIndices') {
+                outRef[nodeId] = emit(id, inputRefs, ([x]) => `torch.arange(${x}.size(1), device=${x}.device, dtype=torch.long).unsqueeze(0).expand(${x}.size(0), -1)`);
+                continue;
+            }
+            if (key === 'deepflow.op.Gather') {
+                outRef[nodeId] = emit(id, inputRefs, ([indices, weight]) => `F.embedding(${indices}, ${weight}, padding_idx=${toPyLiteral(parameters.padding_idx)})`);
+                continue;
+            }
+            if (key === 'deepflow.op.Subtract') {
+                outRef[nodeId] = emit(id, inputRefs, ([a, b]) => `torch.sub(${a}, ${b})`);
+                continue;
+            }
+            if (key === 'deepflow.op.Mean') {
+                const dims = parameters.dim ?? [-1];
+                const tuple = `(${dims.join(', ')},)`;
+                outRef[nodeId] = emit(id, inputRefs, ([x]) => `torch.mean(${x}, dim=${tuple}, keepdim=${toPyLiteral(parameters.keepdim ?? true)})`);
+                continue;
+            }
+            if (key === 'deepflow.op.AddScalar' || key === 'deepflow.op.Pow') {
+                const isPower = key === 'deepflow.op.Pow';
+                const scalar = parameters[isPower ? 'exponent' : 'value'] ?? (isPower ? 2 : 0);
+                outRef[nodeId] = emit(id, inputRefs, ([x]) => `torch.${isPower ? 'pow' : 'add'}(${x}, ${toPyLiteral(scalar)})`);
+                continue;
+            }
+            if (['deepflow.op.Rsqrt', 'deepflow.op.Exp', 'deepflow.op.Sin', 'deepflow.op.Cos'].includes(key)) {
+                outRef[nodeId] = emit(id, inputRefs, ([x]) => `torch.${key.split('.').at(-1).toLowerCase()}(${x})`);
+                continue;
+            }
+            if (key === 'deepflow.op.Unsqueeze') {
+                outRef[nodeId] = emit(id, inputRefs, ([x]) => `torch.unsqueeze(${x}, dim=${parameters.dim ?? -1})`);
+                continue;
+            }
+            if (key === 'deepflow.op.Slice') {
+                const { dim = -1, start = 0, end = null, step = 1 } = parameters;
+                outRef[nodeId] = emit(id, inputRefs, ([x]) => `${x}[(slice(None),) * (${dim < 0 ? `${x}.dim() + ${dim}` : dim}) + (slice(${start}, ${toPyLiteral(end)}, ${step}),)]`);
                 continue;
             }
             if (key === 'deepflow.op.Split' || key === 'deepflow.op.Broadcast') {
