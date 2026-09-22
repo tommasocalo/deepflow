@@ -13,20 +13,32 @@ npm run dev
 
 ## Working in the editor
 
-- **Ribbon:** insert common layers, open **More** to search all blocks, or browse **Templates**. Group, Sequential, Parallel, Parameters, and Fit act on the active graph pane; the ribbon identifies that pane and level. Dragging a block into another pane targets that destination.
-- **Search:** press `/` or `Cmd/Ctrl+K`. Search by name, description or category; `layer norm` finds `LayerNorm`. Enter adds the first result and Arrow Down moves focus into the results. Escape closes the library.
+- **Ribbon:** **Components** contains editable standard components and other layer modules; **Operations** contains math, routing, sources, and outputs; **Templates** contains project definitions. Use **Components → Customize pinned components** for up to six shortcuts. Commands act on the active graph pane; dragging into another pane targets that destination.
+- **Search:** each insertion menu has search. Press `/` or `Cmd/Ctrl+K` to open Operations search. Enter adds the first result, Arrow Down moves into results, and Escape closes the menu.
 - **Nodes:** click a node to open its compact settings; dragging closes them. Port dimensions stay visible beside connections. Numeric fields accept literals and expressions such as `$width`.
-- **Templates:** select connected nodes and choose Group. Reuse the definition from Templates. Open a template using its button or a double-click; edit its exposed parameters from **Parameters → Edit**. Editing its definition affects every use of that template.
+- **Templates:** select connected nodes and choose Group. Reuse the definition from Templates. Open a template using its button or a double-click; edit its exposed parameters from **Component → Parameters**. Editing its definition affects every use of that template.
 - **Repeat:** choose Sequential or Parallel for selected blocks or a template instance. Set a count or expression such as `$H`, and bind parameters to formulas such as `64 * 2 ** i`. Open the shared body and use the level tabs to navigate.
 - **Canvas:** Shift/Command-click for multiple selection, drag the background to select, hold Space to pan, and use Delete/Backspace to remove selected nodes. Select a connection and drag an endpoint to reconnect or release it on empty canvas to detach it.
 - **Save/Load:** graphs persist in this browser. Save downloads the architecture, templates and training graph together as JSON. Load opens that workspace. These files use the V2 schema.
 - **Code:** inspect or download generated `model.py` and `train.py`.
 
+## Standard components and copies
+
+Insert Linear, Embedding, Attention, or Norm from Components, then **Edit definition** to inspect their ordinary operations: learned parameters, matrix products, table lookup, or normalization statistics. Open nested components to continue down to the math.
+
+**Edit definition** changes the shared template. **Make copy** creates a reusable independent definition for this instance, including nested definitions. When copying inside a component, its containing definitions are also copied so other root instances retain their original behavior. Parameters and connections are preserved; the copy appears in Templates.
+
+**Learned positions** generates position indices and looks them up in an Embedding component. New GPT-2 examples use this version, with the sum of token and position vectors kept explicit. **Sinusoidal positions** is a separate alternative built from position indices, frequency arithmetic, sine/cosine, stacking, and slicing; it has no learned table.
+
+Saved opaque layers stay unchanged until you choose **Open operations** in their inspector. Supported conversions preserve node identity, placement, bindings, and connections. These include Linear (with or without bias), ordinary Embedding (including padding rows), learned positions, causal self-attention, and LayerNorm over one final axis. Sparse/max-norm embeddings, multi-axis LayerNorm, and noncausal MultiheadAttention are not converted automatically or silently approximated.
+
+**Gradients** shows structural differentiability, not measured gradient values. It distinguishes trainable or frozen Parameters, stopped/reversed connections, and integer index paths with no derivative. Gather can train its table while its indices remain nondifferentiable; Parameter `requires_grad` controls whether a learned value is trainable.
+
 ## Editable multi-head attention
 
 Choose **Examples → Multi-head attention** to open its internal graph. **GPT-2 small** also uses this template inside its sequential Transformer blocks.
 
-- **Parameters → Edit** exposes `D = 768` (model width), `H = 12` (head count), `d_head = D / H`, and `dropout = 0.1`. Change `H` to another divisor of `D`; the splits, parallel head count, and derived head width update together.
+- **Component → Parameters** exposes `D = 768` (model width), `H = 12` (head count), `d_head = D / H`, and `dropout = 0.1`. Change `H` to another divisor of `D`; the splits, parallel head count, and derived head width update together.
 - In GPT-2, attention inherits `D` and `H` from the Transformer block's `d_model` and `n_heads` bindings. Change those bindings on the Transformer repeat to configure that instance; a bound value takes precedence over a template default.
 - Follow Q/K/V projections → Split → parallel attention heads → Concat → output projection. Open a head to edit Transpose, MatMul, Scale, Causal mask, Softmax, Dropout, and the final MatMul. These are ordinary editable nodes.
 - Named Q/K/V ports route each collection to its matching template input; MatMul uses ordered `a` and `b` ports. Wire to the intended port rather than relying on edge creation order.
@@ -46,10 +58,10 @@ npm run build
 
 The Node regression suites cover template/repeat navigation, deletion, shared validation caching, and real React interactions for numeric parameters, node expansion, library search, template insertion and keyboard access. The interaction tests use jsdom; they do not verify canvas layout, pointer dragging or visual appearance. Older Playwright scripts and historical screenshots remain in `scripts/` and `screenshots/`.
 
-Focused attention checks:
+Focused component and attention checks:
 
 ```sh
-node --test scripts/attention-model.test.mjs scripts/parallel-runtime.test.mjs scripts/nested-attention.test.mjs
+node --test scripts/components-model.test.mjs scripts/components-runtime.test.mjs scripts/attention-model.test.mjs scripts/parallel-runtime.test.mjs scripts/nested-attention.test.mjs
 ```
 
 If `python3` can import PyTorch, these also compare exported CPU outputs and gradients with independent references, including sequential Transformers containing parallel heads. Python-dependent tests skip automatically when PyTorch is unavailable.
