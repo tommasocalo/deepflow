@@ -1,3 +1,8 @@
+/** Include saved local variants too: they can be restored after switching back. */
+export function referencedTemplateIds(node) {
+    return [...new Set([node?.templateId, ...Object.values(node?.structureOverrides ?? {}).map((override) => override?.templateId)].filter(Boolean))];
+}
+
 /** Whether a template references the target directly or through nested instances. */
 export function containsTemplate(templateId, targetId, templates) {
     const pending = [templateId];
@@ -8,7 +13,7 @@ export function containsTemplate(templateId, targetId, templates) {
         if (visited.has(current)) continue;
         visited.add(current);
         for (const node of Object.values(templates[current]?.graph?.nodes ?? {})) {
-            if (node.templateId) pending.push(node.templateId);
+            pending.push(...referencedTemplateIds(node));
         }
     }
     return false;

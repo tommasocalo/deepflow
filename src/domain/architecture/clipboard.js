@@ -1,5 +1,5 @@
 import { newDomainId } from './factories.js';
-import { containsTemplate } from './templateReferences.js';
+import { containsTemplate, referencedTemplateIds } from './templateReferences.js';
 
 export const GRAPH_CLIPBOARD_MIME = 'application/x-deepflow-nodes+json';
 const FORMAT = 'deepflow-node-selection';
@@ -40,9 +40,10 @@ export function readGraphClipboard(text) {
 export function pasteGraphSelection(graph, selection, { templates = {}, templateId = null, offset = { x: 36, y: 36 } } = {}) {
     if (!isGraphClipboard(selection)) return { error: 'The clipboard does not contain graph nodes.' };
     for (const node of selection.nodes) {
-        if (!node.templateId) continue;
-        if (!templates[node.templateId]) return { error: 'The copied component definition is no longer in this project.' };
-        if (templateId && containsTemplate(node.templateId, templateId, templates)) return { error: 'A component cannot contain itself. Paste at another level.' };
+        for (const reference of referencedTemplateIds(node)) {
+            if (!templates[reference]) return { error: 'The copied component definition is no longer in this project.' };
+            if (templateId && containsTemplate(reference, templateId, templates)) return { error: 'A component cannot contain itself. Paste at another level.' };
+        }
     }
     const ids = new Map(selection.nodes.map((node) => [node.id, newDomainId()]));
     const nodes = { ...graph.nodes };

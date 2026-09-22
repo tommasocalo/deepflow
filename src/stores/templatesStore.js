@@ -62,7 +62,12 @@ export const useTemplatesStore = create(
                     cloned.name = sourceId === id && name?.trim() ? name.trim() : `${original.name} copy`;
                     cloned.sourceTemplateId = sourceId;
                     for (const node of Object.values(cloned.graph.nodes)) {
-                        if (['supernode', 'repeat'].includes(node.kind)) node.templateId = copy(node.templateId);
+                        if (['supernode', 'repeat'].includes(node.kind)) {
+                            node.templateId = copy(node.templateId);
+                            for (const override of Object.values(node.structureOverrides ?? {})) {
+                                if (override?.templateId) override.templateId = copy(override.templateId);
+                            }
+                        }
                     }
                     copies[nextId] = cloned;
                     return nextId;

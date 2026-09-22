@@ -4,6 +4,7 @@ import { getIncomingEdges, getTemplateInputIds, mapInputEdgesToPorts, orderOpera
 import { defaultParameterValues, getEntry } from './library/index.js';
 import { isShapeCollection } from './shapeCollections.js';
 import { validate } from '../validation/validator.js';
+import { effectiveTemplateId } from './architecture/instanceStructure.js';
 
 const tensor = (requires = 'unknown', dtype = 'float', dependencies = []) => ({ requires, dtype, dependencies: [...new Set(dependencies)] });
 const items = (value) => value?.items ? value.items.flatMap(items) : [value ?? tensor()];
@@ -35,29 +36,37 @@ export function analyzeGradientFlow(graph, { templates = {}, scope = {}, externa
             const template = templates[node.templateId];
             const count = node.kind === 'repeat' ? resolveRepeatCount(node.count, scope, incoming.map((edge) => shapeReport.shapes[edge.source])).count : 1;
             if (!template || !count || depth >= 8) { report.nodes[id] = tensor(); continue; }
-            const ports = getTemplateInputIds(template.graph);
-            const mapped = mapInputEdgesToPorts(incoming, ports);
-            const initial = Object.fromEntries(ports.map((port) => [port, valueFor(mapped[port])]));
-            const initialShapes = Object.fromEntries(ports.map((port) => [port, shapeReport.shapes[mapped[port]?.source] ?? null]));
             const children = [];
             const outputs = [];
             let carry;
             let carryShape;
-            let carryPorts = new Set();
-            const usedPorts = new Set();
+            const usedEdgeIds = new Set();
             for (let index = 0; index < count && budget.remaining > 0; index++) {
+                const instanceTemplate = templates[effectiveTemplateId(node, index)];
+                if (!instanceTemplate?.graph) {
+                    children.push(null);
+                    carry = tensor();
+                    carryShape = null;
+                    outputs.push(carry);
+                    continue;
+                }
+                const ports = getTemplateInputIds(instanceTemplate.graph);
+                const mapped = mapInputEdgesToPorts(incoming, ports);
+                const initial = Object.fromEntries(ports.map((port) => [port, valueFor(mapped[port])]));
+                const initialShapes = Object.fromEntries(ports.map((port) => [port, shapeReport.shapes[mapped[port]?.source] ?? null]));
                 const repeated = node.kind === 'repeat';
                 const childShapes = Object.fromEntries(ports.map((port) => [port, node.mode === 'parallel'
                     ? isShapeCollection(initialShapes[port]) ? initialShapes[port].items[index] ?? null : initialShapes[port]
                     : index === 0 ? initialShapes[port] : carryShape]));
-                const childScope = buildParameterScope(template.freeParameters, repeated ? node.bindings : node.parameterValues,
+                const childScope = buildParameterScope(instanceTemplate.freeParameters, repeated ? node.bindings : node.parameterValues,
                     repeated ? { ...scope, [node.iterationVariable || 'i']: index } : scope, repeated ? index : undefined, childShapes);
                 const external = Object.fromEntries(ports.map((port) => [port, node.mode === 'parallel'
                     ? initial[port]?.items?.[index] ?? initial[port] : index === 0 ? initial[port] : carry]));
-                const child = analyzeGradientFlow(template.graph, { templates, scope: childScope, externalInputs: external, externalShapes: childShapes, depth: depth + 1, budget });
+                const child = analyzeGradientFlow(instanceTemplate.graph, { templates, scope: childScope, externalInputs: external, externalShapes: childShapes, depth: depth + 1, budget });
                 children.push(child);
-                if (node.mode === 'parallel') for (const port of child.inputDependencies) usedPorts.add(port);
-                else carryPorts = index === 0 ? new Set(child.inputDependencies) : child.inputDependencies.length ? carryPorts : new Set();
+                if (node.mode === 'parallel' || index === 0) {
+                    for (const port of child.inputDependencies) if (mapped[port]) usedEdgeIds.add(mapped[port].id);
+                } else if (!child.inputDependencies.length) usedEdgeIds.clear();
                 // Dependency names are local to a template; map back through its boundary.
                 const dependencies = child.inputDependencies.flatMap((port) => items(external[port]).flatMap((v) => v.dependencies));
                 const remap = (value) => value?.items ? { items: value.items.map(remap) } : { ...value, dependencies };
@@ -66,7 +75,7 @@ export function analyzeGradientFlow(graph, { templates = {}, scope = {}, externa
                 outputs.push(carry);
             }
             report.children[id] = children;
-            used = incoming.filter((edge) => [...(node.mode === 'parallel' ? usedPorts : carryPorts)].some((port) => mapped[port]?.id === edge.id));
+            used = incoming.filter((edge) => usedEdgeIds.has(edge.id));
             output = node.mode === 'parallel' ? { items: outputs } : outputs.at(-1) ?? tensor();
         } else {
             const key = node.libraryKey;

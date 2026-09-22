@@ -4,8 +4,9 @@ import { useTemplatesStore } from '../stores/templatesStore.js';
 import { validate } from '../validation/index.js';
 import { createValidationCache } from '../validation/cache.js';
 import { buildParameterScope, resolveRepeatCount } from '../domain/expressions.js';
-import { getIncomingEdges, mapTemplateInputs } from '../domain/graphInputs.js';
+import { getIncomingEdges, getTemplateInputIds, mapTemplateInputs } from '../domain/graphInputs.js';
 import { isShapeCollection } from '../domain/shapeCollections.js';
+import { effectiveTemplateId } from '../domain/architecture/instanceStructure.js';
 
 const EMPTY_REPORT = Object.freeze({
     topo: [],
@@ -46,32 +47,41 @@ export function resolveLevelContext(rootGraph, currentPath, templates, inspected
     for (const nodeId of currentPath) {
         path.push(nodeId);
         const node = graph?.nodes?.[nodeId];
-        const tpl = node && (node.kind === 'supernode' || node.kind === 'repeat') ? templates[node.templateId] : null;
-        if (!node || !tpl?.graph) return root;
+        if (!node || !['supernode', 'repeat'].includes(node.kind) || !templates[node.templateId]?.graph) return root;
 
         const report = cachedValidate(graph, templates, scope, externalInputs);
-        const inputs = mapTemplateInputs(tpl.graph, getIncomingEdges(graph, nodeId), (edge) => report.shapes[edge.source] ?? null);
+        const incoming = getIncomingEdges(graph, nodeId);
         const isRepeat = node.kind === 'repeat';
         let nextScope;
-        let nextExternal = inputs;
+        let nextExternal;
+        let tpl;
         repeat = null;
         if (isRepeat) {
-            const { count } = resolveRepeatCount(node.count, scope, Object.values(inputs));
+            const { count } = resolveRepeatCount(node.count, scope, incoming.map((edge) => report.shapes[edge.source] ?? null));
             const index = Math.max(0, Math.min((count || 1) - 1, inspectedIterations[JSON.stringify(path)] ?? 0));
-            const iterationScope = (i, shapes) => buildParameterScope(tpl.freeParameters ?? [], node.bindings ?? {}, { ...scope, [node.iterationVariable || 'i']: i }, i, shapes);
-            if (node.mode === 'parallel') {
-                nextExternal = Object.fromEntries(Object.entries(inputs).map(([id, shape]) => [id, isShapeCollection(shape) ? shape.items[index] ?? null : shape]));
-            } else {
-                for (let i = 0; i < index; i++) {
-                    const previous = cachedValidate(tpl.graph, templates, iterationScope(i, nextExternal), nextExternal);
+            let carry = null;
+            // Previous sequential variants determine this occurrence's actual
+            // input. Parallel variants instead consume their selected slice.
+            for (let i = node.mode === 'parallel' ? index : 0; i <= index; i++) {
+                tpl = templates[effectiveTemplateId(node, i)];
+                if (!tpl?.graph) return root;
+                const inputs = mapTemplateInputs(tpl.graph, incoming, (edge) => report.shapes[edge.source] ?? null);
+                nextExternal = node.mode === 'parallel'
+                    ? Object.fromEntries(Object.entries(inputs).map(([id, shape]) => [id, isShapeCollection(shape) ? shape.items[i] ?? null : shape]))
+                    : i === 0 ? inputs : Object.fromEntries(getTemplateInputIds(tpl.graph).map((id) => [id, carry]));
+                nextScope = buildParameterScope(tpl.freeParameters ?? [], node.bindings ?? {}, { ...scope, [node.iterationVariable || 'i']: i }, i, nextExternal);
+                if (i < index) {
+                    const previous = cachedValidate(tpl.graph, templates, nextScope, nextExternal);
                     const output = Object.values(tpl.graph.nodes).filter((n) => n.libraryKey === 'deepflow.template.Output').at(-1);
-                    const carry = output ? previous.shapes[output.id] ?? null : null;
-                    nextExternal = Object.fromEntries(Object.keys(inputs).map((id) => [id, carry]));
+                    carry = output ? previous.shapes[output.id] ?? null : null;
                 }
             }
-            nextScope = iterationScope(index, nextExternal);
             repeat = { path: [...path], count: count || 0, index, label: node.label, mode: node.mode ?? 'sequential' };
         } else {
+            tpl = templates[effectiveTemplateId(node)];
+            if (!tpl?.graph) return root;
+            const inputs = mapTemplateInputs(tpl.graph, incoming, (edge) => report.shapes[edge.source] ?? null);
+            nextExternal = inputs;
             nextScope = buildParameterScope(tpl.freeParameters ?? [], node.parameterValues ?? {}, scope, undefined, inputs);
         }
         graph = tpl.graph;

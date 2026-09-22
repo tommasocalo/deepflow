@@ -4,6 +4,7 @@ import { inferShape } from './shapes.js';
 import { buildParameterScope, resolveLayerParameters, resolveRepeatCount } from '../domain/expressions.js';
 import { getIncomingEdges, getTemplateInputIds, getOperationInputIds, mapTemplateInputs, orderOperationEdges, validateInputPorts } from '../domain/graphInputs.js';
 import { isShapeCollection, shapeCollection } from '../domain/shapeCollections.js';
+import { effectiveTemplateId } from '../domain/architecture/instanceStructure.js';
 
 const TEMPLATE_INPUT = 'deepflow.template.Input';
 const TEMPLATE_OUTPUT = 'deepflow.template.Output';
@@ -108,18 +109,26 @@ export function validate(graph, opts = {}) {
             shapes[id] = null;
             continue;
         }
-        const inputIds = getTemplateInputIds(template.graph);
-        for (const issue of validateInputPorts(edges, inputIds)) push(errors, id, issue);
-        const outputIds = Object.values(template.graph.nodes).filter((n) => n.libraryKey === TEMPLATE_OUTPUT).map((n) => n.id);
-        const initialInputs = mapTemplateInputs(template.graph, edges, (edge) => shapes[edge.source] ?? null);
-        const connectedPorts = mapTemplateInputs(template.graph, edges, () => true);
-        if (edges.length && Object.values(connectedPorts).some((connected) => !connected)) {
-            push(errors, id, 'Connect every template input port');
-        }
         let carry = inputShapes[0] ?? null;
         const outputs = [];
         const childErrors = [];
         for (let index = 0; index < count && budget.remaining >= 0; index++) {
+            const instanceTemplateId = effectiveTemplateId(node, index);
+            const instanceTemplate = templates[instanceTemplateId];
+            if (!instanceTemplate?.graph) {
+                childErrors.push(`Instance ${index + 1} template is missing`);
+                carry = null;
+                outputs.push(null);
+                continue;
+            }
+            const inputIds = getTemplateInputIds(instanceTemplate.graph);
+            const outputIds = Object.values(instanceTemplate.graph.nodes).filter((n) => n.libraryKey === TEMPLATE_OUTPUT).map((n) => n.id);
+            const initialInputs = mapTemplateInputs(instanceTemplate.graph, edges, (edge) => shapes[edge.source] ?? null);
+            if (parallel || index === 0) {
+                for (const issue of validateInputPorts(edges, inputIds)) childErrors.push(issue);
+                const connectedPorts = mapTemplateInputs(instanceTemplate.graph, edges, () => true);
+                if (edges.length && Object.values(connectedPorts).some((connected) => !connected)) childErrors.push('Connect every template input port');
+            }
             let childInputs;
             if (parallel) {
                 childInputs = Object.fromEntries(Object.entries(initialInputs).map(([port, shape]) => [port, isShapeCollection(shape) ? shape.items[index] ?? null : shape]));
@@ -129,11 +138,11 @@ export function validate(graph, opts = {}) {
                 childInputs = Object.fromEntries(inputIds.map((port) => [port, carry]));
             }
             const iterationScope = isRepeat ? { ...scope, [node.iterationVariable || 'i']: index } : scope;
-            const subScope = buildParameterScope(template.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined, childInputs);
-            for (const parameter of template.freeParameters ?? []) {
+            const subScope = buildParameterScope(instanceTemplate.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined, childInputs);
+            for (const parameter of instanceTemplate.freeParameters ?? []) {
                 const value = subScope[parameter.name];
                 if (parameter.derived && value === null) {
-                    const input = template.graph.nodes[parameter.derived.inputId];
+                    const input = instanceTemplate.graph.nodes[parameter.derived.inputId];
                     childErrors.push(`${parameter.name} cannot be inferred from ${input?.label ?? parameter.derived.inputId}: connect an input with a known dimension`);
                     continue;
                 }
@@ -146,7 +155,7 @@ export function validate(graph, opts = {}) {
                     childErrors.push(`${parameter.name} must resolve to a finite number`);
                 }
             }
-            const child = validate(template.graph, { templates, scope: subScope, externalInputs: childInputs, depth: depth + 1, budget });
+            const child = validate(instanceTemplate.graph, { templates, scope: subScope, externalInputs: childInputs, depth: depth + 1, budget });
             carry = outputIds.reduce((output, port) => child.shapes[port] ?? output, null);
             outputs.push(carry);
             childErrors.push(...child.globalErrors, ...Object.values(child.errors).flat());

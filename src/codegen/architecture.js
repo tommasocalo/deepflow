@@ -4,6 +4,7 @@ import { getIncomingEdges, mapTemplateInputs, orderOperationEdges } from '../dom
 import { validate } from '../validation/validator.js';
 import { getEntry } from '../domain/library/index.js';
 import { isShapeCollection } from '../domain/shapeCollections.js';
+import { effectiveTemplateId } from '../domain/architecture/instanceStructure.js';
 import { indent, kwArgs, toPyIdent, toPyLiteral } from './python.js';
 
 /**
@@ -338,18 +339,21 @@ function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, exte
             if (!template) throw new Error(`Missing template: ${node.templateId}`);
             const isRepeat = node.kind === 'repeat';
             const parallel = isRepeat && node.mode === 'parallel';
-            const initialShapes = mapTemplateInputs(template.graph, edges, (edge) => shapeReport.shapes[edge.source] ?? null);
-            const { count, error } = isRepeat ? resolveRepeatCount(node.count, scope, Object.values(initialShapes)) : { count: 1 };
+            const { count, error } = isRepeat ? resolveRepeatCount(node.count, scope, edges.map((edge) => shapeReport.shapes[edge.source] ?? null)) : { count: 1 };
             if (error) throw new Error(error);
-            const initialInputs = mapTemplateInputs(template.graph, edges, (edge) => edgeRefs.get(edge));
             let carry = inputRefs[0] ?? null;
-            let carryShape = initialShapes[Object.keys(initialShapes)[0]] ?? null;
+            let carryShape = shapeReport.shapes[edges[0]?.source] ?? null;
             const outputs = [];
             for (let index = 0; index < count; index++) {
+                const instanceTemplateId = effectiveTemplateId(node, index);
+                const instanceTemplate = ctx.templates[instanceTemplateId];
+                if (!instanceTemplate) throw new Error(`Missing instance template: ${instanceTemplateId}`);
+                const initialShapes = mapTemplateInputs(instanceTemplate.graph, edges, (edge) => shapeReport.shapes[edge.source] ?? null);
+                const initialInputs = mapTemplateInputs(instanceTemplate.graph, edges, (edge) => edgeRefs.get(edge));
                 const iterationScope = isRepeat ? { ...scope, [node.iterationVariable || 'i']: index } : scope;
                 const childShapes = Object.fromEntries(Object.entries(initialShapes).map(([port, shape]) => [port,
                     parallel ? isShapeCollection(shape) ? shape.items[index] ?? null : shape : isRepeat && index > 0 ? carryShape : shape]));
-                const subScope = buildParameterScope(template.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined, childShapes);
+                const subScope = buildParameterScope(instanceTemplate.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined, childShapes);
                 const subInputs = {};
                 for (const [port, ref] of Object.entries(initialInputs)) {
                     const type = typeOf(ref);
@@ -360,7 +364,7 @@ function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, exte
                         subInputs[port] = !parallel && isRepeat && index > 0 ? carry : ref;
                     }
                 }
-                const subPlan = expandGraph(template.graph, subScope, ctx, {
+                const subPlan = expandGraph(instanceTemplate.graph, subScope, ctx, {
                     prefix: `${id}_${index}__`, externalInputs: subInputs, externalShapes: childShapes, depth: depth + 1,
                 });
                 items.push(...subPlan.items);
