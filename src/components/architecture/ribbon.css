@@ -17,6 +17,9 @@
 .df-ribbon-command-list { display: flex; flex-direction: column; justify-content: center; width: 110px; gap: 1px; }
 .df-ribbon-command-list button { display: flex; align-items: center; gap: 5px; height: 17px; padding: 0 4px; border: 1px solid transparent; border-radius: 2px; font-size: 10px; font-weight: 600; text-align: left; }
 .df-ribbon-command-list button:hover:not(:disabled), .df-ribbon-command-list button[aria-expanded="true"] { background: #f4f4ef; border-color: #d4d4ce; }
+.df-ribbon-component .df-ribbon-command-list { gap: 3px; }
+.df-ribbon-component .df-ribbon-command-list button, .df-ribbon-history .df-ribbon-command-list button { height: 22px; }
+.df-ribbon-history .df-ribbon-command-list { width: 59px; gap: 3px; }
 .df-ribbon-view-options { display: flex; flex-direction: column; justify-content: center; gap: 3px; margin-left: 3px; }
 .df-ribbon-view-options button { display: flex; align-items: center; gap: 5px; height: 22px; padding: 2px 5px; border: 1px solid transparent; border-radius: 2px; font-size: 10px; font-weight: 600; }
 .df-ribbon-view-options button:hover { border-color: #d4d4ce; background: #f4f4ef; }
@@ -82,7 +85,7 @@
     .df-ribbon-pane-cue { position: absolute; right: 8px; bottom: 4px; font-size: 8px; }
 }
 @media (max-width: 930px) {
-    .df-ribbon-family:nth-child(n+4) { display: none; }
+    .df-ribbon-family:nth-child(n+2) { display: none; }
     .df-ribbon-pane-cue { display: none; }
 }
 @media (max-width: 760px) {

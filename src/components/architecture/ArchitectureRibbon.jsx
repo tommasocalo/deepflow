@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Pencil, Ruler, Variable, X } from 'lucide-react';
+import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Pencil, Redo2, Ruler, Undo2, Variable, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { resolveComponentContext } from '../../domain/componentContext.js';
 import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
 import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
-import { recordArchitectureEdit } from '../../stores/architectureHistory.js';
+import { recordArchitectureEdit, useArchitectureHistory } from '../../stores/architectureHistory.js';
 import { useOpenToSide } from './OpenToSideContext.jsx';
 import { DEFAULT_PINS, PINNABLE_ENTRIES, setInsertionDragData } from './ribbonEntries.js';
 import BlockPalette from './BlockPalette.jsx';
@@ -44,6 +44,12 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const selectedNodeIds = useArchitectureStore((s) => s.selectedNodeIds);
     const showGradientFlow = useArchitectureStore((s) => s.showGradientFlow);
     const showDimensions = useArchitectureStore((s) => s.showDimensions) !== false;
+    const canUndo = useArchitectureHistory((s) => s.canUndo);
+    const canRedo = useArchitectureHistory((s) => s.canRedo);
+    const undoLabel = useArchitectureHistory((s) => s.undoLabel);
+    const redoLabel = useArchitectureHistory((s) => s.redoLabel);
+    const undo = useArchitectureHistory((s) => s.undo);
+    const redo = useArchitectureHistory((s) => s.redo);
     const templates = useTemplatesStore((s) => s.templates);
     const validation = useValidation();
     const validationContext = useValidationContext();
@@ -166,11 +172,6 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
         closePopup();
         if (selectedComponent) architectureStore.getState().enterSupernode(selectedComponent.id);
     }
-    function makeCopy() {
-        const state = architectureStore.getState();
-        const id = selectedComponent ? state.cloneComponent(selectedComponent.id) : state.cloneCurrentComponent();
-        if (id) { closePopup(); setNotice('Independent definition created'); }
-    }
     const targetLabel = split ? `${paneId === 'side' ? 'Right' : 'Left'} pane` : 'Current graph';
     const menu = ['operations', 'components', 'templates'].includes(popup);
     const popoverStyle = { left: popupLeft, width: MENU_WIDTHS[popup] };
@@ -199,7 +200,6 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             <RibbonGroup label="Component" className="df-ribbon-component">
                 <div className="df-ribbon-command-list">
                     <button type="button" disabled={!selectedComponent || !template} onClick={editDefinition} title={selectedComponent ? `Open ${template?.name} for editing` : 'Select a component to open its definition'}><Pencil size={12} />Edit definition</button>
-                    <button type="button" disabled={!template} onClick={makeCopy} title="Give this instance its own independent definition"><Copy size={12} />Make copy</button>
                     <button type="button" disabled={!template} aria-label="Edit template parameters" aria-expanded={popup === 'parameters'} onClick={(event) => togglePopup('parameters', event)} title={template ? `Edit shared parameters of ${template.name}` : 'Open or select a component'}><Variable size={12} />Parameters<ChevronDown size={9} /></button>
                 </div>
             </RibbonGroup>
@@ -209,6 +209,12 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 <div className="df-ribbon-view-options">
                     <button type="button" aria-label="Show dimensions" aria-pressed={showDimensions} onClick={() => architectureStore.getState().setShowDimensions(!showDimensions)} title="Show tensor dimensions at input and output ports"><Ruler size={14} />Dimensions</button>
                     <button type="button" aria-label="Show gradient flow" aria-pressed={!!showGradientFlow} onClick={() => architectureStore.getState().setShowGradientFlow(!showGradientFlow)} title="Show differentiable paths and stopped gradients"><GitBranch size={14} />Gradients</button>
+                </div>
+            </RibbonGroup>
+            <RibbonGroup label="History" className="df-ribbon-history">
+                <div className="df-ribbon-command-list">
+                    <button type="button" aria-label="Undo" aria-keyshortcuts="Meta+z Control+z" disabled={!canUndo} onClick={undo} title={canUndo ? `Undo ${undoLabel} (⌘Z / Ctrl+Z)` : 'Undo (⌘Z / Ctrl+Z)'}><Undo2 size={14} />Undo</button>
+                    <button type="button" aria-label="Redo" aria-keyshortcuts="Meta+Shift+z Control+Shift+z Control+y" disabled={!canRedo} onClick={redo} title={canRedo ? `Redo ${redoLabel} (⌘⇧Z / Ctrl+Shift+Z)` : 'Redo (⌘⇧Z / Ctrl+Shift+Z)'}><Redo2 size={14} />Redo</button>
                 </div>
             </RibbonGroup>
             {split && <span className="df-ribbon-pane-cue" aria-live="polite"><ArrowUpRight size={11} />{targetLabel}</span>}

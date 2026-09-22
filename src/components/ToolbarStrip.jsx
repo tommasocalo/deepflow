@@ -1,5 +1,5 @@
 import React from 'react';
-import { Code2, FolderOpen, Redo2, RotateCcw, Save, Undo2 } from 'lucide-react';
+import { Code2, FolderOpen, RotateCcw, Save } from 'lucide-react';
 import { useArchitectureStore } from '../stores/architectureStore.js';
 import { useArchitectureHistory } from '../stores/architectureHistory.js';
 import { useTemplatesStore } from '../stores/templatesStore.js';
@@ -27,12 +27,6 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
     const trainingGraph = useTrainingStore((s) => s.graph);
     const trainingReset = useTrainingStore((s) => s.resetGraph);
     const templates = useTemplatesStore((s) => s.templates);
-    const canUndo = useArchitectureHistory((s) => s.canUndo);
-    const canRedo = useArchitectureHistory((s) => s.canRedo);
-    const undoLabel = useArchitectureHistory((s) => s.undoLabel);
-    const redoLabel = useArchitectureHistory((s) => s.redoLabel);
-    const undo = useArchitectureHistory((s) => s.undo);
-    const redo = useArchitectureHistory((s) => s.redo);
 
     const handleSave = () => {
         const payload = { version: 'deepflow-v2', architecture: archGraph, templates, training: trainingGraph };
@@ -82,10 +76,6 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
             </div>
 
             <div className="df-toolbar-actions">
-                {activeTab === 'architecture' && <div className="df-action-group" role="group" aria-label="Architecture history">
-                    <ActionSegment icon={Undo2} label="Undo" onClick={undo} disabled={!canUndo} title={canUndo ? `Undo ${undoLabel} (⌘Z / Ctrl+Z)` : 'Undo (⌘Z / Ctrl+Z)'} />
-                    <ActionSegment icon={Redo2} label="Redo" onClick={redo} disabled={!canRedo} title={canRedo ? `Redo ${redoLabel} (⌘⇧Z / Ctrl+Shift+Z)` : 'Redo (⌘⇧Z / Ctrl+Shift+Z)'} />
-                </div>}
                 <div className="df-action-group" role="group" aria-label="Project actions">
                     <ActionSegment icon={Code2}      label="Code"  onClick={onShowCode}  title="Generated PyTorch source" />
                     <ActionSegment icon={Save}       label="Save"  onClick={handleSave}  title="Download graph as JSON" />

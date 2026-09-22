@@ -108,10 +108,8 @@ try {
     await params.getByRole('button', { name: 'Add parameter', exact: true }).click();
     await params.getByRole('textbox', { name: 'width default value', exact: true }).fill('32');
     await params.getByRole('button', { name: 'Close template parameters', exact: true }).click();
-    const original = await selected();
-    await ribbon.getByRole('button', { name: 'Make copy', exact: true }).click();
+    assert.equal(await ribbon.getByRole('button', { name: 'Make copy', exact: true }).count(), 0);
     const component = await selected();
-    assert.notEqual(component.templateId, original.templateId);
     await ribbon.getByRole('button', { name: 'Edit definition', exact: true }).click();
     assert.deepEqual(await page.evaluate(() => window.__deepflow.architectureStore.getState().currentPath), [component.id]);
     const activeTab = main.getByRole('tab', { selected: true });
@@ -166,7 +164,7 @@ try {
     await page.setViewportSize({ width: 1024, height: 900 });
     assert.equal(await ribbon.evaluate((element) => element.scrollWidth <= element.clientWidth), true, 'Six pinned entries fit at laptop width');
     assert.deepEqual(errors, []);
-    console.log(`Ribbon checks passed: flat tabs, anchored distinct menus, editable components, clone/edit, bounded persistent pins, repeat modes, parameters, pane-aware insert/gradient/fit, cross-pane drag, and keyboard search. Screenshots: ${directory}`);
+    console.log(`Ribbon checks passed: flat tabs, anchored distinct menus, editable components, bounded persistent pins, repeat modes, parameters, pane-aware insert/gradient/fit, cross-pane drag, and keyboard search. Screenshots: ${directory}`);
 } finally {
     await browser.close();
 }
