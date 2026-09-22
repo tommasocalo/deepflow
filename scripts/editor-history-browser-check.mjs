@@ -45,23 +45,46 @@ try {
     // Reproduce the accidental Sequential/Parallel edit that motivated Undo.
     const transformer = await nodeByLabel('Transformer blocks');
     await main.locator(`.react-flow__node[data-id="${transformer.id}"] .df-repeat-face`).click();
-    const repeatMode = page.getByRole('combobox', { name: 'Repeat mode', exact: true });
-    assert.equal(await repeatMode.inputValue(), 'sequential');
-    await repeatMode.selectOption('parallel');
-    await repeatMode.focus();
+    const sequential = ribbon.getByRole('button', { name: 'Repeat selection sequentially', exact: true });
+    const parallel = ribbon.getByRole('button', { name: 'Repeat selection in parallel', exact: true });
+    assert.equal(await page.getByRole('combobox', { name: 'Repeat mode', exact: true }).count(), 0);
+    assert.equal(await sequential.getAttribute('aria-pressed'), 'true');
+    await parallel.click();
+    await parallel.focus();
     assert.equal((await nodeByLabel('Transformer blocks')).mode, 'parallel');
     assert.equal((await history()).undoCount, 1);
     await page.keyboard.press('Control+z');
-    assert.equal((await nodeByLabel('Transformer blocks')).mode, 'sequential', 'Ctrl+Z works while the changed select retains focus');
-    assert.equal(await repeatMode.inputValue(), 'sequential');
+    assert.equal((await nodeByLabel('Transformer blocks')).mode, 'sequential', 'Ctrl+Z works while the ribbon mode button retains focus');
+    assert.equal(await sequential.getAttribute('aria-pressed'), 'true');
+    assert.equal(await parallel.getAttribute('aria-pressed'), 'false');
     await page.keyboard.press('Meta+Shift+z');
     assert.equal((await nodeByLabel('Transformer blocks')).mode, 'parallel', 'Mac redo shortcut restores the repeat mode');
     await undo.click();
-    assert.equal(await repeatMode.inputValue(), 'sequential');
+    assert.equal(await sequential.getAttribute('aria-pressed'), 'true');
     await redo.click();
-    assert.equal(await repeatMode.inputValue(), 'parallel');
+    assert.equal(await parallel.getAttribute('aria-pressed'), 'true');
     await page.keyboard.press('Control+z');
-    assert.equal(await repeatMode.inputValue(), 'sequential');
+    assert.equal(await sequential.getAttribute('aria-pressed'), 'true');
+    const beforeSingle = await document();
+    await sequential.click();
+    assert.equal((await nodeByLabel('Transformer blocks')).kind, 'supernode');
+    assert.equal(await sequential.getAttribute('aria-pressed'), 'false');
+    assert.equal(await parallel.getAttribute('aria-pressed'), 'false');
+    assert.equal(await page.getByRole('textbox', { name: 'count', exact: true }).count(), 0, 'A single component hides repeat-only settings');
+    const singleTransformer = await nodeByLabel('Transformer blocks');
+    for (const key of ['id', 'templateId', 'label', 'position']) assert.deepEqual(singleTransformer[key], transformer[key]);
+    assert.deepEqual(singleTransformer.parameterValues, transformer.bindings, 'Switching to Single preserves template bindings');
+    assert.deepEqual((await graph()).edges, beforeSingle.graph.edges, 'Switching to Single preserves all cables');
+    await settle();
+    await page.screenshot({ path: `${directory}/01b-single-component.png` });
+    await undo.click();
+    assert.deepEqual(await document(), beforeSingle, 'Undo restores the complete repeat after toggling it off');
+    await redo.click();
+    assert.equal((await nodeByLabel('Transformer blocks')).kind, 'supernode');
+    await undo.click();
+    assert.deepEqual(await document(), beforeSingle);
+    const dismissMessage = ribbon.getByRole('button', { name: 'Dismiss message', exact: true });
+    if (await dismissMessage.count()) await dismissMessage.click();
     await page.screenshot({ path: `${directory}/01-repeat-restored.png` });
 
     // Ribbon dialogs stop bubbling keys; focused selects must still reach
@@ -189,7 +212,7 @@ try {
     await settle();
     await page.screenshot({ path: `${directory}/02-pane-dimensions-gradients.png` });
     assert.deepEqual(errors, []);
-    console.log('Editor controls passed: fresh-session history, focused inspector/ribbon select Ctrl/Cmd undo and redo, native text Undo, toolbar actions, nested operation variants, single-step dragging, shared-template parameter restoration across panes, and independent dimensions/gradients without graph or history changes.');
+    console.log('Editor controls passed: fresh-session history, ribbon structure toggles and focused inspector/ribbon select Ctrl/Cmd undo and redo, native text Undo, toolbar actions, nested operation variants, single-step dragging, shared-template parameter restoration across panes, and independent dimensions/gradients without graph or history changes.');
 } finally {
     await browser.close();
 }

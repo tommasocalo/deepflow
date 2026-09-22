@@ -3,6 +3,7 @@ import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBra
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
+import { recordArchitectureEdit } from '../../stores/architectureHistory.js';
 import { useOpenToSide } from './OpenToSideContext.jsx';
 import { DEFAULT_PINS, PINNABLE_ENTRIES, setInsertionDragData } from './ribbonEntries.js';
 import BlockPalette from './BlockPalette.jsx';
@@ -128,15 +129,26 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     }
     function repeatSelection(mode) {
         setError('');
-        const id = selectedComponent?.id ?? groupNodes(selection.length === 1 ? selection[0].label : 'Component');
+        const disableRepeat = selectedRepeatMode === mode;
+        const label = disableRepeat ? 'Use single instance' : `Repeat ${mode === 'parallel' ? 'in parallel' : 'sequentially'}`;
+        const id = recordArchitectureEdit(label, () => {
+            const id = selectedComponent?.id ?? groupNodes(selection.length === 1 ? selection[0].label : 'Component');
+            if (!id) return null;
+            const state = architectureStore.getState();
+            if (disableRepeat) {
+                const issue = state.getSingleConversionIssue(id);
+                if (issue) { setError(issue); return null; }
+                if (!state.convertRepeatToInstance(id)) return null;
+            }
+            else if (selectedComponent?.kind === 'repeat') state.patchRepeatNode(id, { mode });
+            else if (!state.convertInstanceToRepeat(id, undefined, mode)) return null;
+            state.selectOnly(id);
+            state.setExpanded(id);
+            return id;
+        });
         if (!id) return;
-        const state = architectureStore.getState();
-        if (selectedComponent?.kind === 'repeat') state.patchRepeatNode(id, { mode });
-        else state.convertInstanceToRepeat(id, 2, mode);
-        state.selectOnly(id);
-        state.setExpanded(id);
         closePopup();
-        setNotice(`${mode === 'parallel' ? 'Parallel' : 'Sequential'} repeat selected`);
+        setNotice(disableRepeat ? 'Single instance' : `${mode === 'parallel' ? 'Parallel' : 'Sequential'} repeat selected`);
     }
     function editDefinition() {
         closePopup();
@@ -169,8 +181,8 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             </RibbonGroup>
             <RibbonGroup label="Structure">
                 <RibbonButton icon={Group} disabled={!selection.length} aria-label="Group selection into component" aria-expanded={popup === 'group'} onClick={(event) => { setGroupName('Component'); togglePopup('group', event); }} title={selection.length ? 'Group selected blocks into a reusable component' : 'Select blocks to create a component'}>Group</RibbonButton>
-                <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection sequentially" aria-pressed={selectedRepeatMode === 'sequential'} onClick={() => repeatSelection('sequential')} title="Repeat in sequence; each output feeds the next"><RepeatIcon /><span>Sequential</span></button>
-                <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection in parallel" aria-pressed={selectedRepeatMode === 'parallel'} onClick={() => repeatSelection('parallel')} title="Repeat in parallel; each receives the same input"><RepeatIcon parallel /><span>Parallel</span></button>
+                <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection sequentially" aria-pressed={selectedRepeatMode === 'sequential'} onClick={() => repeatSelection('sequential')} title={selectedRepeatMode === 'sequential' ? 'Return to a single instance' : 'Repeat in sequence; each output feeds the next'}><RepeatIcon /><span>Sequential</span></button>
+                <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection in parallel" aria-pressed={selectedRepeatMode === 'parallel'} onClick={() => repeatSelection('parallel')} title={selectedRepeatMode === 'parallel' ? 'Return to a single instance' : 'Repeat in parallel; combine outputs with Concat, Add or Stack'}><RepeatIcon parallel /><span>Parallel</span></button>
             </RibbonGroup>
             <RibbonGroup label="Component" className="df-ribbon-component">
                 <div className="df-ribbon-command-list">

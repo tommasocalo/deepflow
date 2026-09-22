@@ -338,8 +338,8 @@ test('repeat inspection numbers instances from one while retaining zero-based fo
     const template = createTemplate({ id: 'body', name: 'Shared body', graph: emptyGraph() });
     const repeat = createRepeatNode({ id: 'heads', templateId: template.id, label: 'Attention heads', mode: 'parallel', count: 3, position: { x: 0, y: 0 } });
     useTemplatesStore.setState({ templates: { body: template } });
-    useArchitectureStore.setState({ graph: { nodes: { heads: repeat }, edges: [] }, expandedNodeId: 'heads', inspectedIterations: {} });
-    await render(h(GraphHarness));
+    useArchitectureStore.setState({ graph: { nodes: { heads: repeat }, edges: [] }, selectedNodeIds: ['heads'], expandedNodeId: 'heads', inspectedIterations: {} });
+    await render(h('div', null, h(ArchitectureRibbon, { paneId: 'main', onInsert() {}, onFitView() {} }), h(GraphHarness)));
     const labels = [...container.querySelectorAll('.df-parallel-instance b')].map((element) => element.textContent);
     assert.deepEqual(labels, ['1', '2', '3']);
     const inspector = container.querySelector('.df-inspector');
@@ -347,9 +347,11 @@ test('repeat inspection numbers instances from one while retaining zero-based fo
     assert.ok(byAria('iterationVariable').closest('details'));
     assert.equal(byAria('iterationVariable').closest('details').open, false);
     assert.doesNotMatch(inspector.textContent, /Open template|Index name/);
-    await selectValue(byAria('Repeat mode'), 'sequential');
+    assert.equal(byAria('Repeat mode'), null, 'Structure controls live in the ribbon');
+    assert.equal([...inspector.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Single'), undefined);
+    await click(byAria('Repeat selection sequentially'));
     assert.equal(byAria('count').closest('.df-param-row').querySelector('label').textContent, 'Steps');
-    await selectValue(byAria('Repeat mode'), 'parallel');
+    await click(byAria('Repeat selection in parallel'));
     await click(byAria('Open Attention heads instance 2'));
     assert.equal(useArchitectureStore.getState().inspectedIterations['["heads"]'], 1);
     await render(h(RepeatIterationBar));
@@ -366,6 +368,62 @@ test('repeat inspection numbers instances from one while retaining zero-based fo
     await setText(number, '1');
     assert.equal(useArchitectureStore.getState().inspectedIterations['["heads"]'], 0);
     assert.equal(byAria('Previous instance').disabled, true);
+});
+
+test('structure toggles return to a single component without replacing its bindings or cables', async () => {
+    const template = createTemplate({ id: 'body', name: 'Shared projection', graph: emptyGraph(), freeParameters: [{ name: 'width', type: 'int', default: 8 }] });
+    const instance = createSuperNodeInstance({ id: 'projection', templateId: template.id, label: 'Custom projection', position: { x: 80, y: 160 }, parameterValues: { width: 16 } });
+    const input = createLayerNode({ id: 'input', libraryKey: 'deepflow.io.Input', entry: getEntry('deepflow.io.Input'), position: { x: 80, y: 0 }, parameters: { shape: '(16,)' } });
+    const output = createLayerNode({ id: 'output', libraryKey: 'deepflow.io.Output', entry: getEntry('deepflow.io.Output'), position: { x: 80, y: 320 } });
+    const edges = [
+        createEdge({ id: 'incoming', source: input.id, sourceHandle: 'features', target: instance.id, targetHandle: 'body-input', gradientOp: 'stop' }),
+        createEdge({ id: 'outgoing', source: instance.id, sourceHandle: 'body-output', target: output.id }),
+    ];
+    useTemplatesStore.setState({ templates: { body: template } });
+    useArchitectureStore.setState({ graph: { nodes: { input, projection: instance, output }, edges }, selectedNodeIds: [instance.id], expandedNodeId: instance.id });
+    await render(h('div', null, h(ArchitectureRibbon, { paneId: 'main', onInsert() {}, onFitView() {} }), h(GraphHarness)));
+    const sequential = byAria('Repeat selection sequentially');
+    const parallel = byAria('Repeat selection in parallel');
+    assert.equal(byAria('Group selection into component').disabled, false, 'One selected component can be grouped');
+    assert.equal(sequential.getAttribute('aria-pressed'), 'false');
+    assert.equal(parallel.getAttribute('aria-pressed'), 'false');
+    assert.equal([...container.querySelectorAll('.df-inspector button')].find((button) => button.textContent.trim() === 'Repeat'), undefined, 'The inspector has no duplicate repeat action');
+    const readNode = () => useArchitectureStore.getState().graph.nodes.projection;
+    const preserved = () => {
+        const state = useArchitectureStore.getState();
+        const node = readNode();
+        for (const key of ['id', 'templateId', 'label', 'position']) assert.deepEqual(node[key], instance[key], `${key} survives structural changes`);
+        assert.deepEqual(state.graph.edges, edges, 'Port and gradient metadata survive structural changes');
+        assert.deepEqual(state.selectedNodeIds, [instance.id]);
+        assert.deepEqual(node.kind === 'repeat' ? node.bindings : node.parameterValues, { width: 16 });
+    };
+    await click(sequential);
+    assert.equal(readNode().mode, 'sequential');
+    assert.equal(sequential.getAttribute('aria-pressed'), 'true');
+    preserved();
+    await act(() => useArchitectureStore.getState().patchRepeatNode(instance.id, { count: 7, iterationVariable: 'head' }));
+    await click(parallel);
+    assert.equal(readNode().mode, 'parallel');
+    assert.equal(readNode().count, 7, 'Switching repetition direction preserves its count');
+    assert.equal(readNode().iterationVariable, 'head');
+    assert.equal(sequential.getAttribute('aria-pressed'), 'false');
+    assert.equal(parallel.getAttribute('aria-pressed'), 'true');
+    preserved();
+    await click(parallel);
+    assert.equal(readNode().kind, 'supernode', 'Clicking the active Parallel mode returns to single');
+    assert.equal(sequential.getAttribute('aria-pressed'), 'false');
+    assert.equal(parallel.getAttribute('aria-pressed'), 'false');
+    assert.equal(byAria('count'), null);
+    preserved();
+    await click(sequential);
+    assert.equal(readNode().count, 7, 'Re-enabling repetition restores its previous count');
+    assert.equal(readNode().iterationVariable, 'head', 'Re-enabling repetition restores its formula index name');
+    await click(sequential);
+    assert.equal(readNode().kind, 'supernode', 'Clicking the active Sequential mode returns to single');
+    assert.equal(sequential.getAttribute('aria-pressed'), 'false');
+    assert.equal(parallel.getAttribute('aria-pressed'), 'false');
+    preserved();
+    assert.deepEqual(useTemplatesStore.getState().templates, { body: template }, 'Toggles reuse the existing definition');
 });
 
 test('template library searches reusable components and hides recursive insertions', async () => {

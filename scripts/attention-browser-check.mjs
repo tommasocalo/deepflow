@@ -43,7 +43,9 @@ try {
     assert.match(await page.locator('.df-parallel .df-port-shape--output').innerText(), /8 tensors \[B × 128 × 96\]/);
     await page.screenshot({ path: `${directory}/03-eight-heads.png` });
     await page.locator('.df-parallel-header strong').click();
-    await page.getByRole('combobox', { name: 'Repeat mode', exact: true }).waitFor();
+    await page.getByRole('textbox', { name: 'count', exact: true }).waitFor();
+    assert.equal(await page.getByRole('combobox', { name: 'Repeat mode', exact: true }).count(), 0, 'The inspector has no duplicate structure mode');
+    assert.equal(await ribbon.getByRole('button', { name: 'Repeat selection in parallel', exact: true }).getAttribute('aria-pressed'), 'true');
     assert.equal(await page.getByRole('textbox', { name: 'count', exact: true }).inputValue(), '$H');
     assert.equal(await page.locator('.df-inspector [data-parameter="count"] label').innerText(), 'Instances');
     assert.equal(await page.getByRole('textbox', { name: 'iterationVariable', exact: true }).isVisible(), false, 'Formula index is an advanced setting');

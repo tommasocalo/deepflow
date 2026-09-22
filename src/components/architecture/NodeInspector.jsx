@@ -164,14 +164,12 @@ function Bindings({ freeParams, values, onChange, hint }) {
 function SupernodeBody({ id, node }) {
     const template = useTemplatesStore((s) => s.templates[node.templateId]);
     const patchNode = useArchitectureStore((s) => s.patchNode);
-    const convertInstanceToRepeat = useArchitectureStore((s) => s.convertInstanceToRepeat);
     const cloneComponent = useArchitectureStore((s) => s.cloneComponent);
     const values = node.parameterValues ?? {};
     return (
         <>
             {!template && <p className="df-inspector-note">Template missing — re-create or delete this node.</p>}
             <div className="df-inspector-actions">
-                <button type="button" disabled={!template} onClick={() => convertInstanceToRepeat(id, 2)} title="Repeat this template N times"><Repeat size={12} strokeWidth={3} /> Repeat</button>
                 <button type="button" disabled={!template} onClick={() => cloneComponent(id)} title="Copy this definition and its nested components for this instance"><Copy size={12} /> Make copy</button>
             </div>
             <Bindings
@@ -187,7 +185,6 @@ function RepeatBody({ id, node }) {
     const template = useTemplatesStore((s) => s.templates[node.templateId]);
     const patchRepeatNode = useArchitectureStore((s) => s.patchRepeatNode);
     const patchRepeatBinding = useArchitectureStore((s) => s.patchRepeatBinding);
-    const convertRepeatToInstance = useArchitectureStore((s) => s.convertRepeatToInstance);
     const context = useValidationContext();
     const { count, error } = resolveRepeatCount(node.count, context?.scope);
     const mode = node.mode ?? 'sequential';
@@ -195,18 +192,7 @@ function RepeatBody({ id, node }) {
     return (
         <>
             {!template && <p className="df-inspector-note">Template missing — re-create or delete this node.</p>}
-            <div className="df-inspector-actions">
-                <button type="button" disabled={!template} onClick={() => convertRepeatToInstance(id)} title="Back to a single instance"><Boxes size={12} strokeWidth={3} /> Single</button>
-            </div>
             <section className="df-inspector-group">
-                <label className="df-inspector-module">
-                    <span>Mode</span>
-                    <span className="df-inspector-select">
-                        <select aria-label="Repeat mode" value={mode} onChange={(event) => patchRepeatNode(id, { mode: event.target.value })}>
-                            <option value="sequential">Sequential</option><option value="parallel">Parallel</option>
-                        </select><ChevronDown size={11} strokeWidth={3} />
-                    </span>
-                </label>
                 <p className="df-inspector-note">{mode === 'parallel' ? 'One input slice per instance. Output is a tensor collection: connect Concat, Add or Stack to combine it.' : 'Each block feeds the next. Output from the last block.'}</p>
                 <div className="df-inspector-fields">
                     <InspectorField
