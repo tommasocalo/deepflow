@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import VariableInput from './VariableInput';
 import './parameter-shape.css';
 
 const NUMBER_LITERAL = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
@@ -20,7 +21,7 @@ function shapeDimensions(value) {
     return tuple.split(',').map((part) => part.trim()).filter((part, index, parts) => part !== '' || index !== parts.length - 1);
 }
 
-function ShapeField({ value, onChange, common, className, name }) {
+function ShapeField({ value, onChange, common, className, name, suggestions }) {
     const [editingReference, setEditingReference] = useState(false);
     const wholeReference = typeof value === 'string' && /^\$?[A-Za-z_][A-Za-z0-9_]*$/.test(value.trim());
     const dimensions = shapeDimensions(value);
@@ -28,19 +29,18 @@ function ShapeField({ value, onChange, common, className, name }) {
     // A reference can resolve to the entire tuple. It is not one scalar axis:
     // preserve it until the binding menu's "Use local value" supplies an array.
     // Keep the same input while its reference text is temporarily incomplete.
-    if (!Array.isArray(value) && (wholeReference || editingReference)) return <input {...common}
+    if (!Array.isArray(value) && (wholeReference || editingReference)) return <VariableInput {...common} suggestions={suggestions}
         aria-label={common['aria-label'] ?? name} className={`${className} is-expression`}
         type="text" spellCheck={false} autoComplete="off" value={value ?? ''}
-        title="Linked shape. Use local value in parameter options to edit its individual dimensions."
+        title="Linked shape. Disconnect to edit individual dimensions."
         onFocus={() => setEditingReference(true)} onBlur={() => setEditingReference(false)}
         onChange={(event) => onChange(event.target.value)} />;
     return <div className="df-param-shape" role="group" aria-label={`${name} dimensions`}>
-        {dimensions.map((dimension, index) => <span className="df-shape-dimension" key={index}>
+        <div className="df-shape-axes">{dimensions.map((dimension, index) => <span className="df-shape-dimension" key={index}>
             {index > 0 && <span className="df-shape-times" aria-hidden="true">×</span>}
             <span className="df-shape-cell">
-                <input {...common} id={index === 0 ? common.id : `${common.id}-${index}`}
+                <VariableInput {...common} suggestions={suggestions} id={index === 0 ? common.id : `${common.id}-${index}`}
                     aria-label={`${name} dimension ${index + 1}`} className={`${className}${typeof dimension === 'string' && dimension !== '' && !NUMBER_LITERAL.test(dimension) ? ' is-expression' : ''}`}
-                    style={{ '--shape-dimension-width': `${Math.min(19, Math.max(3, String(dimension).length + 1))}ch` }}
                     type="text" spellCheck={false} autoComplete="off" value={dimension ?? ''} placeholder="Size"
                     title={`Dimension ${index + 1}. Accepts a number, parameter reference, or expression.`}
                     onChange={(event) => update(index, event.target.value)}
@@ -53,14 +53,14 @@ function ShapeField({ value, onChange, common, className, name }) {
                     onMouseDown={(event) => event.stopPropagation()}
                     onClick={(event) => { event.stopPropagation(); onChange(dimensions.filter((_, at) => at !== index)); }}>×</button>
             </span>
-        </span>)}
+        </span>)}</div>
         <button type="button" className="nodrag df-shape-add" aria-label={`Add ${name} dimension`} title="Add dimension"
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => { event.stopPropagation(); onChange([...dimensions, 1]); }}>+</button>
     </div>;
 }
 
-const ParameterField = ({ param, value, onChange, error, errors = [], label, ariaLabel, placeholder, compactBoolean = false }) => {
+const ParameterField = ({ param, value, onChange, error, errors = [], label, ariaLabel, placeholder, compactBoolean = false, suggestions = [] }) => {
     const id = useId();
     const hasError = !!error || errors.length > 0;
     const errorId = `${id}-errors`;
@@ -74,9 +74,8 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
     const textValue = Array.isArray(display) ? display.join(', ') : String(display);
     const className = `df-param-input nodrag${hasError ? ' is-invalid' : ''}${expression ? ' is-expression' : ''}`;
     const baseWidth = param.type === 'int' ? 7 : param.type === 'float' ? 8 : param.type === 'tuple' ? 9 : 12;
-    const widthCh = numeric && typeof display === 'string' ? Math.min(16, Math.max(baseWidth, display.length + 1)) : baseWidth;
     const common = {
-        style: { '--parameter-width': `${widthCh}ch` },
+        style: { '--parameter-width': `${baseWidth}ch` },
         id,
         'aria-invalid': hasError,
         'aria-describedby': errors.length ? errorId : undefined,
@@ -94,7 +93,7 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
                 {param.required && <span className="df-param-required" title="Required">*</span>}
             </label>
             {(param.name === 'shape' || param.editor === 'dimensions') && param.type === 'tuple' ? (
-                <ShapeField value={value ?? param.default} onChange={onChange} common={common} className={className} name={ariaLabel ?? param.name} />
+                <ShapeField value={value ?? param.default} onChange={onChange} common={common} className={className} name={ariaLabel ?? param.name} suggestions={suggestions} />
             ) : inlineBoolean ? (
                 <input {...common} className="df-param-checkbox nodrag" type="checkbox" checked={checked}
                     onChange={(event) => onChange(event.target.checked)} />
@@ -115,12 +114,13 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
                     {param.options?.map((option) => <option key={option} value={option}>{option}</option>)}
                 </select>
             ) : param.type === 'tuple' && textValue.length > 22 ? (
-                <textarea {...common} rows={2} className={`${className} df-param-tuple`} value={textValue}
+                <VariableInput {...common} suggestions={suggestions} multiline rows={2} className={`${className} df-param-tuple`} value={textValue}
                     spellCheck={false} placeholder={placeholder ?? 'Dimensions'}
                     onChange={(event) => onChange(event.target.value || null)} />
             ) : (
-                <input
+                <VariableInput
                     {...common}
+                    suggestions={suggestions}
                     type="text"
                     spellCheck={false}
                     autoComplete="off"
