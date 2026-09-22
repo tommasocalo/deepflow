@@ -36,7 +36,7 @@ const cachedValidate = createValidationCache((graph, options) => {
  * parameters flow into the child template — the block you are editing is
  * shown with the shapes it really sees at the selected Repeat index.
  */
-function resolveLevelContext(rootGraph, currentPath, templates, inspectedIterations = {}) {
+export function resolveLevelContext(rootGraph, currentPath, templates, inspectedIterations = {}) {
     const root = { graph: rootGraph, scope: {}, externalInputs: {} };
     let graph = rootGraph;
     let scope = {};

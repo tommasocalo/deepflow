@@ -142,10 +142,10 @@ async function typeText(input, text) {
 const blur = (input) => act(() => input.blur());
 const graphNodes = () => Object.values(useArchitectureStore.getState().graph.nodes);
 
-function ParameterHarness({ initial = null, type = 'float', defaultValue, onValue }) {
+function ParameterHarness({ initial = null, type = 'float', name = 'width', defaultValue, onValue }) {
     const [value, setValue] = useState(initial);
     return h(ParameterField, {
-        param: { name: 'width', type, default: defaultValue }, value,
+        param: { name, type, default: defaultValue }, value,
         onChange(next) { setValue(next); onValue?.(next); },
     });
 }
@@ -229,6 +229,29 @@ test('boolean bindings show their default checkbox while expressions remain edit
     await blur(expression);
     assert.equal(expression.value, '$other_bias');
     assert.equal(latest, '$other_bias');
+});
+
+test('weight shapes edit ordered dimensions without parsing or truncating expressions', async () => {
+    let latest;
+    await render(h(ParameterHarness, { name: 'shape', type: 'tuple', initial: '($out_features, $in_features)', onValue: (value) => { latest = value; } }));
+    assert.equal(byAria('shape dimension 1').value, '$out_features');
+    assert.equal(byAria('shape dimension 2').value, '$in_features');
+    assert.equal(container.querySelector('textarea'), null);
+    await typeText(byAria('shape dimension 2'), '(width + 1) * (2)');
+    await blur(byAria('shape dimension 2'));
+    assert.deepEqual(latest, ['$out_features', '(width + 1) * (2)']);
+    await click(byAria('Add shape dimension'));
+    assert.deepEqual(latest, ['$out_features', '(width + 1) * (2)', 1]);
+    await typeText(byAria('shape dimension 3'), '1.05');
+    await blur(byAria('shape dimension 3'));
+    assert.deepEqual(latest, ['$out_features', '(width + 1) * (2)', 1.05], 'Invalid dimension decimals remain visible to validation');
+    await click(byAria('Remove shape dimension 2'));
+    assert.deepEqual(latest, ['$out_features', 1.05]);
+    assert.equal(byAria('shape dimension 2').value, '1.05');
+    await click(byAria('Remove shape dimension 2'));
+    assert.equal(byAria('Remove shape dimension 1').disabled, true);
+    await typeText(byAria('shape dimension 1'), '');
+    assert.deepEqual(latest, [''], 'An unfinished axis remains editable instead of disappearing');
 });
 
 test('repeated parameter names have unique stable label associations', async () => {
@@ -368,6 +391,26 @@ test('repeat inspection numbers instances from one while retaining zero-based fo
     await setText(number, '1');
     assert.equal(useArchitectureStore.getState().inspectedIterations['["heads"]'], 0);
     assert.equal(byAria('Previous instance').disabled, true);
+});
+
+test('parallel previews keep a fixed footprint and retain access to every instance', async () => {
+    const template = createTemplate({ id: 'body', name: 'Shared body', graph: emptyGraph() });
+    const repeat = createRepeatNode({ id: 'heads', templateId: template.id, label: 'Attention heads', mode: 'parallel', count: 12, position: { x: 0, y: 0 } });
+    useTemplatesStore.setState({ templates: { body: template } });
+    useArchitectureStore.setState({ graph: { nodes: { heads: repeat }, edges: [] }, inspectedIterations: {} });
+    await render(h(GraphHarness));
+    const width = container.querySelector('.df-parallel').style.width;
+    assert.deepEqual([...container.querySelectorAll('.df-parallel-instance b')].map((element) => element.textContent), ['1', '2', '12']);
+    await act(() => useArchitectureStore.getState().patchRepeatNode('heads', { count: 200 }));
+    assert.equal(container.querySelector('.df-parallel').style.width, width);
+    assert.deepEqual([...container.querySelectorAll('.df-parallel-instance b')].map((element) => element.textContent), ['1', '2', '200']);
+    assert.equal(container.querySelectorAll('.df-parallel-ellipsis').length, 1);
+    await click(byAria('Open Attention heads instance 200'));
+    assert.equal(useArchitectureStore.getState().inspectedIterations['["heads"]'], 199);
+    await render(h(RepeatIterationBar));
+    assert.equal(byAria('Inspected instance number').value, '200');
+    await setText(byAria('Inspected instance number'), '137');
+    assert.equal(useArchitectureStore.getState().inspectedIterations['["heads"]'], 136);
 });
 
 test('structure toggles return to a single component without replacing its bindings or cables', async () => {

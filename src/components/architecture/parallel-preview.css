@@ -1,0 +1,15 @@
+/* A fixed-size sample of parallel instances, with every instance available
+   through the navigator inside the shared definition. */
+.df-parallel.df-parallel--compact { padding: 6px 8px; }
+.df-parallel--compact .df-parallel-header { gap: 6px; }
+.df-parallel--compact .df-parallel-header > svg { flex-shrink: 0; }
+.df-parallel--compact .df-parallel-header > strong { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.df-parallel--compact .df-container-open { width: 21px; height: 23px; border-radius: 3px; }
+.df-parallel-preview { display: flex; align-items: center; justify-content: center; gap: 17px; height: 59px; margin: 4px 12px; border-top: 1px solid #111; border-bottom: 1px solid #111; }
+.df-parallel-preview-item { display: flex; align-items: center; gap: 17px; }
+.df-parallel--compact .df-parallel-instance { width: 48px; height: 26px; transform: translateY(var(--parallel-copy-offset)); border-radius: 3px; box-shadow: 3px 3px 0 #eadba3, 4px 4px 0 #111; }
+.df-parallel--compact .df-parallel-instance::before { height: calc(16px + var(--parallel-copy-offset)); }
+.df-parallel--compact .df-parallel-instance::after { height: calc(16px - var(--parallel-copy-offset)); }
+.df-parallel-ellipsis { font: 900 18px/1 ui-monospace, monospace; letter-spacing: 1px; }
+.df-parallel--compact .df-parallel-footer { font-size: 8px; gap: 6px; }
+.df-parallel--compact .df-port-shape--input { max-width: calc(var(--parallel-port-width) - 8px); white-space: normal; line-height: 11px; padding: 1px 3px; }

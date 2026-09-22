@@ -1,6 +1,53 @@
 import { useId } from 'react';
+import './parameter-shape.css';
 
 const NUMBER_LITERAL = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+function shapeDimensions(value) {
+    if (Array.isArray(value)) return value;
+    if (value === null || value === undefined || value === '') return [''];
+    const text = String(value).trim();
+    // Preserve arithmetic parentheses within each dimension. Legacy tuple
+    // strings have a single outer pair around the comma-separated dimensions.
+    const wrapped = (text.startsWith('(') && text.endsWith(')')) || (text.startsWith('[') && text.endsWith(']'));
+    let depth = 0;
+    const wholeWrapper = wrapped && ![...text.slice(0, -1)].some((character) => {
+        if (character === '(' || character === '[') depth++;
+        if (character === ')' || character === ']') depth--;
+        return depth === 0;
+    });
+    const tuple = wholeWrapper ? text.slice(1, -1) : text;
+    return tuple.split(',').map((part) => part.trim()).filter((part, index, parts) => part !== '' || index !== parts.length - 1);
+}
+
+function ShapeField({ value, onChange, common, className, name }) {
+    const dimensions = shapeDimensions(value);
+    const update = (index, next) => onChange(dimensions.map((dimension, at) => at === index ? next : dimension));
+    return <div className="df-param-shape" role="group" aria-label={`${name} dimensions`}>
+        {dimensions.map((dimension, index) => <span className="df-shape-dimension" key={index}>
+            {index > 0 && <span className="df-shape-times" aria-hidden="true">×</span>}
+            <span className="df-shape-cell">
+                <input {...common} id={index === 0 ? common.id : `${common.id}-${index}`}
+                    aria-label={`${name} dimension ${index + 1}`} className={`${className}${typeof dimension === 'string' && dimension !== '' && !NUMBER_LITERAL.test(dimension) ? ' is-expression' : ''}`}
+                    style={{ '--shape-dimension-width': `${Math.min(19, Math.max(3, String(dimension).length + 1))}ch` }}
+                    type="text" spellCheck={false} autoComplete="off" value={dimension ?? ''} placeholder="Size"
+                    title={`Dimension ${index + 1}. Accepts a number, parameter reference, or expression.`}
+                    onChange={(event) => update(index, event.target.value)}
+                    onBlur={(event) => {
+                        const raw = event.currentTarget.value;
+                        if (NUMBER_LITERAL.test(raw) && Number.isFinite(Number(raw)) && dimension !== Number(raw)) update(index, Number(raw));
+                    }} />
+                <button type="button" className="nodrag df-shape-remove" aria-label={`Remove ${name} dimension ${index + 1}`}
+                    disabled={dimensions.length < 2} title="Remove dimension"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => { event.stopPropagation(); onChange(dimensions.filter((_, at) => at !== index)); }}>×</button>
+            </span>
+        </span>)}
+        <button type="button" className="nodrag df-shape-add" aria-label={`Add ${name} dimension`} title="Add dimension"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => { event.stopPropagation(); onChange([...dimensions, 1]); }}>+</button>
+    </div>;
+}
 
 const ParameterField = ({ param, value, onChange, error, errors = [], label, ariaLabel, placeholder, compactBoolean = false }) => {
     const id = useId();
@@ -35,7 +82,9 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
                 {label ?? param.name}
                 {param.required && <span className="df-param-required" title="Required">*</span>}
             </label>
-            {inlineBoolean ? (
+            {param.name === 'shape' && param.type === 'tuple' ? (
+                <ShapeField value={value ?? param.default} onChange={onChange} common={common} className={className} name={ariaLabel ?? param.name} />
+            ) : inlineBoolean ? (
                 <input {...common} className="df-param-checkbox nodrag" type="checkbox" checked={checked}
                     onChange={(event) => onChange(event.target.checked)} />
             ) : param.type === 'bool' && !booleanExpression ? (

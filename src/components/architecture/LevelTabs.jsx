@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Boxes, Home, Repeat, X } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
+import { resolveLevelContext } from '../../hooks/useValidation.js';
 import { useOpenToSideMenu } from './OpenToSideContext.jsx';
 import './level-tabs.css';
 
@@ -49,26 +50,29 @@ export default function LevelTabs() {
     const rootGraph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const openPaths = useArchitectureStore((s) => s.openPaths);
+    const inspectedIterations = useArchitectureStore((s) => s.inspectedIterations);
     const templates = useTemplatesStore((s) => s.templates);
     const openLevel = useArchitectureStore((s) => s.openLevel);
     const closeLevel = useArchitectureStore((s) => s.closeLevel);
 
     const activeKey = JSON.stringify(currentPath);
-    const cards = [{ key: '[]', path: [], label: 'main', kind: 'root', title: 'Top level' }];
-    for (const path of openPaths ?? []) {
-        const level = resolveGraphLevel(rootGraph, path, templates);
-        if (level.isRoot) continue;
-        const parent = resolveGraphLevel(rootGraph, path.slice(0, -1), templates);
-        const node = parent.graph.nodes[path.at(-1)];
-        cards.push({
-            key: JSON.stringify(path),
-            path,
-            label: level.label,
-            kind: node.kind,
-            count: node?.kind === 'repeat' ? node.count : null,
-            title: ['main', ...level.segments.map((segment) => segment.label)].join(' / '),
-        });
-    }
+    const cards = useMemo(() => {
+        const views = [{ key: '[]', path: [], label: 'main', kind: 'root', title: 'Top level' }];
+        for (const path of openPaths ?? []) {
+            const level = resolveGraphLevel(rootGraph, path, templates);
+            if (level.isRoot) continue;
+            const parent = resolveGraphLevel(rootGraph, path.slice(0, -1), templates);
+            const node = parent.graph.nodes[path.at(-1)];
+            const count = node.kind === 'repeat'
+                ? resolveLevelContext(rootGraph, path, templates, inspectedIterations).repeat?.count || '?'
+                : null;
+            views.push({
+                key: JSON.stringify(path), path, label: level.label, kind: node.kind, count,
+                title: ['main', ...level.segments.map((segment) => segment.label)].join(' / '),
+            });
+        }
+        return views;
+    }, [rootGraph, openPaths, templates, inspectedIterations]);
 
     return (
         <div className="df-levels" role="tablist" aria-label="Open levels" onKeyDown={(event) => {

@@ -1,0 +1,18 @@
+/* Each weight axis is an editable dimension, rather than comma punctuation
+   inside a single textbox. Long symbolic axes can wrap in compact inspectors. */
+.df-inspector .df-inspector-field:has(.df-param-shape) { grid-column: 1 / -1; }
+.df-param-shape { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 3px; min-width: 0; }
+.df-shape-dimension { display: inline-flex; align-items: center; gap: 3px; min-width: 0; max-width: 100%; }
+.df-shape-times { flex-shrink: 0; font-size: 10px; font-weight: 800; color: #777; }
+.df-shape-cell { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; border: 1px solid #111; border-radius: 2px; background: #fff; }
+.df-param-shape .df-shape-cell .df-param-input,
+.df-inspector .df-inspector-field .df-param-shape .df-shape-cell .df-param-input { width: var(--shape-dimension-width); min-width: 0; max-width: 100%; height: 23px; padding: 2px 4px; border: 0; border-radius: 0; font: 600 10px/17px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: left; }
+.df-param-shape .df-shape-cell:has(.is-invalid) { border-color: #dc2626; }
+.df-param-shape .df-shape-cell:focus-within { outline: 1px solid #111; }
+.df-param-shape .df-param-input:focus { outline: 0; box-shadow: none; }
+.df-shape-remove { display: grid; place-items: center; flex-shrink: 0; width: 14px; height: 23px; border-left: 1px solid #eee; color: #777; font-size: 11px; }
+.df-shape-remove:hover:enabled { color: #b91c1c; background: #fef2f2; }
+.df-shape-remove:disabled { color: #ccc; cursor: default; }
+.df-shape-add { display: grid; place-items: center; flex-shrink: 0; width: 22px; height: 25px; border: 1px dashed #777; border-radius: 2px; background: white; font-size: 15px; font-weight: 700; }
+.df-shape-add:hover, .df-shape-add:focus-visible { border-color: #111; background: #f5f5f4; }
+.df-shape-add:focus-visible, .df-shape-remove:focus-visible { outline: 1px solid #111; outline-offset: 1px; }
