@@ -3,6 +3,18 @@ import { getEntry } from '../domain/library/index.js';
 import { ensureStandardTemplate } from '../domain/components/index.js';
 
 export const ATTENTION_HEAD_INPUT_IDS = Object.freeze({ q: 'head_q', k: 'head_k', v: 'head_v' });
+export const ATTENTION_INPUT_ID = 'attention_input';
+
+export const attentionHeadParameters = () => [
+    { name: 'd_head', type: 'int', description: 'Q input feature dimension', derived: { kind: 'input-dimension', inputId: ATTENTION_HEAD_INPUT_IDS.q, axis: -1 } },
+    { name: 'dropout', type: 'float', description: 'Attention dropout probability', default: 0.1 },
+];
+export const attentionParameters = () => [
+    { name: 'D', type: 'int', description: 'Input feature dimension', derived: { kind: 'input-dimension', inputId: ATTENTION_INPUT_ID, axis: -1 } },
+    { name: 'H', type: 'int', description: 'Number of parallel heads', default: 12 },
+    { name: 'dropout', type: 'float', description: 'Attention dropout probability', default: 0.1 },
+    { name: 'bias', type: 'bool', description: 'Learned projection bias', default: true },
+];
 
 const layer = (key, x, y, parameters = {}, label, id) => {
     const node = createLayerNode({ libraryKey: key, entry: getEntry(key), position: { x, y }, label, id });
@@ -36,7 +48,7 @@ export function buildAttentionHeadGraph() {
 /** Projection → split → generic parallel Repeat → concat → output projection. */
 export function buildMultiHeadAttentionGraph({ headTemplateId, headInputIds = ATTENTION_HEAD_INPUT_IDS, linearTemplateId } = {}) {
     if (!headTemplateId) throw new Error('A head template is required to build multi-head attention.');
-    const input = layer('deepflow.template.Input', 560, 0, {}, 'attention input');
+    const input = layer('deepflow.template.Input', 560, 0, {}, 'attention input', ATTENTION_INPUT_ID);
     const projectionNode = (x, y, label) => linearTemplateId
         ? createSuperNodeInstance({ templateId: linearTemplateId, position: { x, y }, label, parameterValues: { in_features: '$D', out_features: '$D', bias: '$bias' } })
         : layer('torch.nn.Linear', x, y, { in_features: '$D', out_features: '$D' }, label);
@@ -48,7 +60,7 @@ export function buildMultiHeadAttentionGraph({ headTemplateId, headInputIds = AT
     const vSplit = layer('deepflow.op.Split', 940, 310, { chunks: '$H', dim: -1 }, 'split V');
     const heads = createRepeatNode({
         templateId: headTemplateId, position: { x: 560, y: 490 }, label: 'Attention heads',
-        mode: 'parallel', count: '$H', bindings: { d_head: '$d_head', dropout: '$dropout' },
+        mode: 'parallel', count: 'auto', bindings: { dropout: '$dropout' },
     });
     const concat = layer('deepflow.op.Concat', 560, 760, { dim: -1 }, 'concatenate heads');
     const projection = projectionNode(560, 910, 'output projection');
@@ -67,21 +79,13 @@ export function registerAttentionTemplates(templatesStore) {
         name: 'Attention head',
         description: 'Editable scaled dot-product attention: Q × Kᵀ, scale, causal mask, softmax, dropout, and weights × V.',
         graph: buildAttentionHeadGraph(),
-        freeParameters: [
-            { name: 'd_head', type: 'int', description: 'Features per head', default: 64 },
-            { name: 'dropout', type: 'float', description: 'Attention dropout probability', default: 0.1 },
-        ],
+        freeParameters: attentionHeadParameters(),
     });
     const attentionTemplateId = templates.createTemplate({
         name: 'Multi-head attention',
         description: 'Editable Q/K/V projections, equal splits, parallel attention heads, concatenation, and output projection.',
         graph: buildMultiHeadAttentionGraph({ headTemplateId }),
-        freeParameters: [
-            { name: 'D', type: 'int', description: 'Model width', default: 768 },
-            { name: 'H', type: 'int', description: 'Number of parallel heads', default: 12 },
-            { name: 'd_head', type: 'int', description: 'Features per head, derived from D and H', default: 'D / H' },
-            { name: 'dropout', type: 'float', description: 'Attention dropout probability', default: 0.1 },
-        ],
+        freeParameters: attentionParameters(),
     });
     return { headTemplateId, attentionTemplateId };
 }

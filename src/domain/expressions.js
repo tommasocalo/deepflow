@@ -146,10 +146,24 @@ export function resolveLayerParameters(node, scope) {
     return { ...node, parameters: out };
 }
 
-/** Resolve ordered free parameters; later defaults can use earlier bindings. */
-export function buildParameterScope(freeParameters, bindings = {}, parentScope = {}, iterationIndex) {
+/** A derived dimension refers to a named template input, never to a guessed width. */
+export function resolveDerivedParameter(derived, externalInputs = {}) {
+    if (derived?.kind !== 'input-dimension') return null;
+    const shape = externalInputs[derived.inputId];
+    if (!Array.isArray(shape) || !Number.isInteger(derived.axis)) return null;
+    const axis = derived.axis < 0 ? shape.length + derived.axis : derived.axis;
+    const value = shape[axis];
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+/** Resolve ordered exposed controls and derived input dimensions in the local scope. */
+export function buildParameterScope(freeParameters, bindings = {}, parentScope = {}, iterationIndex, externalInputs = {}) {
     const result = { ...parentScope };
     for (const parameter of freeParameters ?? []) {
+        if (parameter.derived) {
+            result[parameter.name] = resolveDerivedParameter(parameter.derived, externalInputs);
+            continue;
+        }
         let raw = bindings[parameter.name];
         if (Array.isArray(raw) && iterationIndex !== undefined) raw = raw[iterationIndex];
         if (raw === undefined || (raw === null && !parameter.nullable) || raw === '') raw = parameter.default;
@@ -159,8 +173,14 @@ export function buildParameterScope(freeParameters, bindings = {}, parentScope =
 }
 
 /** Guard all unrolling/allocation before entering a loop. */
-export function resolveRepeatCount(raw, scope = {}) {
-    const value = resolveParameterValue(raw, scope);
+export function resolveRepeatCount(raw, scope = {}, inputShapes = []) {
+    let value;
+    if (raw === 'auto') {
+        const counts = inputShapes.filter((shape) => shape?.kind === 'collection' && Array.isArray(shape.items)).map((shape) => shape.items.length);
+        if (!counts.length) return { count: null, error: 'Auto instances needs an incoming collection from Split or Broadcast' };
+        if (counts.some((count) => count !== counts[0])) return { count: null, error: 'Auto instances needs equally sized input collections' };
+        value = counts[0];
+    } else value = resolveParameterValue(raw, scope);
     const count = typeof value === 'number' ? value : NaN;
     if (!Number.isSafeInteger(count) || count < 1 || count > MAX_REPEAT_COUNT) {
         return { count: null, error: `Repeat count must resolve to a positive integer from 1 to ${MAX_REPEAT_COUNT}` };

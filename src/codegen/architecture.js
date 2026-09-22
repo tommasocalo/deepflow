@@ -3,6 +3,7 @@ import { buildParameterScope, resolveLayerParameters, resolveRepeatCount } from 
 import { getIncomingEdges, mapTemplateInputs, orderOperationEdges } from '../domain/graphInputs.js';
 import { validate } from '../validation/validator.js';
 import { getEntry } from '../domain/library/index.js';
+import { isShapeCollection } from '../domain/shapeCollections.js';
 import { indent, kwArgs, toPyIdent, toPyLiteral } from './python.js';
 
 /**
@@ -151,10 +152,13 @@ function makeContext(templates) {
  * @param {Object<string, *>} scope
  * @param {ReturnType<typeof makeContext>} ctx
  */
-function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, depth = 0 } = {}) {
+function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, externalShapes = {}, depth = 0 } = {}) {
     if (depth > 8) throw new Error('Template recursion exceeds depth 8');
     const { order, cyclic, adjacency } = topologicalSort(graph);
     if (cyclic.length) throw new Error('Cannot export a graph containing a cycle');
+    // Resolve the same tensor context as validation, including derived input
+    // dimensions. Runtime values and their static shapes travel together.
+    const shapeReport = validate(graph, { templates: ctx.templates, scope, externalInputs: externalShapes, depth });
     const items = [];
     const outRef = {};
     const unique = (id) => `${prefix}${id}`;
@@ -334,14 +338,18 @@ function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, dept
             if (!template) throw new Error(`Missing template: ${node.templateId}`);
             const isRepeat = node.kind === 'repeat';
             const parallel = isRepeat && node.mode === 'parallel';
-            const { count, error } = isRepeat ? resolveRepeatCount(node.count, scope) : { count: 1 };
+            const initialShapes = mapTemplateInputs(template.graph, edges, (edge) => shapeReport.shapes[edge.source] ?? null);
+            const { count, error } = isRepeat ? resolveRepeatCount(node.count, scope, Object.values(initialShapes)) : { count: 1 };
             if (error) throw new Error(error);
             const initialInputs = mapTemplateInputs(template.graph, edges, (edge) => edgeRefs.get(edge));
             let carry = inputRefs[0] ?? null;
+            let carryShape = initialShapes[Object.keys(initialShapes)[0]] ?? null;
             const outputs = [];
             for (let index = 0; index < count; index++) {
                 const iterationScope = isRepeat ? { ...scope, [node.iterationVariable || 'i']: index } : scope;
-                const subScope = buildParameterScope(template.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined);
+                const childShapes = Object.fromEntries(Object.entries(initialShapes).map(([port, shape]) => [port,
+                    parallel ? isShapeCollection(shape) ? shape.items[index] ?? null : shape : isRepeat && index > 0 ? carryShape : shape]));
+                const subScope = buildParameterScope(template.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined, childShapes);
                 const subInputs = {};
                 for (const [port, ref] of Object.entries(initialInputs)) {
                     const type = typeOf(ref);
@@ -353,10 +361,11 @@ function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, dept
                     }
                 }
                 const subPlan = expandGraph(template.graph, subScope, ctx, {
-                    prefix: `${id}_${index}__`, externalInputs: subInputs, depth: depth + 1,
+                    prefix: `${id}_${index}__`, externalInputs: subInputs, externalShapes: childShapes, depth: depth + 1,
                 });
                 items.push(...subPlan.items);
                 carry = subPlan.finalId ?? carry;
+                carryShape = subPlan.finalShape;
                 outputs.push(carry);
             }
             outRef[nodeId] = parallel ? emit(id, outputs, (xs) => `(${xs.join(', ')},)`, outputs.map(typeOf)) : carry;
@@ -374,7 +383,8 @@ function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, dept
         if (node.kind === 'layer' && node.libraryKey === 'deepflow.io.Output') outputRefs.push(outRef[nodeId] ?? unique(nodeId));
         if (node.kind === 'layer' && node.libraryKey === 'deepflow.template.Output') finalId = outRef[nodeId] ?? unique(nodeId);
     }
-    return { items, finalId, outputRefs };
+    const output = Object.values(graph.nodes).filter((node) => node.libraryKey === 'deepflow.template.Output').at(-1);
+    return { items, finalId, outputRefs, finalShape: output ? shapeReport.shapes[output.id] ?? null : null };
 }
 
 /** Render the keyword args for a layer instantiation, restricted to the

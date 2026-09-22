@@ -2,6 +2,8 @@ import { topologicalSort } from '../validation/topology.js';
 import { buildParameterScope, resolveLayerParameters, resolveRepeatCount } from './expressions.js';
 import { getIncomingEdges, getTemplateInputIds, mapInputEdgesToPorts, orderOperationEdges } from './graphInputs.js';
 import { defaultParameterValues, getEntry } from './library/index.js';
+import { isShapeCollection } from './shapeCollections.js';
+import { validate } from '../validation/validator.js';
 
 const tensor = (requires = 'unknown', dtype = 'float', dependencies = []) => ({ requires, dtype, dependencies: [...new Set(dependencies)] });
 const items = (value) => value?.items ? value.items.flatMap(items) : [value ?? tensor()];
@@ -17,8 +19,9 @@ const trainableModule = (key) => /^torch\.nn\.(Linear|Embedding|Bilinear|Conv|Ba
 const unknownModule = (key) => /^(deepflow\.op\.|deepflow\.(io|template)\.|torch\.nn\.|deepflow\.nn\.)/.test(key) === false;
 
 /** Static autograd structure. This describes paths, never measured gradients. */
-export function analyzeGradientFlow(graph, { templates = {}, scope = {}, externalInputs = {}, depth = 0, budget = { remaining: 20000 } } = {}) {
+export function analyzeGradientFlow(graph, { templates = {}, scope = {}, externalInputs = {}, externalShapes = {}, depth = 0, budget = { remaining: 20000 } } = {}) {
     const report = { graph, scope, nodes: {}, edges: {}, children: {}, output: tensor(), inputDependencies: [] };
+    const shapeReport = validate(graph, { templates, scope, externalInputs: externalShapes, depth });
     const allowed = new Set();
     const { order } = topologicalSort(graph);
     for (const id of order) {
@@ -30,23 +33,28 @@ export function analyzeGradientFlow(graph, { templates = {}, scope = {}, externa
         let output;
         if (node.kind === 'supernode' || node.kind === 'repeat') {
             const template = templates[node.templateId];
-            const count = node.kind === 'repeat' ? resolveRepeatCount(node.count, scope).count : 1;
+            const count = node.kind === 'repeat' ? resolveRepeatCount(node.count, scope, incoming.map((edge) => shapeReport.shapes[edge.source])).count : 1;
             if (!template || !count || depth >= 8) { report.nodes[id] = tensor(); continue; }
             const ports = getTemplateInputIds(template.graph);
             const mapped = mapInputEdgesToPorts(incoming, ports);
             const initial = Object.fromEntries(ports.map((port) => [port, valueFor(mapped[port])]));
+            const initialShapes = Object.fromEntries(ports.map((port) => [port, shapeReport.shapes[mapped[port]?.source] ?? null]));
             const children = [];
             const outputs = [];
             let carry;
+            let carryShape;
             let carryPorts = new Set();
             const usedPorts = new Set();
             for (let index = 0; index < count && budget.remaining > 0; index++) {
                 const repeated = node.kind === 'repeat';
+                const childShapes = Object.fromEntries(ports.map((port) => [port, node.mode === 'parallel'
+                    ? isShapeCollection(initialShapes[port]) ? initialShapes[port].items[index] ?? null : initialShapes[port]
+                    : index === 0 ? initialShapes[port] : carryShape]));
                 const childScope = buildParameterScope(template.freeParameters, repeated ? node.bindings : node.parameterValues,
-                    repeated ? { ...scope, [node.iterationVariable || 'i']: index } : scope, repeated ? index : undefined);
+                    repeated ? { ...scope, [node.iterationVariable || 'i']: index } : scope, repeated ? index : undefined, childShapes);
                 const external = Object.fromEntries(ports.map((port) => [port, node.mode === 'parallel'
                     ? initial[port]?.items?.[index] ?? initial[port] : index === 0 ? initial[port] : carry]));
-                const child = analyzeGradientFlow(template.graph, { templates, scope: childScope, externalInputs: external, depth: depth + 1, budget });
+                const child = analyzeGradientFlow(template.graph, { templates, scope: childScope, externalInputs: external, externalShapes: childShapes, depth: depth + 1, budget });
                 children.push(child);
                 if (node.mode === 'parallel') for (const port of child.inputDependencies) usedPorts.add(port);
                 else carryPorts = index === 0 ? new Set(child.inputDependencies) : child.inputDependencies.length ? carryPorts : new Set();
@@ -54,6 +62,7 @@ export function analyzeGradientFlow(graph, { templates = {}, scope = {}, externa
                 const dependencies = child.inputDependencies.flatMap((port) => items(external[port]).flatMap((v) => v.dependencies));
                 const remap = (value) => value?.items ? { items: value.items.map(remap) } : { ...value, dependencies };
                 carry = remap(child.output);
+                carryShape = child.outputShape;
                 outputs.push(carry);
             }
             report.children[id] = children;
@@ -101,6 +110,7 @@ export function analyzeGradientFlow(graph, { templates = {}, scope = {}, externa
     }
     const outputs = Object.values(graph.nodes).filter((node) => ['deepflow.io.Output', 'deepflow.template.Output'].includes(node.libraryKey));
     report.output = outputs.length ? report.nodes[outputs.at(-1).id] ?? tensor() : tensor();
+    report.outputShape = outputs.length ? shapeReport.shapes[outputs.at(-1).id] ?? null : null;
     report.inputDependencies = merge([report.output]).dependencies;
     const reachable = new Set(outputs.map((node) => node.id));
     for (const id of [...order].reverse()) {

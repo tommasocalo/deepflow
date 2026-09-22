@@ -1,6 +1,6 @@
 import { createEdge, createLayerNode, createSuperNodeInstance } from '../architecture/index.js';
 import { getEntry } from '../library/index.js';
-import { buildAttentionHeadGraph, buildMultiHeadAttentionGraph } from '../../storyboards/attention.js';
+import { attentionHeadParameters, attentionParameters, buildAttentionHeadGraph, buildMultiHeadAttentionGraph } from '../../storyboards/attention.js';
 
 /** Standard components are ordinary editable templates, registered only on demand. */
 export const STANDARD_COMPONENTS = [
@@ -97,7 +97,10 @@ export function buildSinusoidalPositionComponentGraph() {
 export function ensureStandardTemplate(key, templatesStore) {
     const component = STANDARD_COMPONENTS.find((item) => item.key === key);
     if (!component) return null;
-    const existing = Object.values(templatesStore.getState().templates).find((template) => template.standardKey === key);
+    // A new catalog generation never rewrites an older saved/custom definition.
+    // Existing graphs keep their IDs; newly inserted examples use the new model.
+    const existing = Object.values(templatesStore.getState().templates).find((template) => template.standardKey === key
+        && (key !== 'attention' || template.standardVersion === 2));
     if (existing) return existing.id;
     let graph, freeParameters;
     if (key === 'linear') {
@@ -117,17 +120,17 @@ export function ensureStandardTemplate(key, templatesStore) {
         freeParameters = [spec('D', 'int', 768, 'Output feature count')];
     } else if (key === 'attention') {
         const linearTemplateId = ensureStandardTemplate('linear', templatesStore);
-        let headTemplateId = Object.values(templatesStore.getState().templates).find((template) => template.standardKey === 'attention-head')?.id;
+        let headTemplateId = Object.values(templatesStore.getState().templates).find((template) => template.standardKey === 'attention-head' && template.standardVersion === 2)?.id;
         if (!headTemplateId) headTemplateId = templatesStore.getState().createTemplate({
-            name: 'Attention head', standardKey: 'attention-head', graph: buildAttentionHeadGraph(),
+            name: 'Attention head', standardKey: 'attention-head', standardVersion: 2, graph: buildAttentionHeadGraph(),
             description: 'Scaled causal dot-product attention from editable operations.',
-            freeParameters: [spec('d_head', 'int', 64), spec('dropout', 'float', 0.1)],
+            freeParameters: attentionHeadParameters(),
         });
         graph = buildMultiHeadAttentionGraph({ headTemplateId, linearTemplateId });
-        freeParameters = [spec('D', 'int', 768, 'Model width'), spec('H', 'int', 12, 'Parallel heads'), spec('d_head', 'int', 'D / H', 'Features per head'), spec('dropout', 'float', 0.1), spec('bias', 'bool', true)];
+        freeParameters = attentionParameters();
     }
     return templatesStore.getState().createTemplate({ name: component.key === 'layernorm' ? 'LayerNorm' : component.key === 'attention' ? 'Multi-head attention' : component.label,
-        description: component.description, graph, freeParameters, standardKey: key });
+        description: component.description, graph, freeParameters, standardKey: key, ...(key === 'attention' ? { standardVersion: 2 } : {}) });
 }
 
 const unsupported = (parameters, defaults) => Object.entries(defaults).some(([key, value]) => parameters[key] !== undefined && parameters[key] !== value);

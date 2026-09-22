@@ -43,13 +43,13 @@ test('attention head exposes three ordered inputs and editable causal attention 
     for (const edge of graph.edges) assert.ok(graph.nodes[edge.source] && graph.nodes[edge.target]);
 });
 
-test('MHA combines full-width projections, equal splits and a generic expression-count parallel repeat', () => {
+test('MHA combines full-width projections, equal splits and a collection-count parallel repeat', () => {
     const graph = buildMultiHeadAttentionGraph({ headTemplateId: 'head' });
     const repeat = nodesOf(graph).find((node) => node.kind === 'repeat');
     assert.equal(repeat.templateId, 'head');
     assert.equal(repeat.mode, 'parallel');
-    assert.equal(repeat.count, '$H');
-    assert.deepEqual(repeat.bindings, { d_head: '$d_head', dropout: '$dropout' });
+    assert.equal(repeat.count, 'auto');
+    assert.deepEqual(repeat.bindings, { dropout: '$dropout' });
     const incoming = graph.edges.filter((edge) => edge.target === repeat.id);
     assert.deepEqual(incoming.map((edge) => edge.targetHandle), Object.values(ATTENTION_HEAD_INPUT_IDS));
     for (const edge of incoming) assert.deepEqual(graph.nodes[edge.source].parameters, { chunks: '$H', dim: -1 });
@@ -66,13 +66,13 @@ test('registered templates retain user parameters and head-count edits preserve 
     const tpl = templatesStore.getState();
     const attention = tpl.getTemplate(attentionTemplateId);
     assert.deepEqual(attention.freeParameters.map(({ name, default: value }) => [name, value]), [
-        ['D', 768], ['H', 12], ['d_head', 'D / H'], ['dropout', 0.1],
+        ['D', undefined], ['H', 12], ['dropout', 0.1], ['bias', true],
     ]);
     const head = tpl.getTemplate(headTemplateId);
     tpl.patchFreeParameter(attentionTemplateId, 'H', { default: 8 });
     assert.equal(tpl.getTemplate(attentionTemplateId).graph, attention.graph, 'Count changes use one generic repeat node');
     assert.equal(tpl.getTemplate(headTemplateId), head, 'All heads continue to share one editable definition');
-    assert.equal(nodesOf(attention.graph).find((node) => node.kind === 'repeat').count, '$H');
+    assert.equal(nodesOf(attention.graph).find((node) => node.kind === 'repeat').count, 'auto');
 });
 
 test('the default GPT-2 and standalone example register and open explicit attention templates', () => {

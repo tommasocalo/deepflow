@@ -31,7 +31,7 @@ function nestedFixture() {
     const heads = nodesOf(mha).find((node) => node.kind === 'repeat');
     const templates = {
         head: { id: 'head', name: 'Head', graph: buildAttentionHeadGraph(), freeParameters: [
-            { name: 'd_head', type: 'int', default: 64 }, { name: 'dropout', type: 'float', default: 0 },
+            { name: 'd_head', type: 'int', derived: { kind: 'input-dimension', inputId: 'head_q', axis: -1 } }, { name: 'dropout', type: 'float', default: 0 },
         ] },
         mha: { id: 'mha', name: 'MHA', graph: mha, freeParameters: [
             { name: 'D', type: 'int', default: 768 }, { name: 'H', type: 'int', default: 12 },

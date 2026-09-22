@@ -27,7 +27,7 @@ function repeatFixture(count = 2, mode = 'parallel') {
 function attentionFixture(D = 8, H = 2) {
     const templates = {
         head: { id: 'head', name: 'Attention head', graph: buildAttentionHeadGraph(), freeParameters: [
-            { name: 'd_head', type: 'int', default: 4 }, { name: 'dropout', type: 'float', default: 0 },
+            { name: 'd_head', type: 'int', derived: { kind: 'input-dimension', inputId: 'head_q', axis: -1 } }, { name: 'dropout', type: 'float', default: 0 },
         ] },
         mha: { id: 'mha', name: 'Multi-head attention', graph: buildMultiHeadAttentionGraph({ headTemplateId: 'head' }), freeParameters: [
             { name: 'D', type: 'int', default: 8 }, { name: 'H', type: 'int', default: 2 },

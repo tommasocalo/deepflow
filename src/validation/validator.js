@@ -91,7 +91,12 @@ export function validate(graph, opts = {}) {
         }
         const isRepeat = node.kind === 'repeat';
         const parallel = isRepeat && node.mode === 'parallel';
-        const countResult = isRepeat ? resolveRepeatCount(node.count, scope) : { count: 1 };
+        if (isRepeat && node.count === 'auto' && !parallel) {
+            push(errors, id, 'Auto instances is available only for parallel repetition');
+            shapes[id] = null;
+            continue;
+        }
+        const countResult = isRepeat ? resolveRepeatCount(node.count, scope, inputShapes) : { count: 1 };
         if (countResult.error) {
             push(errors, id, countResult.error);
             shapes[id] = null;
@@ -115,10 +120,23 @@ export function validate(graph, opts = {}) {
         const outputs = [];
         const childErrors = [];
         for (let index = 0; index < count && budget.remaining >= 0; index++) {
+            let childInputs;
+            if (parallel) {
+                childInputs = Object.fromEntries(Object.entries(initialInputs).map(([port, shape]) => [port, isShapeCollection(shape) ? shape.items[index] ?? null : shape]));
+            } else if (!isRepeat || index === 0) {
+                childInputs = initialInputs;
+            } else {
+                childInputs = Object.fromEntries(inputIds.map((port) => [port, carry]));
+            }
             const iterationScope = isRepeat ? { ...scope, [node.iterationVariable || 'i']: index } : scope;
-            const subScope = buildParameterScope(template.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined);
+            const subScope = buildParameterScope(template.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined, childInputs);
             for (const parameter of template.freeParameters ?? []) {
                 const value = subScope[parameter.name];
+                if (parameter.derived && value === null) {
+                    const input = template.graph.nodes[parameter.derived.inputId];
+                    childErrors.push(`${parameter.name} cannot be inferred from ${input?.label ?? parameter.derived.inputId}: connect an input with a known dimension`);
+                    continue;
+                }
                 if (parameter.nullable && (value === null || value === undefined)) continue;
                 if (parameter.type === 'bool' && typeof value !== 'boolean') childErrors.push(`${parameter.name} must resolve to true or false`);
                 if (parameter.type === 'int' && (value === null || value === undefined || !Number.isSafeInteger(Number(value)))) {
@@ -127,14 +145,6 @@ export function validate(graph, opts = {}) {
                 if (parameter.type === 'float' && (value === null || value === undefined || !Number.isFinite(Number(value)))) {
                     childErrors.push(`${parameter.name} must resolve to a finite number`);
                 }
-            }
-            let childInputs;
-            if (parallel) {
-                childInputs = Object.fromEntries(Object.entries(initialInputs).map(([port, shape]) => [port, isShapeCollection(shape) ? shape.items[index] ?? null : shape]));
-            } else if (!isRepeat || index === 0) {
-                childInputs = initialInputs;
-            } else {
-                childInputs = Object.fromEntries(inputIds.map((port) => [port, carry]));
             }
             const child = validate(template.graph, { templates, scope: subScope, externalInputs: childInputs, depth: depth + 1, budget });
             carry = outputIds.reduce((output, port) => child.shapes[port] ?? output, null);

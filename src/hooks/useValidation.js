@@ -56,23 +56,23 @@ function resolveLevelContext(rootGraph, currentPath, templates, inspectedIterati
         let nextExternal = inputs;
         repeat = null;
         if (isRepeat) {
-            const { count } = resolveRepeatCount(node.count, scope);
+            const { count } = resolveRepeatCount(node.count, scope, Object.values(inputs));
             const index = Math.max(0, Math.min((count || 1) - 1, inspectedIterations[JSON.stringify(path)] ?? 0));
-            const iterationScope = (i) => buildParameterScope(tpl.freeParameters ?? [], node.bindings ?? {}, { ...scope, [node.iterationVariable || 'i']: i }, i);
-            nextScope = iterationScope(index);
+            const iterationScope = (i, shapes) => buildParameterScope(tpl.freeParameters ?? [], node.bindings ?? {}, { ...scope, [node.iterationVariable || 'i']: i }, i, shapes);
             if (node.mode === 'parallel') {
                 nextExternal = Object.fromEntries(Object.entries(inputs).map(([id, shape]) => [id, isShapeCollection(shape) ? shape.items[index] ?? null : shape]));
             } else {
                 for (let i = 0; i < index; i++) {
-                    const previous = cachedValidate(tpl.graph, templates, iterationScope(i), nextExternal);
+                    const previous = cachedValidate(tpl.graph, templates, iterationScope(i, nextExternal), nextExternal);
                     const output = Object.values(tpl.graph.nodes).filter((n) => n.libraryKey === 'deepflow.template.Output').at(-1);
                     const carry = output ? previous.shapes[output.id] ?? null : null;
                     nextExternal = Object.fromEntries(Object.keys(inputs).map((id) => [id, carry]));
                 }
             }
+            nextScope = iterationScope(index, nextExternal);
             repeat = { path: [...path], count: count || 0, index, label: node.label, mode: node.mode ?? 'sequential' };
         } else {
-            nextScope = buildParameterScope(tpl.freeParameters ?? [], node.parameterValues ?? {}, scope);
+            nextScope = buildParameterScope(tpl.freeParameters ?? [], node.parameterValues ?? {}, scope, undefined, inputs);
         }
         graph = tpl.graph;
         scope = nextScope;
