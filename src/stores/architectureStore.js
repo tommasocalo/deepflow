@@ -26,6 +26,7 @@ import { getEntry } from '../domain/library/index.js';
 import { isValidLevelPath, nearestOpenAncestor, reconcileOpenLevels, sameLevelPath } from '../domain/architecture/levelNavigation.js';
 import { containsTemplate } from '../domain/architecture/templateReferences.js';
 import { copyGraphSelection, pasteGraphSelection } from '../domain/architecture/clipboard.js';
+import { changeStructureScope, effectiveTemplateId, structureOverrideKey } from '../domain/architecture/instanceStructure.js';
 import { instanceAsRepeat, repeatAsSingle, singleConversionIssue } from '../domain/architecture/repeatStructure.js';
 import { componentBindingsForLayer, ensureStandardTemplate, getStandardComponentForLayer, STANDARD_COMPONENTS } from '../domain/components/index.js';
 import { useTemplatesStore } from './templatesStore.js';
@@ -41,7 +42,7 @@ const HISTORY_ACTIONS = {
     moveNode: 'Move node', moveNodes: 'Move nodes', connect: 'Connect nodes', reconnectEdge: 'Reconnect nodes',
     removeEdge: 'Delete connection', patchEdge: 'Change connection', setEdgeGradientOp: 'Change gradient flow',
     resetCurrentGraph: 'Reset graph', groupSelection: 'Group nodes',
-    pasteSelection: 'Paste nodes',
+    pasteSelection: 'Paste nodes', setStructureScope: 'Change structure scope',
 };
 
 const initialGraph = () => {
@@ -69,7 +70,7 @@ const initialGraph = () => {
  * whether to set this store's graph or call into the templates store.
  */
 function resolveLevel(state) {
-    return resolveGraphLevel(state.graph, state.currentPath, useTemplatesStore.getState().templates);
+    return resolveGraphLevel(state.graph, state.currentPath, useTemplatesStore.getState().templates, state.inspectedIterations);
 }
 
 /**
@@ -81,7 +82,7 @@ function getViewGraph(state) {
 
 /** Only return changed navigation fields: moving nodes must not cause extra writes. */
 function navigationPatch(state, graph = state.graph) {
-    const next = reconcileOpenLevels(graph, useTemplatesStore.getState().templates, state.openPaths, state.currentPath);
+    const next = reconcileOpenLevels(graph, useTemplatesStore.getState().templates, state.openPaths, state.currentPath, state.inspectedIterations);
     const patch = {};
     if (next.openPaths !== state.openPaths) patch.openPaths = next.openPaths;
     if (next.currentPath !== state.currentPath) {
@@ -132,14 +133,14 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         if (!isActive() || !path.length) return null;
         const state = get();
         const templates = useTemplatesStore.getState();
-        if (!isValidLevelPath(state.graph, templates.templates, path)) return null;
+        if (!isValidLevelPath(state.graph, templates.templates, path, state.inspectedIterations)) return null;
         const top = state.graph.nodes[path[0]];
         // Fork the containing definition too: rebinding a nested component
         // must not mutate the parent used by another root instance.
         const copiedTop = templates.cloneTemplate(top.templateId, path.length === 1 ? name : undefined);
         if (!copiedTop) return null;
         const graph = patchNode(state.graph, top.id, { templateId: copiedTop });
-        const clonedLevel = resolveGraphLevel(graph, path, useTemplatesStore.getState().templates);
+        const clonedLevel = resolveGraphLevel(graph, path, useTemplatesStore.getState().templates, state.inspectedIterations);
         if (path.length > 1 && name?.trim()) templates.patchTemplate(clonedLevel.templateId, { name: name.trim() });
         set({ graph, ...navigationPatch(state, graph) });
         return clonedLevel.templateId;
@@ -169,6 +170,29 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         getLevel: () => resolveLevel(get()),
         getMutationContext: () => ({ storeId, levelKey: JSON.stringify(get().currentPath), graph: getViewGraph(get()) }),
 
+        getStructureScope: (path = get().currentPath) => {
+            const state = get();
+            const templates = useTemplatesStore.getState().templates;
+            const level = resolveGraphLevel(state.graph, path, templates, state.inspectedIterations);
+            if (!path.length || level.isRoot) return { available: false, local: false, label: '', index: null, hasSavedLocal: false };
+            const override = level.instance.structureOverrides?.[structureOverrideKey(level.instance, level.index ?? 0)];
+            return { available: true, local: !!override?.enabled, label: level.label, index: level.index,
+                hasSavedLocal: !!templates[override?.templateId] };
+        },
+
+        setStructureScope: (scope, path = get().currentPath) => {
+            if (!isActive() || !['shared', 'local'].includes(scope)) return false;
+            const state = get();
+            const current = state.getStructureScope(path);
+            if (!current.available) return false;
+            if (current.local === (scope === 'local')) return true;
+            const result = changeStructureScope(state.graph, useTemplatesStore.getState().templates, path, state.inspectedIterations, scope === 'local');
+            if (!result) return false;
+            useTemplatesStore.setState({ templates: result.templates });
+            set({ graph: result.graph, ...sharedGraphPatch(get(), result.graph), expandedNodeId: null });
+            return true;
+        },
+
         copySelection: () => copyGraphSelection(getViewGraph(get()), get().selectedNodeIds),
 
         pasteSelection: (selection, offset, expected) => {
@@ -176,6 +200,17 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
             const level = resolveLevel(get());
             const result = pasteGraphSelection(level.graph, selection, { offset, templateId: level.templateId, templates: useTemplatesStore.getState().templates });
             if (result.error) return result;
+            // Shared definitions stay shared; private versions belong to the copy.
+            for (const id of result.nodeIds) {
+                const node = result.graph.nodes[id];
+                if (!node.structureOverrides) continue;
+                const overrides = Object.fromEntries(Object.entries(node.structureOverrides).map(([key, override]) => {
+                    const source = useTemplatesStore.getState().getTemplate(override.templateId);
+                    const templateId = useTemplatesStore.getState().cloneTemplate(override.templateId, source?.name);
+                    return [key, { ...override, templateId: templateId ?? override.templateId }];
+                }));
+                result.graph = patchNode(result.graph, id, { structureOverrides: overrides });
+            }
             updateCurrentGraph(() => result.graph);
             set({ selectedNodeIds: result.nodeIds, expandedNodeId: null });
             return { nodeIds: result.nodeIds };
@@ -255,7 +290,7 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
             const node = getViewGraph(get()).nodes[repeatId];
             const templates = useTemplatesStore.getState().templates;
             if (singleConversionIssue(node, templates)) return null;
-            const instance = repeatAsSingle(node, templates[node.templateId]);
+            const instance = repeatAsSingle(node, templates[effectiveTemplateId(node, 0)]);
             updateCurrentGraph((graph) => ({ ...graph, nodes: { ...graph.nodes, [node.id]: instance } }));
             return instance.id;
         },
@@ -388,7 +423,7 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
 
         openLevel: (path) => {
             const state = get();
-            if (!isValidLevelPath(state.graph, useTemplatesStore.getState().templates, path)) return false;
+            if (!isValidLevelPath(state.graph, useTemplatesStore.getState().templates, path, state.inspectedIterations)) return false;
             const currentPath = [...path];
             const openPaths = currentPath.length && !state.openPaths.some((open) => sameLevelPath(open, currentPath))
                 ? [...state.openPaths, currentPath] : state.openPaths;
@@ -414,11 +449,14 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         setInspectedIteration: (path, index) => {
             if (!Array.isArray(path) || !path.length || !Number.isInteger(index) || index < 0) return false;
             const state = get();
-            if (!isValidLevelPath(state.graph, useTemplatesStore.getState().templates, path)) return false;
-            const parent = resolveGraphLevel(state.graph, path.slice(0, -1), useTemplatesStore.getState().templates);
+            if (!isValidLevelPath(state.graph, useTemplatesStore.getState().templates, path, state.inspectedIterations)) return false;
+            const parent = resolveGraphLevel(state.graph, path.slice(0, -1), useTemplatesStore.getState().templates, state.inspectedIterations);
             if (parent.graph.nodes[path.at(-1)]?.kind !== 'repeat') return false;
             const key = JSON.stringify(path);
-            if (state.inspectedIterations[key] !== index) set({ inspectedIterations: { ...state.inspectedIterations, [key]: index } });
+            if (state.inspectedIterations[key] !== index) {
+                const inspectedIterations = { ...state.inspectedIterations, [key]: index };
+                set({ inspectedIterations, ...sharedGraphPatch({ ...state, inspectedIterations }) });
+            }
             return true;
         },
 
@@ -581,7 +619,7 @@ const architectureStore = create(
         createArchitectureState(),
         {
             name: STORAGE_KEY,
-            partialize: (state) => ({ graph: state.graph, currentPath: state.currentPath, openPaths: state.openPaths }),
+            partialize: (state) => ({ graph: state.graph, currentPath: state.currentPath, openPaths: state.openPaths, inspectedIterations: state.inspectedIterations }),
             merge: (persisted, current) => {
                 const saved = persisted ?? {};
                 const graph = saved.graph ?? current.graph;
@@ -590,7 +628,7 @@ const architectureStore = create(
                 // ancestors as tabs when restoring that older format.
                 const savedPaths = saved.openPaths ?? currentPath.map((_, index) => currentPath.slice(0, index + 1));
                 const openPaths = [...(Array.isArray(savedPaths) ? savedPaths : []), currentPath];
-                const navigation = reconcileOpenLevels(graph, useTemplatesStore.getState().templates, openPaths, currentPath);
+                const navigation = reconcileOpenLevels(graph, useTemplatesStore.getState().templates, openPaths, currentPath, saved.inspectedIterations);
                 return { ...current, ...saved, graph, ...navigation };
             },
         },
@@ -670,9 +708,11 @@ Object.assign(useArchitectureStore, architectureStore);
  */
 export function createArchitecturePaneStore({ path = [] } = {}) {
     const graph = architectureStore.getState().graph;
-    const currentPath = isValidLevelPath(graph, useTemplatesStore.getState().templates, path) ? [...path] : [];
+    const inspectedIterations = { ...architectureStore.getState().inspectedIterations };
+    const currentPath = isValidLevelPath(graph, useTemplatesStore.getState().templates, path, inspectedIterations) ? [...path] : [];
     let active = true;
     const pane = createStore(createArchitectureState({ graph, path: currentPath, isActive: () => active }));
+    pane.setState({ inspectedIterations });
     documentPanes.add(pane);
     const unsubscribeMain = architectureStore.subscribe((state, previous) => {
         if (state.graph === previous.graph || pane.getState().graph === state.graph) return;

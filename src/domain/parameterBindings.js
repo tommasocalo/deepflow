@@ -1,3 +1,4 @@
+import { resolveLevelContext } from './architecture/levelContext.js';
 import { asFreeParamRef, resolveParameterValue } from './expressions.js';
 
 /** References in arithmetic and dimension tuples; numeric exponents are not names. */
@@ -12,16 +13,10 @@ export function parameterReferences(value) {
     return [...new Set(names)];
 }
 
-export function parameterFrames(graph, path, templates) {
-    const frames = [];
-    for (const [depth, id] of path.entries()) {
-        const instance = graph?.nodes[id];
-        const template = templates[instance?.templateId];
-        if (!template) break;
-        frames.push({ instance, template, path: path.slice(0, depth), bindings: instance.kind === 'repeat' ? instance.bindings ?? {} : instance.parameterValues ?? {} });
-        graph = template.graph;
-    }
-    return frames;
+export function parameterFrames(graph, path, templates, inspectedIterations = {}) {
+    return resolveLevelContext(graph, path, templates, inspectedIterations).levels.map(({ instance, template }, depth) => ({
+        instance, template, path: path.slice(0, depth), bindings: instance.kind === 'repeat' ? instance.bindings ?? {} : instance.parameterValues ?? {},
+    }));
 }
 
 export function availableParameters(frames) {

@@ -244,7 +244,7 @@ test('example/initial document sessions suppress construction steps; persisted s
     architecture.getState().addStandardComponent('linear', position);
     const architectureSaved = JSON.parse(saved.get('deepflow:architecture-graph')).state;
     const templatesSaved = JSON.parse(saved.get('deepflow:templates')).state;
-    assert.deepEqual(Object.keys(architectureSaved).sort(), ['currentPath', 'graph', 'openPaths']);
+    assert.deepEqual(Object.keys(architectureSaved).sort(), ['currentPath', 'graph', 'inspectedIterations', 'openPaths']);
     assert.deepEqual(Object.keys(templatesSaved), ['templates']);
 });
 

@@ -1,5 +1,6 @@
 import { evaluateExpression, repeatBindingValue } from '../expressions.js';
 import { getEntry } from '../library/index.js';
+import { effectiveTemplateId } from './instanceStructure.js';
 
 // Keep scientific literals intact and match whole identifiers, including $refs.
 const TOKENS = /((?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)|\$?([a-zA-Z_][\w$]*)/g;
@@ -28,7 +29,7 @@ function firstValue(value, variable, parameter) {
  */
 export function singleConversionIssue(node, templates) {
     if (node?.kind !== 'repeat') return 'Select a repeated component first.';
-    const template = templates[node.templateId];
+    const template = templates[effectiveTemplateId(node, 0)];
     if (!template) return 'The component template is missing. Restore it before switching to Single.';
     const variable = node.iterationVariable || 'i';
     const inspect = (definition, bindings = {}, projectDefaults = false, ancestors = new Set()) => {
@@ -58,7 +59,8 @@ export function singleConversionIssue(node, templates) {
             if (child.kind === 'repeat' && (child.iterationVariable || 'i') === variable) continue;
             const values = child.kind === 'repeat' ? child.bindings : child.parameterValues;
             if (Object.values(values ?? {}).some((value) => hasIndex(value, variable))) return true;
-            if (inspect(templates[child.templateId], values, false, path)) return true;
+            const ids = new Set([child.templateId, ...Object.values(child.structureOverrides ?? {}).filter((override) => override.enabled).map((override) => override.templateId)]);
+            if ([...ids].some((id) => inspect(templates[id], values, false, path))) return true;
         }
         return false;
     };
@@ -82,12 +84,14 @@ export function repeatAsSingle(node, template) {
         ...node,
         kind: 'supernode',
         parameterValues,
+        ...(node.structureOverrides ? { structureOverrides: { ...node.structureOverrides, single: node.structureOverrides['0'] } } : {}),
         repeatSettings: { count: node.count, mode: node.mode ?? 'sequential', iterationVariable: variable, bindings, singleValues: { ...parameterValues } },
     };
     delete single.count;
     delete single.mode;
     delete single.iterationVariable;
     delete single.bindings;
+    if (single.structureOverrides && !single.structureOverrides.single) delete single.structureOverrides.single;
     return single;
 }
 
@@ -108,8 +112,13 @@ export function instanceAsRepeat(node, count, mode) {
         mode: mode ?? remembered?.mode ?? 'sequential',
         iterationVariable: remembered?.iterationVariable || 'i',
         bindings,
+        ...(node.structureOverrides ? { structureOverrides: { ...node.structureOverrides, '0': node.structureOverrides.single } } : {}),
     };
     delete repeat.parameterValues;
     delete repeat.repeatSettings;
+    if (repeat.structureOverrides) {
+        delete repeat.structureOverrides.single;
+        if (!repeat.structureOverrides['0']) delete repeat.structureOverrides['0'];
+    }
     return repeat;
 }

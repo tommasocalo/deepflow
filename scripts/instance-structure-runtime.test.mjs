@@ -9,6 +9,9 @@ import { containsTemplate } from '../src/domain/architecture/templateReferences.
 import { copyGraphSelection, pasteGraphSelection } from '../src/domain/architecture/clipboard.js';
 import { useTemplatesStore } from '../src/stores/templatesStore.js';
 import { createValidationCache } from '../src/validation/cache.js';
+import { resolveGraphLevel } from '../src/domain/architecture/operations.js';
+import { changeStructureScope, inspectedInstanceIndex } from '../src/domain/architecture/instanceStructure.js';
+import { parameterFrames } from '../src/domain/parameterBindings.js';
 
 const layer = (id, libraryKey, parameters = {}) => ({ id, label: id, kind: 'layer', libraryKey, parameters, position: { x: 0, y: 0 } });
 const edge = (source, target, targetHandle) => ({ id: `${source}_${target}`, source, target, targetHandle });
@@ -139,6 +142,64 @@ test('validation cache refreshes when an occurrence switches structure without c
     assert.notEqual(second, first);
     assert.deepEqual(first.shapes.heads.items, [[null, 16], [null, 16]]);
     assert.deepEqual(second.shapes.heads.items, [[null, 16], [null, 8]]);
+});
+
+test('shrinking a parameter count aligns canvas, bindings, validation and local editing on the remaining occurrence', () => {
+    const heads = repeat('heads', 'shared', '$H', 'parallel', { 1: override('local'), 2: override('third') });
+    const templates = { shared: scale('shared', 2), local: scale('local', 3), third: scale('third', 4),
+        body: { id: 'body', name: 'Body', freeParameters: [{ name: 'H', type: 'int', default: 3 }], graph: graph([
+            layer('in', 'deepflow.template.Input'), heads, layer('out', 'deepflow.template.Output'),
+        ], [edge('in', 'heads'), edge('heads', 'out')]) },
+    };
+    const node = { id: 'component', kind: 'supernode', templateId: 'body', parameterValues: { H: 3 } };
+    const original = fixture(node);
+    const path = ['component', 'heads'];
+    const inspected = { '["component","heads"]': 2 };
+    assert.equal(resolveGraphLevel(original, path, templates, inspected).templateId, 'third');
+    const changed = { ...original, nodes: { ...original.nodes, component: { ...node, parameterValues: { H: 2 } } } };
+    const level = resolveGraphLevel(changed, path, templates, inspected);
+    assert.equal(level.templateId, 'local');
+    assert.equal(level.index, 1);
+    assert.equal(resolveLevelContext(changed, path, templates, inspected).graph, level.graph);
+    assert.equal(parameterFrames(changed, path, templates, inspected).at(-1).template.id, 'local');
+    const disabled = changeStructureScope(changed, templates, path, inspected, false);
+    assert.equal(resolveGraphLevel(disabled.graph, path, disabled.templates, inspected).templateId, 'shared');
+    const parent = resolveGraphLevel(disabled.graph, ['component'], disabled.templates, inspected).graph.nodes.heads;
+    assert.equal(parent.structureOverrides[1].enabled, false);
+    assert.equal(parent.structureOverrides[2].enabled, true, 'The out-of-range saved occurrence is retained, not edited');
+});
+
+test('Auto collection length and numeric-string counts choose the same occurrence everywhere', () => {
+    const templates = { shared: scale('shared', 2), local: scale('local', 3), third: scale('third', 4) };
+    const root = graph([
+        layer('input', 'deepflow.io.Input', { shape: '(16,)' }), layer('broadcast', 'deepflow.op.Broadcast', { count: 2 }),
+        repeat('heads', 'shared', 'auto', 'parallel', { 1: override('local'), 2: override('third') }),
+    ], [edge('input', 'broadcast'), edge('broadcast', 'heads')]);
+    const inspected = { '["heads"]': 2 };
+    assert.equal(resolveLevelContext(root, ['heads'], templates, inspected).repeat.index, 1);
+    assert.equal(resolveGraphLevel(root, ['heads'], templates, inspected).templateId, 'local');
+    assert.equal(parameterFrames(root, ['heads'], templates, inspected).at(-1).template.id, 'local');
+    assert.equal(inspectedInstanceIndex({ kind: 'repeat', count: '2' }, ['heads'], inspected), 1);
+    const unresolved = { ...root, nodes: { ...root.nodes, heads: { ...root.nodes.heads, count: '$missing' } } };
+    assert.equal(resolveLevelContext(unresolved, ['heads'], templates, inspected).repeat.index, 0);
+    assert.equal(resolveGraphLevel(unresolved, ['heads'], templates, inspected).templateId, 'shared');
+});
+
+test('contextual navigation reuses semantic validation while nodes move', () => {
+    let reads = 0;
+    const input = layer('input', 'deepflow.io.Input');
+    Object.defineProperty(input, 'parameters', { enumerable: true, get: () => { reads++; return { shape: '(16,)' }; } });
+    const templates = { shared: scale('shared', 2) };
+    let root = graph([input, layer('broadcast', 'deepflow.op.Broadcast', { count: 2 }), repeat('heads', 'shared', 'auto')], [edge('input', 'broadcast'), edge('broadcast', 'heads')]);
+    const inspected = { '["heads"]': 1 };
+    assert.equal(resolveGraphLevel(root, ['heads'], templates, inspected).index, 1);
+    const initialReads = reads;
+    assert.ok(initialReads > 0);
+    for (let x = 1; x <= 20; x++) {
+        root = { ...root, nodes: { ...root.nodes, heads: { ...root.nodes.heads, position: { x, y: 0 } } } };
+        assert.equal(resolveGraphLevel(root, ['heads'], templates, inspected).index, 1);
+    }
+    assert.equal(reads, initialReads, 'Position-only moves do not rerun shape validation');
 });
 
 const torchAvailable = spawnSync('python3', ['-c', 'import torch'], { encoding: 'utf8' }).status === 0;

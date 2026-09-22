@@ -4,9 +4,9 @@ export const sameLevelPath = (a, b) => Array.isArray(a) && Array.isArray(b) &&
     a.length === b.length && a.every((id, index) => id === b[index]);
 
 /** Check the entire path: the resolver can fall back when any segment is invalid. */
-export function isValidLevelPath(graph, templates, path) {
+export function isValidLevelPath(graph, templates, path, inspectedIterations = {}) {
     if (!Array.isArray(path) || path.some((id) => typeof id !== 'string' || !id)) return false;
-    const level = resolveGraphLevel(graph, path, templates);
+    const level = resolveGraphLevel(graph, path, templates, inspectedIterations);
     return level.segments.length === path.length && level.segments.every((segment, index) => segment.id === path[index]);
 }
 
@@ -19,13 +19,13 @@ export function nearestOpenAncestor(path, openPaths) {
 }
 
 /** Retain insertion order and references so ordinary graph edits do not change navigation. */
-export function reconcileOpenLevels(graph, templates, openPaths = [], currentPath = []) {
+export function reconcileOpenLevels(graph, templates, openPaths = [], currentPath = [], inspectedIterations = {}) {
     const validPaths = [];
     for (const path of Array.isArray(openPaths) ? openPaths : []) {
-        if (!path?.length || !isValidLevelPath(graph, templates, path)) continue;
+        if (!path?.length || !isValidLevelPath(graph, templates, path, inspectedIterations)) continue;
         if (!validPaths.some((existing) => sameLevelPath(existing, path))) validPaths.push(path);
     }
-    const active = isValidLevelPath(graph, templates, currentPath)
+    const active = isValidLevelPath(graph, templates, currentPath, inspectedIterations)
         ? currentPath
         : nearestOpenAncestor(Array.isArray(currentPath) ? currentPath : [], validPaths);
     return {

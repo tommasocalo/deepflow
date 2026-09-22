@@ -34,6 +34,7 @@
  * @typedef {Object} SuperNodeInstance
  * @property {string} id
  * @property {'supernode'} kind
+ * @property {Object<string, {templateId: string, enabled: boolean}>} [structureOverrides] Saved private definitions; single for components, zero-based occurrence keys for repeats.
  * @property {string} templateId           Reference to the template definition
  * @property {string} label                 Per-instance display label
  * @property {Position} position
@@ -43,6 +44,7 @@
  * @typedef {Object} RepeatNode
  * @property {string} id
  * @property {'repeat'} kind
+ * @property {Object<string, {templateId: string, enabled: boolean}>} [structureOverrides] Active and saved local versions per zero-based occurrence.
  * @property {string} templateId           Template to repeat
  * @property {string} label
  * @property {Position} position
@@ -91,6 +93,7 @@
  * @property {string} [standardKey]           Editable catalog family
  * @property {number} [standardVersion]       Catalog generation; old definitions remain attached to saved graphs
  * @property {string} [componentStyleKey]     Visual family retained by independent copies
+ * @property {boolean} [structureVariant] Private definition owned by an occurrence, excluded from the reusable template menu.
  * @property {string} [sourceTemplateId]      Definition from which a copy was derived
  */
 

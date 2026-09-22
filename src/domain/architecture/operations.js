@@ -1,3 +1,5 @@
+import { resolveLevelContext } from './levelContext.js';
+
 /**
  * Immutable operations over an ArchitectureGraph.
  * Every function returns a new graph; nothing is mutated in place.
@@ -28,21 +30,21 @@ export function removeNode(graph, id) {
  * Every editor surface uses the same traversal so edits and feedback refer to
  * the graph displayed on the canvas. An invalid saved path falls back to root.
  */
-export function resolveGraphLevel(graph, currentPath = [], templates = {}) {
+export function resolveGraphLevel(graph, currentPath = [], templates = {}, inspectedIterations = {}) {
     const root = { graph, isRoot: true, templateId: null, label: 'main', segments: [] };
+    const context = resolveLevelContext(graph, currentPath, templates, inspectedIterations);
+    if (context.levels.length !== currentPath.length) return root;
     let level = root;
-    for (const id of currentPath) {
-        const node = level.graph?.nodes?.[id];
-        if (!node || !['supernode', 'repeat'].includes(node.kind)) return root;
-        const template = templates[node.templateId];
-        if (!template?.graph) return root;
+    for (const { instance: node, template, templateId, index } of context.levels) {
         const label = node.label || template.name || (node.kind === 'repeat' ? 'Repeat' : 'Supernode');
         level = {
             graph: template.graph,
             isRoot: false,
-            templateId: node.templateId,
+            templateId,
+            instance: node,
+            index: node.kind === 'repeat' ? index : null,
             label,
-            segments: [...level.segments, { id, label, kind: node.kind, depth: level.segments.length + 1 }],
+            segments: [...level.segments, { id: node.id, label, kind: node.kind, depth: level.segments.length + 1 }],
         };
     }
     return level;

@@ -124,7 +124,7 @@ test('generic wrapping and conversion preserve graph identity and accept editabl
     assert.equal(createRepeatNode({ templateId }).mode, 'sequential');
 });
 
-test('head inspection is local to a pane and never rewrites the shared graph or persisted project', () => {
+test('head inspection stays local to a pane and persists the main selection separately from the graph', () => {
     const { headTemplateId } = registerAttentionTemplates(templatesStore);
     const repeat = createRepeatNode({ id: 'heads', templateId: headTemplateId, mode: 'parallel', count: 12 });
     architectureStore.setState({ graph: { nodes: { heads: repeat }, edges: [] } });
@@ -142,7 +142,10 @@ test('head inspection is local to a pane and never rewrites the shared graph or 
         assert.equal(pane.getState().setInspectedIteration(['heads'], -1), false);
         assert.equal(pane.getState().setInspectedIteration(['heads'], 1.5), false);
         assert.equal(pane.getState().setInspectedIteration(['missing'], 0), false);
-        assert.equal(Object.hasOwn(JSON.parse(storage.get('deepflow:architecture-graph')).state, 'inspectedIterations'), false);
+        const persisted = JSON.parse(storage.get('deepflow:architecture-graph')).state;
+        assert.deepEqual(persisted.inspectedIterations, { '["heads"]': 2 });
+        assert.deepEqual(persisted.graph, JSON.parse(JSON.stringify(main.graph)));
+        assert.equal(architectureStore.getState().graph, main.graph);
     } finally {
         pane.dispose();
     }
