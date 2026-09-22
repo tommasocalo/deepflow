@@ -40,6 +40,12 @@ function Field({ initial = null, name = 'width', type = 'float' }) {
     const [value, setValue] = useState(initial);
     return h(ParameterField, { param: { name, type }, value, suggestions, onChange(next) { latest = next; setValue(next); } });
 }
+function ValidatedShape() {
+    const [value, setValue] = useState([32, '$width']);
+    const valid = value[1] === '$width';
+    return h(ParameterField, { param: { name: 'shape', type: 'tuple' }, value, suggestions,
+        errors: valid ? [] : ['Unknown dimension reference'], onChange: setValue });
+}
 beforeEach(() => {
     errors.length = 0;
     latest = undefined;
@@ -97,6 +103,8 @@ test('typing $ offers scoped names, resolved values and owners; arrows and Enter
     assert.equal(input().value, '$weight_shape');
     assert.equal(options().length, 0);
     assert.equal(input().selectionStart, '$weight_shape'.length);
+    await act(() => document.dispatchEvent(new dom.window.Event('selectionchange', { bubbles: true })));
+    assert.equal(options().length, 0, 'A delayed native selection event does not reopen accepted completion');
 });
 
 test('prefix matching and caret insertion preserve the rest of the expression', async () => {
@@ -148,4 +156,21 @@ test('whole-shape references retain their scalar binding and numeric editing kee
     assert.equal(latest, '1.00e-2');
     await act(() => input().blur());
     assert.equal(latest, 0.01);
+});
+
+test('unfinished references defer inline errors until blur without losing real validation feedback', async () => {
+    await act(() => root.render(h(ValidatedShape)));
+    const second = input('shape dimension 2');
+    await type(second, '$');
+    assert.equal(container.querySelectorAll('[aria-invalid="true"]').length, 0);
+    assert.equal(container.querySelector('.df-param-errors'), null, 'Typing an incomplete reference does not flash field errors');
+    await act(() => second.blur());
+    assert.equal(second.getAttribute('aria-invalid'), 'true');
+    assert.match(container.querySelector('.df-param-errors').textContent, /Unknown dimension reference/);
+    await type(second, '$wi');
+    assert.equal(second.getAttribute('aria-invalid'), 'false');
+    await key(second, 'Enter');
+    await act(() => second.blur());
+    assert.equal(second.value, '$width');
+    assert.equal(container.querySelectorAll('[aria-invalid="true"]').length, 0);
 });

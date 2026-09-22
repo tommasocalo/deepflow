@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { completeVariableReference, formatVariableValue, variableReferenceAtCaret } from './variableCompletion';
 import './variable-input.css';
@@ -7,6 +7,7 @@ import './variable-input.css';
  * selection, arithmetic, clipboard shortcuts, and native text editing. */
 export default function VariableInput({ suggestions = [], multiline = false, onChange, onFocus, onBlur, onKeyDown, onSelect, ...props }) {
     const inputRef = useRef(null);
+    const completedRef = useRef(null);
     const listId = useId();
     const [reference, setReference] = useState(null);
     const [focused, setFocused] = useState(false);
@@ -23,19 +24,21 @@ export default function VariableInput({ suggestions = [], multiline = false, onC
     }) : [];
     const open = focused && reference && dismissed !== referenceKey && options.length > 0;
     const active = Math.min(highlighted, options.length - 1);
+    useLayoutEffect(() => {
+        if (open) document.getElementById(`${listId}-${active}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }, [open, active, listId]);
 
     const updateReference = (input, changed = false) => {
         const row = input.closest('.df-param-row');
-        if (row) {
-            const rowRect = row.getBoundingClientRect();
-            const inspectorRect = row.closest('.df-inspector')?.getBoundingClientRect();
-            const width = inspectorRect?.width ? Math.min(Math.max(184, rowRect.width), inspectorRect.width - 20) : Math.max(184, rowRect.width);
-            const left = inspectorRect?.width ? Math.max(inspectorRect.left + 10 - rowRect.left, Math.min(0, inspectorRect.right - 10 - rowRect.left - width)) : 0;
-            setAnchor({ host: row, width, left });
-        }
+        if (row) setAnchor(row);
         const next = variableReferenceAtCaret(input.value, input.selectionStart);
         const nextKey = next && `${next.start}:${next.end}:${next.prefix}`;
-        if (changed || nextKey !== referenceKey) {
+        // Browsers dispatch a delayed selectionchange after completion sets the
+        // caret. Keep that event from reopening the just-accepted suggestion.
+        if (completedRef.current?.value === input.value && completedRef.current?.key === nextKey) {
+            setDismissed(nextKey);
+        } else if (changed || nextKey !== referenceKey) {
+            completedRef.current = null;
             setHighlighted(0);
             setDismissed(null);
         }
@@ -45,6 +48,9 @@ export default function VariableInput({ suggestions = [], multiline = false, onC
         const input = inputRef.current;
         if (!input || !reference) return;
         const next = completeVariableReference(input.value, reference, option.name);
+        const completed = variableReferenceAtCaret(next.value, next.caret);
+        const completedKey = `${completed.start}:${completed.end}:${completed.prefix}`;
+        completedRef.current = { value: next.value, key: completedKey };
         // Native input dispatch keeps the consumer's ordinary onChange contract
         // and React's controlled-input tracker in sync.
         const view = input.ownerDocument.defaultView;
@@ -52,14 +58,12 @@ export default function VariableInput({ suggestions = [], multiline = false, onC
         Object.getOwnPropertyDescriptor(prototype, 'value').set.call(input, next.value);
         input.setSelectionRange(next.caret, next.caret);
         input.dispatchEvent(new view.Event('input', { bubbles: true }));
-        const completed = variableReferenceAtCaret(next.value, next.caret);
         setReference(completed);
-        setDismissed(`${completed.start}:${completed.end}:${completed.prefix}`);
+        setDismissed(completedKey);
         input.focus();
     };
     const Input = multiline ? 'textarea' : 'input';
     const list = open && <span id={listId} role="listbox" aria-label="Available parameters"
-        style={anchor ? { width: anchor.width, left: anchor.left } : undefined}
         className={`df-variable-suggestions nodrag${anchor ? ' is-portaled' : ''}`}>
         {options.map((option, index) => <span key={option.name} id={`${listId}-${index}`}
             role="option" aria-selected={index === active} className="df-variable-option"
@@ -99,6 +103,6 @@ export default function VariableInput({ suggestions = [], multiline = false, onC
                     setDismissed(referenceKey);
                 }
             }} />
-        {anchor && list ? createPortal(list, anchor.host) : list}
+        {anchor && list ? createPortal(list, anchor) : list}
     </span>;
 }

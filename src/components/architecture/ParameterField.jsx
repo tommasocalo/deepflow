@@ -62,7 +62,11 @@ function ShapeField({ value, onChange, common, className, name, suggestions }) {
 
 const ParameterField = ({ param, value, onChange, error, errors = [], label, ariaLabel, placeholder, compactBoolean = false, suggestions = [] }) => {
     const id = useId();
-    const hasError = !!error || errors.length > 0;
+    const [editing, setEditing] = useState(false);
+    // A partial "$" or arithmetic expression is expected while typing. Keep
+    // document validation live, but show field feedback after editing finishes.
+    const visibleErrors = editing ? [] : errors;
+    const hasError = !editing && (!!error || errors.length > 0);
     const errorId = `${id}-errors`;
     const display = value === null || value === undefined ? '' : value;
     const numeric = param.type === 'int' || param.type === 'float';
@@ -78,7 +82,7 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
         style: { '--parameter-width': `${baseWidth}ch` },
         id,
         'aria-invalid': hasError,
-        'aria-describedby': errors.length ? errorId : undefined,
+        'aria-describedby': visibleErrors.length ? errorId : undefined,
         'aria-label': ariaLabel,
         className,
         onClick: (event) => event.stopPropagation(),
@@ -87,7 +91,13 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
     };
 
     return (
-        <div className={`df-param-row${hasError ? ' has-error' : ''}${inlineBoolean ? ' df-param-row--toggle' : ''}`}>
+        <div className={`df-param-row${hasError ? ' has-error' : ''}${inlineBoolean ? ' df-param-row--toggle' : ''}`}
+            onChangeCapture={(event) => {
+                if (event.target.matches('input:not([type="checkbox"]), textarea')) setEditing(true);
+            }}
+            onBlurCapture={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setEditing(false);
+            }}>
             <label htmlFor={id} title={param.description} className="df-param-label">
                 {label ?? param.name}
                 {param.required && <span className="df-param-required" title="Required">*</span>}
@@ -141,7 +151,7 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
                     }}
                 />
             )}
-            {errors.length > 0 && <div id={errorId} className="df-param-errors">{errors.map((message, index) => <span key={index}>{message}</span>)}</div>}
+            {visibleErrors.length > 0 && <div id={errorId} className="df-param-errors">{visibleErrors.map((message, index) => <span key={index}>{message}</span>)}</div>}
         </div>
     );
 };

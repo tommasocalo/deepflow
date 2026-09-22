@@ -11,7 +11,8 @@
 .df-inspector .df-inspector-field .df-param-shape .df-shape-cell .df-param-input { width: 100%; min-width: 0; max-width: 100%; height: 25px; padding: 3px 5px; border: 0; border-radius: 0; font: 600 10px/17px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: left; }
 .df-param-shape .df-shape-cell:has(.is-invalid) { border-color: #dc2626; }
 .df-param-shape .df-shape-cell:focus-within { outline: 1px solid #111; }
-.df-param-shape .df-param-input:focus { outline: 0; box-shadow: none; }
+.df-param-shape .df-shape-cell .df-param-input:focus,
+.df-inspector .df-inspector-field .df-param-shape .df-shape-cell .df-param-input:focus { outline: 0; box-shadow: none; }
 .df-shape-remove { display: grid; place-items: center; flex-shrink: 0; width: 16px; height: 25px; border-left: 1px solid #eee; color: #777; font-size: 11px; }
 .df-shape-remove:hover:enabled { color: #b91c1c; background: #fef2f2; }
 .df-shape-remove:disabled { color: #ccc; cursor: default; }

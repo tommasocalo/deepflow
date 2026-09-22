@@ -2,8 +2,8 @@
 .df-variable-field.is-completing { z-index: 20; }
 .df-param-row { position: relative; }
 .df-param-row:has(.df-variable-field.is-completing) { z-index: 30; }
-.df-variable-suggestions { position: absolute; z-index: 30; top: calc(100% + 3px); left: 0; display: grid; width: max(100%, 184px); max-width: 260px; max-height: 180px; overflow-y: auto; border: 2px solid #111; border-radius: 0; background: #fff; box-shadow: 2px 2px 0 #111; color: #111; text-align: left; }
-.df-variable-suggestions.is-portaled { box-sizing: border-box; max-width: none; }
+.df-variable-suggestions { display: grid; box-sizing: border-box; width: 100%; min-width: 0; max-height: 180px; overflow-y: auto; margin-top: 3px; border: 1px solid #111; border-radius: 0; background: #fff; color: #111; text-align: left; }
+.df-variable-suggestions.is-portaled { grid-column: 1 / -1; }
 .df-variable-option { display: grid; gap: 2px; min-width: 0; padding: 5px 6px; cursor: pointer; border-bottom: 1px solid #e7e5e4; }
 .df-variable-option:last-child { border-bottom: 0; }
 .df-variable-option[aria-selected="true"], .df-variable-option:hover { background: #fef08a; }
