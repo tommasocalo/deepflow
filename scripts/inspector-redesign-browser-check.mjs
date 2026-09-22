@@ -121,8 +121,8 @@ try {
     await screenshot('04-position-table-dimensions-1024');
     await second.fill('$');
     assert.equal(await page.locator('.df-param-shape [aria-invalid="true"]').count(), 0, 'A partial reference is not painted red while typing');
-    assert.match(await page.locator('.df-inspector-field[data-parameter="shape"] .df-parameter-source').innerText(), /Unresolved/);
-    assert.equal(await page.getByRole('button', { name: 'Unlink shape', exact: true }).count(), 0, 'An incomplete reference cannot detach into an invalid local value');
+    assert.equal(await page.locator('.df-parameter-source').count(), 0, 'References are shown once inside their field');
+    assert.equal(await page.getByRole('button', { name: 'Unlink shape', exact: true }).count(), 0);
     await screenshot('05-shape-variable-suggestions-1024');
     await second.fill('$embedding_dim');
     await second.press('Escape');
@@ -133,8 +133,9 @@ try {
     await inspect('Attention heads');
     assert.equal(await field('dropout').inputValue(), '$dropout');
     const source = page.locator('.df-parameter-source');
-    assert.match(await source.innerText(), /Linked\s+0.1\s+from causal self-attention/);
-    assert.equal(await source.getByRole('button').count(), 1, 'Only the explicit Unlink action remains');
+    assert.equal(await source.count(), 0);
+    assert.equal(await page.locator('.df-parameter-result').count(), 0, 'Direct references do not duplicate their resolved values');
+    assert.equal(await page.getByRole('button', { name: 'Dropout in causal self-attention settings', exact: true }).getAttribute('aria-pressed'), 'true');
     assert.equal(await page.getByRole('button', { name: /Parameter options/ }).count(), 0);
     assert.equal(await page.getByRole('link').count(), 0);
     await screenshot('06-attention-heads-linked-1440');
@@ -142,32 +143,36 @@ try {
     await navigate(['Transformer blocks', 'causal self-attention', 'Attention heads']);
     await inspect('attention dropout');
     assert.equal(await field('p').inputValue(), '$dropout');
-    assert.match(await source.innerText(), /Linked\s+0.1/);
-    await screenshot('07-dropout-link-1440');
-    await page.getByRole('button', { name: 'Unlink p', exact: true }).click();
-    assert.equal(await field('p').inputValue(), '0.1');
     assert.equal(await source.count(), 0);
+    const eye = page.getByRole('button', { name: 'Dropout in Attention heads settings', exact: true });
+    assert.equal(await eye.getAttribute('aria-pressed'), 'true');
+    await screenshot('07-dropout-link-1440');
     await field('p').fill('0.25');
     await field('p').blur();
     assert.equal(await field('p').inputValue(), '0.25');
+    assert.equal(await eye.getAttribute('aria-pressed'), 'false');
     await field('p').fill('$dr');
     assert.match(await matching.innerText(), /\$dropout\s*0.1/);
     await field('p').press('Enter');
     assert.equal(await field('p').inputValue(), '$dropout');
-    assert.match(await source.innerText(), /Linked\s+0.1/);
-
-    await page.getByRole('button', { name: 'Expose a field…', exact: true }).click();
-    await page.getByRole('combobox', { name: 'Field to expose', exact: true }).selectOption('p');
-    await page.getByRole('textbox', { name: 'Exposed parameter name', exact: true }).fill('attention_probability');
+    assert.equal(await source.count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Expose a field…', exact: true }).count(), 0);
+    assert.equal(await eye.getAttribute('aria-pressed'), 'true');
+    await eye.click();
+    assert.equal(await eye.getAttribute('aria-pressed'), 'false');
+    assert.equal(await field('p').inputValue(), '$dropout', 'The eye only hides the parent control');
     await screenshot('08-expose-single-field-1440');
-    await page.getByRole('button', { name: 'Expose parameter', exact: true }).click();
-    assert.equal(await field('p').inputValue(), '$attention_probability');
-    assert.match(await source.innerText(), /Linked\s+0.1/);
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     assert.equal(await field('p').inputValue(), '$dropout');
+    assert.equal(await eye.getAttribute('aria-pressed'), 'true');
 
     await page.setViewportSize({ width: 1024, height: 768 });
     await fit();
+    await field('p').fill('1 / 3');
+    await field('p').blur();
+    assert.match(await page.locator('.df-parameter-result').innerText(), /Result:\s*≈\s*0\.333333/);
+    assert.equal(await page.locator('.df-parameter-result strong').getAttribute('title'), `Exact value: ${1 / 3}`);
+    assert.equal(await field('p').inputValue(), '1 / 3');
     await screenshot('09-dropout-link-1024');
     await navigate([]);
     await inspect('Add');
@@ -180,5 +185,5 @@ try {
     await screenshot('10-operation-type-1024');
     assert.deepEqual(errors, []);
     await writeFile(`${directory}/measurements.json`, JSON.stringify(measurements, null, 2));
-    console.log('Inspector redesign browser checks passed: aligned labels, stable one-row shapes, scoped autocomplete, inherited validation, explicit unlink/relink, expose+Undo, operation icon/type, 1440/1024 containment.');
+    console.log('Inspector redesign browser checks passed: aligned labels, stable one-row shapes, scoped autocomplete, inherited validation, direct references without duplicate rows, eye visibility+Undo, compact formula result with exact tooltip, operation icon/type, 1440/1024 containment.');
 } finally { await browser.close(); }

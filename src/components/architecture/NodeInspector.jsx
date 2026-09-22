@@ -10,7 +10,7 @@ import { useValidation, useValidationContext } from '../../hooks/useValidation.j
 import { resolveComponentContext } from '../../domain/componentContext.js';
 import { STANDARD_COMPONENTS } from '../../domain/components/index.js';
 import ParameterField from './ParameterField.jsx';
-import ParameterBinding, { DerivedParameter, ExposeParameter, ParameterBindingsProvider } from './ParameterBinding.jsx';
+import ParameterBinding, { DerivedParameter, ParameterBindingsProvider } from './ParameterBinding.jsx';
 import OperationIcon from './OperationIcon.jsx';
 import { useInspectorPlacement } from './useInspectorPlacement.js';
 import { compactConnectionWarnings, compactParameterError, partitionParameterErrors } from './inspectorIssues.js';
@@ -35,6 +35,7 @@ const FIELD_LABELS = {
     bias: 'Bias',
     H: 'Heads', D: 'Width', d_head: 'Head width', n_heads: 'Heads', dropout: 'Dropout',
     shape: 'Shape', factor: 'Factor', value: 'Value', exponent: 'Exponent', chunks: 'Parts', name: 'Name',
+    init: 'Distribution', scale: 'Scale', disabled_init: 'When disabled',
 };
 
 // Width follows the field schema, never the number of characters being typed.
@@ -44,22 +45,22 @@ function inspectorWidth(node, template) {
 }
 
 function InspectorField({ param, value, label, fullRow = false, ...props }) {
-    const wide = ['tuple', 'string'].includes(param.type) || param.name === 'factor';
+    const wide = ['tuple', 'string'].includes(param.type) || ['factor', 'scale'].includes(param.name);
     return (
         <div className={`df-inspector-field${wide ? ' is-wide' : ''}${fullRow ? ' is-alone' : ''}`} data-parameter={param.name}>
-            <ParameterBinding param={param} value={value} onChange={props.onChange}><ParameterField
+            <ParameterBinding param={param} value={value}><ParameterField
                 param={{ ...param, description: `${param.name}${param.description ? ` — ${param.description}` : ''}` }}
                 value={value}
                 label={label ?? FIELD_LABELS[param.name] ?? param.name.replaceAll('_', ' ')}
                 ariaLabel={param.name}
-                compactBoolean={param.name === 'bias'}
+                compactBoolean={param.type === 'bool'}
                 {...props}
             /></ParameterBinding>
         </div>
     );
 }
 
-function ParamGroup({ params, values, fieldErrors, onPatch, collapsed = false }) {
+function ParamGroup({ params, values, fieldErrors, onPatch, collapsed = false, title = 'Options', initiallyOpen = false, labels = {} }) {
     const detailsRef = useRef(null);
     const hasErrors = params.some((p) => fieldErrors[p.name]?.length);
     useEffect(() => {
@@ -70,6 +71,7 @@ function ParamGroup({ params, values, fieldErrors, onPatch, collapsed = false })
         <InspectorField
             key={p.name}
             param={p}
+            label={labels[p.name]}
             fullRow={params.length === 1}
             value={values[p.name]}
             onChange={(v) => onPatch({ [p.name]: v })}
@@ -78,8 +80,8 @@ function ParamGroup({ params, values, fieldErrors, onPatch, collapsed = false })
     ))}</div>;
     const inlineBias = params.length === 1 && params[0].name === 'bias';
     return collapsed && !inlineBias ? (
-        <details ref={detailsRef} className="df-inspector-group df-inspector-options">
-            <summary>Options</summary>
+        <details ref={detailsRef} className="df-inspector-group df-inspector-options" open={initiallyOpen || undefined}>
+            <summary>{title}</summary>
             {fields}
         </details>
     ) : inlineBias && collapsed ? <section className="df-inspector-group">{fields}</section> : fields;
@@ -102,6 +104,10 @@ function LayerBody({ id, node, fieldErrors }) {
     const params = entry?.parameters ?? [];
     const primary = params.filter((p) => p.required || SHAPE_PRIORITY.includes(p.name));
     const options = params.filter((p) => !p.required && !SHAPE_PRIORITY.includes(p.name));
+    const parameterTensor = node.libraryKey === 'deepflow.op.Parameter';
+    const initialization = parameterTensor ? options.filter((p) => ['init', 'scale'].includes(p.name)) : [];
+    const otherOptions = parameterTensor ? options.filter((p) => !['init', 'scale'].includes(p.name)) : options;
+    const distribution = node.parameters.init ?? 'normal';
     const family = getNodeFamily(node.libraryKey);
     const moduleOptions = family?.variants ?? (entry && entry.category !== 'IO'
         ? PYTORCH_BLOCKS.filter((c) => c.category === entry.category && !TEMPLATE_ONLY.has(c.key) && !getNodeFamily(c.key))
@@ -128,7 +134,9 @@ function LayerBody({ id, node, fieldErrors }) {
             {params.length ? (
                 <>
                     <ParamGroup params={primary} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch} />
-                    <ParamGroup params={options} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch} collapsed />
+                    {initialization.length > 0 && <ParamGroup params={initialization} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch}
+                        collapsed title="Initialization" initiallyOpen labels={{ scale: distribution === 'uniform' ? 'Bound (±)' : distribution === 'normal' ? 'Standard deviation' : 'Scale' }} />}
+                    <ParamGroup params={otherOptions} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch} collapsed />
                 </>
             ) : <p className="df-inspector-note">No parameters.</p>}
         </>
@@ -140,11 +148,11 @@ function Bindings({ freeParams, values, onChange, hint }) {
     return (
         <section className="df-inspector-group">
             <div className="df-inspector-fields">
-                {freeParams.filter((p) => !p.derived).map((p) => (
+                {freeParams.filter((p) => !p.derived && !p.hidden).map((p) => (
                     <InspectorField
                         key={p.name}
                         param={p}
-                        fullRow={freeParams.filter((parameter) => !parameter.derived).length === 1}
+                        fullRow={freeParams.filter((parameter) => !parameter.derived && !parameter.hidden).length === 1}
                         label={FIELD_LABELS[p.name] ?? p.name.replaceAll('_', ' ')}
                         value={values[p.name]}
                         placeholder={p.default != null ? String(p.default) : 'Default'}
@@ -213,13 +221,13 @@ function RepeatBody({ id, node }) {
                 <summary>Parameter formulas</summary>
                 <div className="df-inspector-fields">
                     <InspectorField
-                        param={{ name: 'iterationVariable', type: 'string', description: 'Zero-based index available in parameter formulas; instance 1 uses index 0' }}
-                        label="Index variable"
+                        param={{ name: 'iterationVariable', type: 'string', description: 'Position in a repeat, for formulas that vary by instance: instance 1 uses 0, instance 2 uses 1' }}
+                        label="Formula index"
                         value={iterVar}
                         onChange={(v) => patchRepeatNode(id, { iterationVariable: (v || 'i').trim() || 'i' })}
                     />
                 </div>
-                <p className="df-inspector-note"><code>{iterVar} = 0…{count ? count - 1 : '?'}</code>. For example, <code>64 * 2 ** {iterVar}</code>.</p>
+                <p className="df-inspector-note">Instance 1: <code>{iterVar} = 0</code>; instance 2: <code>{iterVar} = 1</code>. Use it only for values that change by instance, e.g. <code>64 * ({iterVar} + 1)</code>.</p>
             </details>
         </>
     );
@@ -271,7 +279,6 @@ export default function NodeInspector() {
                 {node.kind === 'supernode' && <SupernodeBody id={id} node={node} />}
                 {node.kind === 'repeat' && <RepeatBody id={id} node={node} />}
                 <Issues errors={nodeErrors} warnings={warnings} />
-                <ExposeParameter />
             </div></ParameterBindingsProvider>
         </aside>
     );

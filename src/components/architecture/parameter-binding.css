@@ -1,23 +1,12 @@
 .df-field-binding { position: relative; min-width: 0; }
-.df-parameter-source { display: grid; grid-template-columns: max-content minmax(0, 1fr) 21px; align-items: center; gap: 2px 4px; min-width: 0; margin-top: 4px; color: #666; font: 10px/1.35 ui-sans-serif, system-ui, sans-serif; }
-.df-parameter-link-state { flex-shrink: 0; color: #555; }
-.df-parameter-source > strong { flex-shrink: 0; color: #111; font: 600 10px/1.35 ui-monospace, monospace; }
-.df-parameter-origin { grid-row: 2; grid-column: 1 / -1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
-.df-parameter-unlink { display: grid; place-items: center; flex-shrink: 0; width: 21px; height: 21px; padding: 0; margin-left: auto; border: 1px solid #ccc; border-radius: 2px; background: #fff; color: #555; cursor: pointer; }
-.df-parameter-unlink:hover { color: #111; border-color: #111; background: #fff8d9; }
-.df-parameter-source.is-unresolved { color: #a16207; }
+.df-param-label-line { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.df-field-visibility { display: grid; place-items: center; width: 18px; height: 18px; flex: 0 0 18px; padding: 0; border: 1px solid transparent; border-radius: 2px; background: #fff; color: #777; cursor: pointer; }
+.df-field-visibility[aria-pressed="true"] { color: #111; }
+.df-field-visibility:hover, .df-field-visibility:focus-visible { color: #111; border-color: #111; background: #fff8d9; }
+.df-parameter-result { display: flex; align-items: baseline; gap: 5px; min-width: 0; margin-top: 4px; font: 10px/1.4 ui-sans-serif, system-ui, sans-serif; color: #666; }
+.df-parameter-result strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #111; font: 600 10px/1.4 ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 .df-derived-parameter { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 6px; padding: 6px 0; border-bottom: 1px solid #eee; font-size: 10px; }
 .df-derived-parameter strong { font: 700 11px ui-monospace, monospace; }
 .df-derived-parameter small { grid-column: 1 / -1; color: #666; font-size: 10px; }
 .df-derived-parameters { margin-top: 5px; }
 .df-repeat-auto > button, .df-repeat-infer { padding: 2px 0; margin-top: 4px; border: 0; background: none; font: 10px/1.3 ui-sans-serif, system-ui, sans-serif; color: #555; text-decoration: underline; cursor: pointer; }
-.df-expose-parameter { margin-top: 9px; padding-top: 6px; border-top: 1px solid #e5e5e5; }
-.df-expose-trigger { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; background: none; border: 0; color: #555; font: 10px/1.4 ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
-.df-expose-trigger:hover { color: #111; text-decoration: underline; }
-.df-expose-parameter form { display: grid; gap: 7px; font-size: 10px; }
-.df-expose-parameter header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.df-expose-parameter header button { border: 0; background: none; padding: 0; cursor: pointer; }
-.df-expose-parameter label { display: grid; gap: 3px; }
-.df-expose-parameter input, .df-expose-parameter select { min-width: 0; width: 100%; height: 28px; box-sizing: border-box; border: 1px solid #111; border-radius: 2px; background: #fff; padding: 3px 5px; color: #111; font: 11px ui-monospace, monospace; }
-.df-expose-submit { min-height: 27px; padding: 4px 6px; border: 1px solid #111; border-radius: 2px; background: #fff8d9; font-size: 10px; font-weight: 600; cursor: pointer; }
-.df-expose-submit:disabled { opacity: .45; cursor: default; }

@@ -1,5 +1,6 @@
 import { resolveLevelContext } from './architecture/levelContext.js';
 import { asFreeParamRef, resolveParameterValue } from './expressions.js';
+export { formatParameterValue } from './parameterDisplay.js';
 
 /** References in arithmetic and dimension tuples; numeric exponents are not names. */
 export function parameterReferences(value) {
@@ -65,12 +66,6 @@ export function resolvedFieldValue(value, scope, depth = 0) {
     return resolved;
 }
 
-export function formatParameterValue(value) {
-    if (value === null || value === undefined) return 'Unresolved';
-    if (Array.isArray(value)) return value.map(formatParameterValue).join(' × ');
-    return String(value);
-}
-
 /** One immutable edit adds the interface control and binds the original field. */
 export function exposeTemplateField(template, { nodeId, field, name, spec, defaultValue }) {
     if (!template || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || (template.freeParameters ?? []).some((p) => p.name === name)) return null;
@@ -86,4 +81,49 @@ export function exposeTemplateField(template, { nodeId, field, name, spec, defau
         freeParameters: [...(template.freeParameters ?? []), { ...definition, ...(spec?.name === 'shape' && spec.type === 'tuple' ? { editor: 'dimensions' } : {}), name, default: defaultValue ?? null }],
         graph: { ...template.graph, nodes: { ...template.graph.nodes, [nodeId]: nextNode } },
     };
+}
+
+function fieldValue(node, field) {
+    if (!node) return undefined;
+    if (node.kind === 'repeat' && field === 'count') return node.count;
+    const values = node.kind === 'layer' ? node.parameters : node.kind === 'repeat' ? node.bindings : node.parameterValues;
+    return values?.[field];
+}
+
+/** A direct reference exposes this field through its immediate component.
+ * Hidden controls remain references: visibility never changes model values. */
+export function exposedFieldParameter(template, nodeId, field) {
+    const value = fieldValue(template?.graph?.nodes?.[nodeId], field);
+    const name = asFreeParamRef(typeof value === 'string' ? value.trim() : value);
+    return name ? template?.freeParameters?.find((parameter) => parameter.name === name && !parameter.derived) ?? null : null;
+}
+
+/** The eye changes the parent control's visibility. First exposure creates
+ * an alias; later clicks retain the alias, formulas and every instance binding. */
+export function toggleTemplateFieldExposure(template, { nodeId, field, spec, defaultValue, label, reservedNames = [] }) {
+    const node = template?.graph?.nodes?.[nodeId];
+    if (!node || !field || spec?.derived || (node.kind === 'repeat' && field === 'count' && node.count === 'auto')) return null;
+    const exposed = exposedFieldParameter(template, nodeId, field);
+    if (exposed) return {
+        ...template,
+        freeParameters: template.freeParameters.map((parameter) => parameter === exposed ? { ...parameter, hidden: parameter.hidden !== true } : parameter),
+    };
+
+    const current = fieldValue(node, field);
+    const candidate = current !== undefined ? current : defaultValue !== undefined ? defaultValue : spec?.default;
+    const raw = candidate == null && !spec?.nullable && spec?.default != null ? spec.default : candidate ?? null;
+    // Include referenced names even when callers supply no scope. An alias
+    // named like its own default would shadow the value it must inherit.
+    const reserved = new Set([
+        ...(template.freeParameters ?? []).map((parameter) => parameter.name),
+        ...reservedNames.map((name) => String(name).replace(/^\$/, '')),
+        ...parameterReferences(raw),
+    ]);
+    const friendly = String(label || (field === 'p' ? 'dropout' : field)).trim()
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+        .replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+    const base = /^[a-z_]/.test(friendly) ? friendly : `parameter${friendly ? `_${friendly}` : ''}`;
+    let name = base;
+    for (let suffix = 2; reserved.has(name); suffix++) name = `${base}_${suffix}`;
+    return exposeTemplateField(template, { nodeId, field, name, spec: { ...spec, hidden: false }, defaultValue: raw });
 }

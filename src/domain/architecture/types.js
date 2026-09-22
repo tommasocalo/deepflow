@@ -12,6 +12,7 @@
  * @property {*} [default]
  * @property {string[]} [options]
  * @property {boolean} [required]
+ * @property {boolean} [hidden] Hide this control on component instances without changing the parameter or its references.
  * @property {{kind: 'input-dimension', inputId: string, axis: number}} [derived] Read-only dimension from the named template input; never an editable instance binding.
  *
  * @typedef {Object} LibraryEntry

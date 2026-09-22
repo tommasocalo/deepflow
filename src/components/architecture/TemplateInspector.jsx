@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { ArrowUpRight, ChevronDown, Plus, Trash2, Variable } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, Eye, EyeOff, Plus, Trash2, Variable } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
@@ -75,6 +75,11 @@ function TemplateParameters({ template, embedded, initiallyOpen, onOpenConsumer 
                         <section key={parameter.name} className="df-template-parameter" aria-label={`Parameter ${parameter.name}`}>
                             <div className="df-template-parameter-heading">
                                 <code>${parameter.name}</code>
+                                <button type="button" className="df-field-visibility" aria-label={`${parameter.name} in ${template.name} settings`}
+                                    aria-pressed={!parameter.hidden} title={`${parameter.hidden ? 'Show' : 'Hide'} ${parameter.name} in component settings`}
+                                    onClick={() => patchFreeParameter(template.id, parameter.name, { hidden: !parameter.hidden })}>
+                                    {parameter.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                                </button>
                                 <button
                                     type="button"
                                     className="df-template-remove"

@@ -27,12 +27,12 @@ function ShapeField({ value, onChange, common, className, name, suggestions }) {
     const dimensions = shapeDimensions(value);
     const update = (index, next) => onChange(dimensions.map((dimension, at) => at === index ? next : dimension));
     // A reference can resolve to the entire tuple. It is not one scalar axis:
-    // preserve it until the binding menu's "Use local value" supplies an array.
+    // preserve it until the user enters explicit dimensions.
     // Keep the same input while its reference text is temporarily incomplete.
     if (!Array.isArray(value) && (wholeReference || editingReference)) return <VariableInput {...common} suggestions={suggestions}
         aria-label={common['aria-label'] ?? name} className={`${className} is-expression`}
         type="text" spellCheck={false} autoComplete="off" value={value ?? ''}
-        title="Linked shape. Disconnect to edit individual dimensions."
+        title="Parameter reference. Enter comma-separated dimensions to use a local shape."
         onFocus={() => setEditingReference(true)} onBlur={() => setEditingReference(false)}
         onChange={(event) => onChange(event.target.value)} />;
     return <div className="df-param-shape" role="group" aria-label={`${name} dimensions`}>
@@ -60,7 +60,7 @@ function ShapeField({ value, onChange, common, className, name, suggestions }) {
     </div>;
 }
 
-const ParameterField = ({ param, value, onChange, error, errors = [], label, ariaLabel, placeholder, compactBoolean = false, suggestions = [] }) => {
+const ParameterField = ({ param, value, onChange, error, errors = [], label, ariaLabel, placeholder, compactBoolean = false, suggestions = [], labelAction }) => {
     const id = useId();
     const [editing, setEditing] = useState(false);
     // A partial "$" or arithmetic expression is expected while typing. Keep
@@ -98,10 +98,10 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
             onBlurCapture={(event) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) setEditing(false);
             }}>
-            <label htmlFor={id} title={param.description} className="df-param-label">
+            <div className="df-param-label-line"><label htmlFor={id} title={param.description} className="df-param-label">
                 {label ?? param.name}
                 {param.required && <span className="df-param-required" title="Required">*</span>}
-            </label>
+            </label>{labelAction}</div>
             {(param.name === 'shape' || param.editor === 'dimensions') && param.type === 'tuple' ? (
                 <ShapeField value={value ?? param.default} onChange={onChange} common={common} className={className} name={ariaLabel ?? param.name} suggestions={suggestions} />
             ) : inlineBoolean ? (

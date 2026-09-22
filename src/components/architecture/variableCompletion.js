@@ -1,3 +1,5 @@
+import { formatParameterValue } from '../../domain/parameterDisplay.js';
+
 // A completion replaces only the reference containing the caret. Expressions
 // on either side keep their original text, including whitespace and operators.
 export function variableReferenceAtCaret(value, caret) {
@@ -20,6 +22,5 @@ export function completeVariableReference(value, reference, name) {
 
 export function formatVariableValue(value) {
     if (value === undefined || value === null) return 'unresolved';
-    if (Array.isArray(value)) return value.map(formatVariableValue).join(' × ');
-    return String(value);
+    return formatParameterValue(value);
 }

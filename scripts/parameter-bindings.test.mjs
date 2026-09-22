@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { availableParameters, exposeTemplateField, parameterConsumers, parameterFrames, parameterOrigin, parameterReferences, resolvedFieldValue } from '../src/domain/parameterBindings.js';
+import { availableParameters, exposedFieldParameter, exposeTemplateField, parameterConsumers, parameterFrames, parameterOrigin, parameterReferences, resolvedFieldValue, toggleTemplateFieldExposure } from '../src/domain/parameterBindings.js';
+import { buildParameterScope } from '../src/domain/expressions.js';
 
 const graph = (...nodes) => ({ nodes: Object.fromEntries(nodes.map((node) => [node.id, node])), edges: [] });
 const layer = (id, parameters) => ({ id, kind: 'layer', label: id, libraryKey: 'torch.nn.Dropout', parameters });
@@ -71,4 +72,101 @@ test('store exposure is a single undoable edit across definition and field', asy
     history.getState().redo();
     assert.equal(templates.getState().templates.body.graph.nodes.drop.parameters.p, '$dropout');
     assert.equal(templates.getState().templates.body.freeParameters[0].default, .1);
+});
+
+test('field eyes expose a friendly control and hide it without disconnecting consumers or overrides', () => {
+    const original = { id: 'head', freeParameters: [], graph: graph(layer('dropout', { p: 0.15, inplace: false })) };
+    const options = { nodeId: 'dropout', field: 'p', spec: { name: 'p', type: 'float', default: .5 }, label: 'Dropout' };
+    const exposed = toggleTemplateFieldExposure(original, options);
+    assert.equal(exposed.graph.nodes.dropout.parameters.p, '$dropout');
+    assert.equal(exposedFieldParameter(exposed, 'dropout', 'p').name, 'dropout');
+    assert.equal(exposedFieldParameter(exposed, 'dropout', 'p').default, .15);
+    assert.equal(exposedFieldParameter(exposed, 'dropout', 'p').hidden, false);
+    const withConsumers = {
+        ...exposed,
+        graph: graph(exposed.graph.nodes.dropout, layer('other', { p: '$dropout' })),
+        freeParameters: [...exposed.freeParameters, { name: 'doubled', type: 'float', default: '$dropout * 2' }],
+    };
+    const hidden = toggleTemplateFieldExposure(withConsumers, options);
+    assert.equal(hidden.graph, withConsumers.graph, 'Visibility never changes fields or other consumers');
+    assert.equal(hidden.freeParameters.length, 2, 'The parameter remains in the runtime scope');
+    assert.equal(exposedFieldParameter(hidden, 'dropout', 'p').hidden, true);
+    assert.deepEqual(buildParameterScope(hidden.freeParameters, { dropout: .27 }), { dropout: .27, doubled: .54 });
+    assert.deepEqual(availableParameters([{ instance: { label: 'Head' }, template: hidden }]).map((parameter) => parameter.name), ['dropout', 'doubled'], 'Hidden controls remain available in expressions');
+    const shown = toggleTemplateFieldExposure(hidden, options);
+    assert.deepEqual(shown, withConsumers, 'Showing a control restores visibility without making a second alias');
+    assert.equal(original.graph.nodes.dropout.parameters.p, .15);
+    assert.deepEqual(original.freeParameters, []);
+});
+
+test('exposure avoids local, inherited and self-reference collisions without evaluating formulas', () => {
+    const original = { freeParameters: [{ name: 'dropout', type: 'float', default: .1 }], graph: graph(layer('dropout', { p: '$dropout_3 * 0.5' })) };
+    const exposed = toggleTemplateFieldExposure(original, { nodeId: 'dropout', field: 'p', spec: { type: 'float' }, reservedNames: ['dropout_2', '$dropout_4'] });
+    assert.equal(exposed.graph.nodes.dropout.parameters.p, '$dropout_5');
+    assert.equal(exposed.freeParameters.at(-1).default, '$dropout_3 * 0.5');
+    assert.equal(buildParameterScope(exposed.freeParameters, {}, { dropout_3: .17 }).dropout_5, .085);
+    assert.equal(exposedFieldParameter(original, 'dropout', 'p'), null, 'An arithmetic dependency is not a direct exposed control');
+    const ancestorReference = { freeParameters: [], graph: graph(layer('dropout', { p: '$dropout' })) };
+    assert.equal(exposedFieldParameter(ancestorReference, 'dropout', 'p'), null, 'An ancestor parameter is not exposed by this component yet');
+    const forwarded = toggleTemplateFieldExposure(ancestorReference, { nodeId: 'dropout', field: 'p', spec: { type: 'float' } });
+    assert.equal(forwarded.graph.nodes.dropout.parameters.p, '$dropout_2');
+    assert.equal(forwarded.freeParameters[0].default, '$dropout');
+});
+
+test('visibility aliases preserve tuple formulas, explicit null, false, zero and nested component bindings', () => {
+    const original = { freeParameters: [], graph: graph(
+        layer('weight', { shape: ['$width', '2 * $width'], padding_idx: null, requires_grad: false, scale: 0, reset: null }),
+        { id: 'child', kind: 'supernode', parameterValues: { dropout: .2 } },
+        { id: 'repeat', kind: 'repeat', count: 3, bindings: { width: 64 } },
+    ) };
+    let current = original;
+    const cases = [
+        { nodeId: 'weight', field: 'shape', spec: { name: 'shape', type: 'tuple' }, expected: ['$width', '2 * $width'] },
+        { nodeId: 'weight', field: 'padding_idx', spec: { name: 'padding_idx', type: 'int', nullable: true, default: 5 }, defaultValue: 5, expected: null },
+        { nodeId: 'weight', field: 'requires_grad', spec: { type: 'bool', default: true }, expected: false },
+        { nodeId: 'weight', field: 'scale', spec: { type: 'float', default: 1 }, expected: 0 },
+        { nodeId: 'weight', field: 'reset', spec: { type: 'float', default: 1 }, defaultValue: null, expected: 1 },
+        { nodeId: 'child', field: 'dropout', spec: { type: 'float' }, expected: .2 },
+        { nodeId: 'repeat', field: 'count', spec: { type: 'int' }, expected: 3 },
+        { nodeId: 'repeat', field: 'width', spec: { type: 'int' }, expected: 64 },
+    ];
+    for (const { expected, ...options } of cases) {
+        current = toggleTemplateFieldExposure(current, options);
+        assert.deepEqual(exposedFieldParameter(current, options.nodeId, options.field).default, expected);
+    }
+    assert.equal(current.freeParameters.find((parameter) => parameter.name === 'shape').editor, 'dimensions');
+    assert.equal(current.graph.nodes.child.parameterValues.dropout, '$dropout');
+    assert.equal(current.graph.nodes.repeat.count, '$count');
+    assert.equal(current.graph.nodes.repeat.bindings.width, '$width');
+    assert.equal(buildParameterScope(current.freeParameters).padding_idx, null);
+    assert.equal(toggleTemplateFieldExposure(original, { nodeId: 'weight', field: 'shape', spec: { derived: { axis: -1 } } }), null);
+    assert.equal(toggleTemplateFieldExposure({ ...original, graph: graph({ id: 'auto', kind: 'repeat', count: 'auto' }) }, { nodeId: 'auto', field: 'count', spec: { type: 'int' } }), null);
+});
+
+test('field visibility and initial exposure are each atomic undoable changes', async () => {
+    const { useArchitectureStore: architecture } = await import('../src/stores/architectureStore.js');
+    const { useTemplatesStore: templates } = await import('../src/stores/templatesStore.js');
+    const { useArchitectureHistory: history } = await import('../src/stores/architectureHistory.js');
+    const body = { id: 'body', name: 'Body', freeParameters: [], graph: graph(layer('drop', { p: .1 })) };
+    templates.setState({ templates: { body } });
+    architecture.setState({ graph: graph({ id: 'component', kind: 'supernode', templateId: 'body', parameterValues: { dropout: .3 } }), currentPath: ['component'], openPaths: [['component']] });
+    history.getState().clear();
+    const options = { nodeId: 'drop', field: 'p', spec: { type: 'float' } };
+    assert.equal(templates.getState().toggleFieldExposure('body', options), true);
+    assert.equal(history.getState().undoCount, 1);
+    const exposed = templates.getState().templates.body;
+    assert.equal(templates.getState().toggleFieldExposure('body', options), true);
+    assert.equal(history.getState().undoCount, 2);
+    assert.equal(templates.getState().templates.body.freeParameters[0].hidden, true);
+    assert.equal(architecture.getState().graph.nodes.component.parameterValues.dropout, .3);
+    history.getState().undo();
+    assert.deepEqual(templates.getState().templates.body, exposed);
+    history.getState().undo();
+    assert.deepEqual(templates.getState().templates.body, body);
+    history.getState().redo();
+    history.getState().redo();
+    assert.equal(templates.getState().templates.body.freeParameters[0].hidden, true);
+    assert.equal(templates.getState().templates.body.graph.nodes.drop.parameters.p, '$dropout');
+    assert.equal(templates.getState().toggleFieldExposure('missing', options), false);
+    assert.equal(history.getState().undoCount, 2, 'Rejected changes do not add history entries');
 });

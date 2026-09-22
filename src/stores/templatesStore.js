@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { withArchitectureHistory } from './architectureHistory.js';
-import { exposeTemplateField } from '../domain/parameterBindings.js';
+import { exposeTemplateField, toggleTemplateFieldExposure } from '../domain/parameterBindings.js';
 import {
     addEdge,
     addNode,
@@ -21,7 +21,7 @@ const HISTORY_ACTIONS = {
     patchTemplateLayerParameters: 'Change template settings', moveTemplateNode: 'Move template node',
     addEdgeToTemplate: 'Connect template nodes', removeEdgeFromTemplate: 'Delete template connection',
     addFreeParameter: 'Add template parameter', patchFreeParameter: 'Change template parameter', removeFreeParameter: 'Delete template parameter',
-    exposeField: 'Expose component parameter',
+    exposeField: 'Expose component parameter', toggleFieldExposure: 'Change parameter visibility',
 };
 
 /**
@@ -162,6 +162,13 @@ export const useTemplatesStore = create(
 
             exposeField: (templateId, options) => {
                 const template = exposeTemplateField(get().templates[templateId], options);
+                if (!template) return false;
+                set((state) => ({ templates: { ...state.templates, [templateId]: template } }));
+                return true;
+            },
+
+            toggleFieldExposure: (templateId, options) => {
+                const template = toggleTemplateFieldExposure(get().templates[templateId], options);
                 if (!template) return false;
                 set((state) => ({ templates: { ...state.templates, [templateId]: template } }));
                 return true;

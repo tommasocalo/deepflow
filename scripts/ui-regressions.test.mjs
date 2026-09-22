@@ -272,7 +272,7 @@ test('whole-shape references remain a single binding until replaced by local dim
     assert.deepEqual(latest, [32, 16, 1], 'Exposed shape aliases retain the dimension editor metadata');
 });
 
-test('shape bindings expose symbolic axes, keep the tuple linked, and detach to editable local cells', async () => {
+test('shape visibility keeps symbolic axes intact and whole references can be replaced directly', async () => {
     const weight = createLayerNode({ id: 'weight', libraryKey: 'deepflow.op.Parameter', entry: getEntry('deepflow.op.Parameter'), label: 'weight', position: { x: 0, y: 0 }, parameters: { shape: ['$out_features', '$in_features'] } });
     const template = createTemplate({ id: 'projection-body', name: 'Projection', graph: { nodes: { weight }, edges: [] }, freeParameters: [
         { name: 'out_features', type: 'int', default: 32 }, { name: 'in_features', type: 'int', default: 16 },
@@ -281,24 +281,35 @@ test('shape bindings expose symbolic axes, keep the tuple linked, and detach to 
     useTemplatesStore.setState({ templates: { [template.id]: template } });
     useArchitectureStore.setState({ graph: { nodes: { projection }, edges: [] }, currentPath: ['projection'], openPaths: [['projection']], expandedNodeId: 'weight' });
     await render(h(GraphHarness));
-    const shapeField = byAria('shape dimension 1').closest('.df-field-binding');
-    assert.equal(shapeField.querySelector('.df-parameter-source strong').textContent, '32 × 16');
-    await click(container.querySelector('.df-expose-trigger'));
-    await typeText(byAria('Exposed parameter name'), 'weight_shape');
-    await act(() => byAria('Exposed parameter name').closest('form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
-    assert.equal(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, '$weight_shape');
+    assert.equal(byAria('shape dimension 1').value, '$out_features');
+    assert.equal(container.querySelector('.df-parameter-source'), null);
+    assert.equal(container.querySelector('.df-expose-trigger'), null);
+    const eye = () => byAria('Shape in Projection settings');
+    assert.equal(eye().getAttribute('aria-pressed'), 'false');
+    await click(eye());
+    assert.equal(eye().getAttribute('aria-pressed'), 'true');
+    assert.equal(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, '$shape');
     assert.deepEqual(useTemplatesStore.getState().templates[template.id].freeParameters.at(-1).default, ['$out_features', '$in_features'], 'Exposure preserves symbolic dimensions rather than freezing this instance');
     await act(() => useTemplatesStore.getState().patchFreeParameter(template.id, 'out_features', { default: 48 }));
-    assert.equal(byAria('shape').value, '$weight_shape');
+    assert.equal(byAria('shape').value, '$shape');
     assert.equal(byAria('Add shape dimension'), null);
-    const detach = byAria('Unlink shape');
-    assert.ok(detach, 'The linked array has a resolved local value');
-    await click(detach);
-    assert.deepEqual(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, [48, 16]);
+    await click(eye());
+    assert.equal(eye().getAttribute('aria-pressed'), 'false');
+    assert.equal(byAria('shape').value, '$shape', 'Hiding a control keeps its expression unchanged');
+    assert.equal(useTemplatesStore.getState().templates[template.id].freeParameters.at(-1).hidden, true);
+    await act(() => { useArchitectureStore.getState().openLevel([]); useArchitectureStore.getState().setExpanded('projection'); });
+    assert.equal(byAria('shape'), null, 'The parent no longer presents the hidden field');
+    assert.equal(byAria('shape dimension 1'), null);
+    await act(() => { useArchitectureStore.getState().openLevel(['projection']); useArchitectureStore.getState().setExpanded('weight'); });
+    await click(eye());
+    assert.equal(useTemplatesStore.getState().templates[template.id].freeParameters.at(-1).hidden, false);
+    const reference = byAria('shape');
+    await typeText(reference, '48,16');
+    await blur(reference);
     assert.equal(byAria('shape dimension 1').value, '48');
     assert.equal(byAria('shape dimension 2').value, '16');
     await click(byAria('Add shape dimension'));
-    assert.deepEqual(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, [48, 16, 1]);
+    assert.deepEqual(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, ['48', '16', 1]);
 });
 
 test('repeated parameter names have unique stable label associations', async () => {
@@ -312,18 +323,46 @@ test('repeated parameter names have unique stable label associations', async () 
     assert.equal(inputs[1].value, '');
 });
 
-test('optional null bindings display None while missing references remain unresolved', async () => {
+test('direct references stay in their inputs without duplicated values or unlink actions', async () => {
     const gather = createLayerNode({ id: 'gather', libraryKey: 'deepflow.op.Gather', entry: getEntry('deepflow.op.Gather'), label: 'lookup', position: { x: 0, y: 0 }, parameters: { padding_idx: '$padding_idx' } });
     const template = createTemplate({ id: 'table-body', name: 'Table', graph: { nodes: { gather }, edges: [] }, freeParameters: [{ name: 'padding_idx', type: 'int', nullable: true, default: null }] });
     const instance = createSuperNodeInstance({ id: 'table', templateId: template.id, label: 'Table', position: { x: 0, y: 0 } });
     useTemplatesStore.setState({ templates: { [template.id]: template } });
     useArchitectureStore.setState({ graph: { nodes: { table: instance }, edges: [] }, currentPath: ['table'], openPaths: [['table']], expandedNodeId: 'gather' });
     await render(h(GraphHarness));
-    assert.match(container.querySelector('.df-parameter-source').textContent, /LinkedNone/);
-    assert.ok(byAria('Unlink padding_idx'));
-    await act(() => useArchitectureStore.getState().patchLayerParameters('gather', { padding_idx: '$missing' }));
-    assert.match(container.querySelector('.df-parameter-source').textContent, /Unresolved/);
+    assert.equal(byAria('padding_idx').value, '$padding_idx');
+    assert.equal(container.querySelector('.df-parameter-source'), null);
+    assert.equal(container.querySelector('.df-parameter-result'), null);
     assert.equal(byAria('Unlink padding_idx'), null);
+    const eye = () => byAria('Padding index in Table settings');
+    assert.equal(eye().getAttribute('aria-pressed'), 'true');
+    await click(eye());
+    assert.equal(eye().getAttribute('aria-pressed'), 'false');
+    assert.equal(byAria('padding_idx').value, '$padding_idx');
+    assert.equal(useTemplatesStore.getState().templates[template.id].freeParameters[0].default, null);
+    await act(() => useArchitectureStore.getState().patchLayerParameters('gather', { padding_idx: '$missing' }));
+    assert.equal(byAria('padding_idx').value, '$missing');
+    assert.equal(container.querySelector('.df-parameter-result'), null, 'A missing variable does not become a calculated result');
+});
+
+test('only formulas show a compact computed result while stored expressions retain their full precision', async () => {
+    const dropout = createLayerNode({ id: 'dropout', libraryKey: 'torch.nn.Dropout', entry: getEntry('torch.nn.Dropout'), label: 'Dropout', position: { x: 0, y: 0 }, parameters: { p: '1 / 3' } });
+    const template = createTemplate({ id: 'body', name: 'Block', graph: { nodes: { dropout }, edges: [] }, freeParameters: [{ name: 'dropout', type: 'float', default: 0.1 }] });
+    const block = createSuperNodeInstance({ id: 'block', templateId: template.id, label: 'Block', position: { x: 0, y: 0 } });
+    useTemplatesStore.setState({ templates: { [template.id]: template } });
+    useArchitectureStore.setState({ graph: { nodes: { block }, edges: [] }, currentPath: ['block'], openPaths: [['block']], expandedNodeId: 'dropout' });
+    await render(h(GraphHarness));
+    assert.match(container.querySelector('.df-parameter-result').textContent, /Result:\s*≈\s*0\.333333/);
+    assert.equal(container.querySelector('.df-parameter-result strong').title, `Exact value: ${1 / 3}`);
+    assert.equal(byAria('p').value, '1 / 3');
+    assert.equal(useTemplatesStore.getState().templates[template.id].graph.nodes.dropout.parameters.p, '1 / 3');
+    await typeText(byAria('p'), '$dropout');
+    await blur(byAria('p'));
+    assert.equal(container.querySelector('.df-parameter-result'), null);
+    await typeText(byAria('p'), '0.25');
+    await blur(byAria('p'));
+    assert.equal(container.querySelector('.df-parameter-result'), null);
+    assert.equal(useTemplatesStore.getState().templates[template.id].graph.nodes.dropout.parameters.p, 0.25);
 });
 
 test('compact nodes open the inspector and editing keeps node geometry unchanged', async () => {
