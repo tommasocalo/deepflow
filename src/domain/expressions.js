@@ -25,7 +25,7 @@
 // before evaluating, so `=` cannot be abused for assignment to anything
 // the host cares about.
 const ALLOWED = /^[\s\d+\-*/().,a-zA-Z_$%?:=!<>&|]*$/;
-const ALLOWED_IDENT = /^[a-zA-Z_$][\w$]*$/;
+export const MAX_REPEAT_COUNT = 256;
 
 export function evaluateExpression(expr, scope = {}) {
     if (typeof expr === 'number') {
@@ -47,13 +47,12 @@ export function evaluateExpression(expr, scope = {}) {
         // Substitute identifiers from scope directly into the expression so
         // we don't pass them as Function parameters — JS reserved words
         // like `in` would otherwise cause a SyntaxError.
-        let substituted = trimmed;
-        for (const [k, v] of Object.entries(scope)) {
-            if (!ALLOWED_IDENT.test(k)) continue;
-            const num = Number(v);
-            if (!Number.isFinite(num)) continue;
-            substituted = substituted.replace(new RegExp(`\\b${k}\\b`, 'g'), `(${num})`);
-        }
+        const substituted = trimmed.replace(/\$?([a-zA-Z_][\w$]*)/g, (token, name) => {
+            const value = scope[name] ?? scope[token];
+            if (value === null || value === undefined || typeof value === 'boolean' || value === '') return token;
+            const number = Number(value);
+            return Number.isFinite(number) ? `(${number})` : token;
+        });
         // Any identifier remaining means an unbound name → unevaluable.
         if (/[a-zA-Z_$]/.test(substituted)) return null;
         const fn = new Function(`"use strict"; return (${substituted});`);
@@ -85,18 +84,18 @@ export function asFreeParamRef(value) {
  * @param {*} value
  * @param {Object<string, *>} scope
  */
-export function resolveParameterValue(value, scope) {
+export function resolveParameterValue(value, scope = {}) {
     if (typeof value !== 'string') return value;
 
-    const ref = asFreeParamRef(value);
+    const ref = asFreeParamRef(value.trim());
     if (ref !== null) {
         return scope[ref] ?? null;
     }
 
-    // Heuristic: if the string contains identifier-arithmetic, ternary, or
-    // comparison operators, treat it as an expression. Includes `?:` and
-    // `==`/`<`/`>` so per-iteration formulas with conditions parse.
-    if (/[a-zA-Z_$]/.test(value) && /[+\-*/()%?:<>!&|=]/.test(value)) {
+    if (Object.hasOwn(scope, value.trim())) return scope[value.trim()];
+    // Tuple strings remain literal; arithmetic and numeric formulas may use
+    // either bare identifiers or $references.
+    if (!value.includes(',') && /[+\-*/%?:<>!&|=]/.test(value)) {
         const evaluated = evaluateExpression(value, scope);
         if (evaluated !== null) return evaluated;
     }
@@ -122,4 +121,26 @@ export function resolveLayerParameters(node, scope) {
         out[key] = resolveParameterValue(value, scope);
     }
     return { ...node, parameters: out };
+}
+
+/** Resolve ordered free parameters; later defaults can use earlier bindings. */
+export function buildParameterScope(freeParameters, bindings = {}, parentScope = {}, iterationIndex) {
+    const result = { ...parentScope };
+    for (const parameter of freeParameters ?? []) {
+        let raw = bindings[parameter.name];
+        if (Array.isArray(raw) && iterationIndex !== undefined) raw = raw[iterationIndex];
+        if (raw === undefined || raw === null || raw === '') raw = parameter.default;
+        result[parameter.name] = resolveParameterValue(raw, result);
+    }
+    return result;
+}
+
+/** Guard all unrolling/allocation before entering a loop. */
+export function resolveRepeatCount(raw, scope = {}) {
+    const value = resolveParameterValue(raw, scope);
+    const count = typeof value === 'number' ? value : NaN;
+    if (!Number.isSafeInteger(count) || count < 1 || count > MAX_REPEAT_COUNT) {
+        return { count: null, error: `Repeat count must resolve to a positive integer from 1 to ${MAX_REPEAT_COUNT}` };
+    }
+    return { count, error: null };
 }

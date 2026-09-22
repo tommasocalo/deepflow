@@ -1,5 +1,7 @@
 import { topologicalSort } from '../validation/topology.js';
-import { resolveLayerParameters, resolveParameterValue } from '../domain/expressions.js';
+import { buildParameterScope, resolveLayerParameters, resolveRepeatCount } from '../domain/expressions.js';
+import { getIncomingEdges, mapTemplateInputs, orderOperationEdges } from '../domain/graphInputs.js';
+import { validate } from '../validation/validator.js';
 import { getEntry } from '../domain/library/index.js';
 import { indent, kwArgs, toPyIdent, toPyLiteral } from './python.js';
 
@@ -16,7 +18,13 @@ import { indent, kwArgs, toPyIdent, toPyLiteral } from './python.js';
  * @returns {string}  Python source
  */
 export function generateArchitectureModule(graph, { templates = {}, className = 'Model' } = {}) {
+    const report = validate(graph, { templates });
+    if (!report.ok) {
+        throw new Error(`Cannot export invalid architecture: ${[...report.globalErrors, ...Object.values(report.errors).flat()].slice(0, 4).join('; ')}`);
+    }
     const ctx = makeContext(templates);
+    ctx.rootInputs = new Map(Object.values(graph.nodes).filter((node) => node.libraryKey === 'deepflow.io.Input').map((node, index) => [node.id, index ? `x${index + 1}` : 'x']));
+    const forwardArgs = [...ctx.rootInputs.values()].join(', ') || 'x';
     const plan = expandGraph(graph, {}, ctx);
 
     const initLines = [];
@@ -39,7 +47,9 @@ export function generateArchitectureModule(graph, { templates = {}, className = 
     const exprFor = (id) => (id ? aliasMap[id] || outputName(id) : 'x');
 
     for (const item of plan.items) {
-        if (item.kind === 'instantiate') {
+        if (item.kind === 'input') {
+            aliasMap[item.id] = item.name;
+        } else if (item.kind === 'instantiate') {
             const out = outputName(item.id);
             const fieldName = `self.${item.field}`;
             const args = renderArgs(item.entry, item.parameters);
@@ -54,6 +64,7 @@ export function generateArchitectureModule(graph, { templates = {}, className = 
         } else if (item.kind === 'combine') {
             const out = outputName(item.id);
             const inputs = item.inputs.map((id) => exprFor(id));
+            for (const check of item.checks?.(inputs) ?? []) forwardLines.push(check);
             forwardLines.push(`${out} = ${item.expr(inputs)}`);
         } else if (item.kind === 'gradop') {
             const out = outputName(item.id);
@@ -82,7 +93,7 @@ export function generateArchitectureModule(graph, { templates = {}, className = 
         ? `\nclass _GradReverse(torch.autograd.Function):\n    @staticmethod\n    def forward(ctx, x, lambd):\n        ctx.lambd = float(lambd)\n        return x.view_as(x)\n\n    @staticmethod\n    def backward(ctx, grad_output):\n        return grad_output.neg() * ctx.lambd, None\n\n\ndef _grad_reverse(x, lambd):\n    return _GradReverse.apply(x, lambd)\n`
         : '');
 
-    return `import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n${helpers}\n\nclass ${toPyIdent(className, 'Model')}(nn.Module):\n    def __init__(self):\n        super().__init__()\n${indent(init, 2)}\n\n    def forward(self, x):\n${indent(fwd, 2)}\n        return ${finalExpr}\n`;
+    return `import torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n${helpers}\n\nclass ${toPyIdent(className, 'Model')}(nn.Module):\n    def __init__(self):\n        super().__init__()\n${indent(init, 2)}\n\n    def forward(self, ${forwardArgs}):\n${indent(fwd, 2)}\n        return ${finalExpr}\n`;
 }
 
 // ------------------- internals -------------------
@@ -118,6 +129,8 @@ function makeContext(templates) {
         fieldCounter: {},
         usesGRL: false,
         usesCausalAttention: false,
+        valueTypes: new Map(),
+        expandedNodes: 0,
         nextField(name) {
             const base = toPyIdent(name, 'layer');
             const n = (this.fieldCounter[base] = (this.fieldCounter[base] || 0) + 1);
@@ -135,231 +148,170 @@ function makeContext(templates) {
  * @param {Object<string, *>} scope
  * @param {ReturnType<typeof makeContext>} ctx
  */
-function expandGraph(graph, scope, ctx) {
-    const { order, adjacency } = topologicalSort(graph);
-
-    /** @type {Array<{ id: string, kind: string, [key: string]: any }>} */
+function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, depth = 0 } = {}) {
+    if (depth > 8) throw new Error('Template recursion exceeds depth 8');
+    const { order, cyclic, adjacency } = topologicalSort(graph);
+    if (cyclic.length) throw new Error('Cannot export a graph containing a cycle');
     const items = [];
-    /** Map an internal-node id → the plan-item id whose forward output represents that node's value. */
     const outRef = {};
+    const unique = (id) => `${prefix}${id}`;
+    const typeOf = (ref) => ctx.valueTypes.get(ref) ?? null;
+    const setType = (ref, type) => ctx.valueTypes.set(ref, type);
+    const emit = (id, inputs, expr, type = null, checks) => {
+        items.push({ id, kind: 'combine', inputs, expr, checks });
+        setType(id, type);
+        return id;
+    };
+    const select = (ref, index, id) => emit(id, [ref], ([x]) => `${x}[${index}]`, typeOf(ref)?.[index] ?? null);
+    const flatten = (refs, label) => refs.flatMap((ref, index) => {
+        const type = typeOf(ref);
+        if (!Array.isArray(type)) return [ref];
+        return flatten(type.map((_, itemIndex) => select(ref, itemIndex, `${label}_${index}_${itemIndex}`)), `${label}_${index}`);
+    });
 
-    for (const id of order) {
-        const node = graph.nodes[id];
+    for (const nodeId of order) {
+        if (++ctx.expandedNodes > 20000) throw new Error('Expanded graph exceeds 20000 nodes');
+        const node = graph.nodes[nodeId];
         if (!node) continue;
-        const inIds = adjacency.inn[id] ?? [];
-        const inputRefs = inIds.map((src) => outRef[src] ?? src);
+        const id = unique(nodeId);
+        const edges = getIncomingEdges(graph, nodeId);
+        // Apply edge wrappers before expansion so they also reach template boundaries.
+        const edgeRefs = new Map();
+        for (const edge of edges) {
+            let ref = outRef[edge.source] ?? unique(edge.source);
+            const op = edge.gradientOp ?? 'none';
+            if (op !== 'none') {
+                const wrapperId = unique(`${edge.id}_${op}`);
+                const lambda = Number(edge.gradientOpLambda ?? 1);
+                if (!Number.isFinite(lambda)) throw new Error('Gradient reversal coefficient must be finite');
+                if (op === 'reverse') ctx.usesGRL = true;
+                const transform = (x) => op === 'reverse' ? `_grad_reverse(${x}, ${lambda})` : `${x}.detach()`;
+                const type = typeOf(ref);
+                ref = emit(wrapperId, [ref], ([x]) => Array.isArray(type) ? `tuple(${transform('part')} for part in ${x})` : transform(x), type);
+            }
+            edgeRefs.set(edge, ref);
+        }
+        const inputRefs = orderOperationEdges(node, edges).map((edge) => edgeRefs.get(edge) ?? null);
 
         if (node.kind === 'layer') {
-            const entry = getEntry(node.libraryKey);
-            // Boundary / IO blocks are pure pass-throughs in codegen.
-            if (
-                !entry?.pyTorchFn ||
-                node.libraryKey === 'deepflow.template.Input' ||
-                node.libraryKey === 'deepflow.template.Output' ||
-                node.libraryKey === 'deepflow.io.Input' ||
-                node.libraryKey === 'deepflow.io.Output' ||
-                node.libraryKey === 'deepflow.op.Split'
-            ) {
+            const key = node.libraryKey;
+            const entry = getEntry(key);
+            const parameters = resolveLayerParameters(node, scope).parameters;
+            if (key === 'deepflow.io.Input') {
+                items.push({ id, kind: 'input', name: ctx.rootInputs.get(nodeId) ?? 'x' });
+                outRef[nodeId] = id;
+                continue;
+            }
+            if (['deepflow.template.Input', 'deepflow.template.Output', 'deepflow.io.Input', 'deepflow.io.Output'].includes(key)) {
+                const refs = key === 'deepflow.template.Input' && Object.hasOwn(externalInputs, nodeId) ? [externalInputs[nodeId]] : inputRefs;
+                items.push({ id, kind: 'passthrough', inputs: refs });
+                setType(id, typeOf(refs[0]));
+                outRef[nodeId] = id;
+                continue;
+            }
+            if (key === 'deepflow.op.Split' || key === 'deepflow.op.Broadcast') {
+                const isSplit = key === 'deepflow.op.Split';
+                const { count, error } = resolveRepeatCount(parameters[isSplit ? 'chunks' : 'count'] ?? 2);
+                if (error) throw new Error(error);
+                const dim = parameters.dim ?? -1;
+                const type = Array.from({ length: count }, () => typeOf(inputRefs[0]));
+                outRef[nodeId] = emit(id, inputRefs, ([x]) => isSplit
+                    ? `torch.tensor_split(${x}, ${count}, dim=${dim})`
+                    : `(${Array(count).fill(x).join(', ')},)`, type,
+                isSplit ? ([x]) => [`assert ${x}.size(${dim}) % ${count} == 0, "Split dimension must be divisible by chunks"`] : undefined);
+                continue;
+            }
+            if (['deepflow.op.Add', 'deepflow.op.Multiply', 'deepflow.op.Concat', 'deepflow.op.Stack'].includes(key)) {
+                const flattened = flatten(inputRefs, `${id}_item`);
+                const dim = parameters.dim ?? (key === 'deepflow.op.Stack' ? 0 : 1);
+                const expr = key === 'deepflow.op.Concat' ? (xs) => `torch.cat([${xs.join(', ')}], dim=${dim})`
+                    : key === 'deepflow.op.Stack' ? (xs) => `torch.stack([${xs.join(', ')}], dim=${dim})`
+                    : (xs) => xs.slice(1).reduce((acc, x) => `torch.${key === 'deepflow.op.Add' ? 'add' : 'mul'}(${acc}, ${x})`, xs[0]);
+                outRef[nodeId] = emit(id, flattened, expr);
+                continue;
+            }
+            if (key === 'deepflow.op.Transpose') {
+                outRef[nodeId] = emit(id, inputRefs, ([x]) => `${x}.transpose(${parameters.dim0 ?? -2}, ${parameters.dim1 ?? -1})`);
+                continue;
+            }
+            if (key === 'deepflow.op.MatMul') {
+                outRef[nodeId] = emit(id, inputRefs, ([a, b]) => `torch.matmul(${a}, ${b})`);
+                continue;
+            }
+            if (key === 'deepflow.op.Scale') {
+                outRef[nodeId] = emit(id, inputRefs, ([x]) => `(${x} * ${toPyLiteral(parameters.factor ?? 1)})`);
+                continue;
+            }
+            if (key === 'deepflow.op.CausalMask') {
+                outRef[nodeId] = emit(id, inputRefs, ([x]) => `${x}.masked_fill(torch.ones((${x}.size(-2), ${x}.size(-1)), dtype=torch.bool, device=${x}.device).triu(1), float('-inf'))`);
+                continue;
+            }
+            if (!entry?.pyTorchFn) {
                 items.push({ id, kind: 'passthrough', inputs: inputRefs });
-                outRef[id] = id;
+                setType(id, typeOf(inputRefs[0]));
+                outRef[nodeId] = id;
                 continue;
             }
-            // Combine / element-wise ops with multiple inputs.
-            if (node.libraryKey === 'deepflow.op.Add') {
-                items.push({ id, kind: 'combine', inputs: inputRefs, expr: (xs) => xs.length === 2 ? `torch.add(${xs[0]}, ${xs[1]})` : `${xs.slice(1).reduce((a, x) => `torch.add(${a}, ${x})`, xs[0])}` });
-                outRef[id] = id;
-                continue;
-            }
-            if (node.libraryKey === 'deepflow.op.Multiply') {
-                items.push({ id, kind: 'combine', inputs: inputRefs, expr: (xs) => xs.slice(1).reduce((a, x) => `torch.mul(${a}, ${x})`, xs[0]) });
-                outRef[id] = id;
-                continue;
-            }
-            if (node.libraryKey === 'deepflow.op.Concat') {
-                const dim = resolveParameterValue(node.parameters?.dim, scope) ?? 1;
-                items.push({ id, kind: 'combine', inputs: inputRefs, expr: (xs) => `torch.cat([${xs.join(', ')}], dim=${dim})` });
-                outRef[id] = id;
-                continue;
-            }
-
-            if (node.libraryKey === 'deepflow.nn.PositionalEmbedding') {
-                const resolved = resolveLayerParameters(node, scope);
-                const field = ctx.nextField(node.label || entry.name);
-                items.push({
-                    id, kind: 'instantiate', field, entry, parameters: resolved.parameters, inputs: inputRefs,
-                    initExpr: `torch.nn.Embedding(${toPyLiteral(resolved.parameters.max_len)}, ${toPyLiteral(resolved.parameters.embedding_dim)})`,
-                    forwardExpr: (f, x) => `${f}(torch.arange(${x}.size(1), device=${x}.device))`,
-                });
-                outRef[id] = id;
-                continue;
-            }
-            if (node.libraryKey === 'deepflow.nn.CausalSelfAttention') {
-                ctx.usesCausalAttention = true;
-                const resolved = resolveLayerParameters(node, scope);
-                const field = ctx.nextField(node.label || entry.name);
-                items.push({
-                    id, kind: 'instantiate', field, entry, parameters: resolved.parameters, inputs: inputRefs,
-                    initExpr: `CausalSelfAttention(${renderArgs(entry, resolved.parameters)})`,
-                });
-                outRef[id] = id;
-                continue;
-            }
-
-            // Standard layer: resolve $param refs, instantiate.
-            const resolved = resolveLayerParameters(node, scope);
             const field = ctx.nextField(node.label || entry.name);
-            items.push({
-                id,
-                kind: 'instantiate',
-                field,
-                entry,
-                parameters: resolved.parameters,
-                inputs: inputRefs,
-            });
-            outRef[id] = id;
+            const item = { id, kind: 'instantiate', field, entry, parameters, inputs: inputRefs };
+            if (key === 'deepflow.nn.PositionalEmbedding') {
+                item.initExpr = `torch.nn.Embedding(${toPyLiteral(parameters.max_len)}, ${toPyLiteral(parameters.embedding_dim)})`;
+                item.forwardExpr = (f, x) => `${f}(torch.arange(${x}.size(1), device=${x}.device))`;
+            } else if (key === 'deepflow.nn.CausalSelfAttention') {
+                ctx.usesCausalAttention = true;
+                item.initExpr = `CausalSelfAttention(${renderArgs(entry, parameters)})`;
+            }
+            items.push(item);
+            outRef[nodeId] = id;
             continue;
         }
 
-        if (node.kind === 'supernode') {
-            const tpl = ctx.templates[node.templateId];
-            if (!tpl) {
-                items.push({ id, kind: 'passthrough', inputs: inputRefs });
-                outRef[id] = id;
-                continue;
-            }
-            const subScope = buildSubScope(tpl.freeParameters ?? [], node.parameterValues ?? {}, scope);
-            const subPlan = expandGraph(tpl.graph, subScope, ctx);
-            // Wire the supernode's external input(s) into the template's
-            // boundary input(s) before namespacing.
-            patchPlanInputs(subPlan, tpl.graph, inputRefs);
-            renameSubPlanIds(subPlan, `i_${id}`);
-            for (const item of subPlan.items) items.push(item);
-            outRef[id] = subPlan.finalId ?? id;
-            continue;
-        }
-
-        if (node.kind === 'repeat') {
-            const tpl = ctx.templates[node.templateId];
-            const count = Math.max(0, Number(node.count) || 0);
-            if (!tpl || count === 0) {
-                items.push({ id, kind: 'passthrough', inputs: inputRefs });
-                outRef[id] = id;
-                continue;
-            }
-            const iterVar = node.iterationVariable || 'i';
+        if (node.kind === 'supernode' || node.kind === 'repeat') {
+            const template = ctx.templates[node.templateId];
+            if (!template) throw new Error(`Missing template: ${node.templateId}`);
+            const isRepeat = node.kind === 'repeat';
+            const parallel = isRepeat && node.mode === 'parallel';
+            const { count, error } = isRepeat ? resolveRepeatCount(node.count, scope) : { count: 1 };
+            if (error) throw new Error(error);
+            const initialInputs = mapTemplateInputs(template.graph, edges, (edge) => edgeRefs.get(edge));
             let carry = inputRefs[0] ?? null;
-            for (let i = 0; i < count; i++) {
-                const scopeI = { ...scope, [iterVar]: i };
-                for (const fp of tpl.freeParameters ?? []) {
-                    let raw;
-                    const binding = node.bindings?.[fp.name];
-                    if (Array.isArray(binding)) raw = binding[i] ?? fp.default;
-                    else if (binding !== undefined && binding !== null && binding !== '') raw = binding;
-                    else raw = fp.default;
-                    scopeI[fp.name] = resolveParameterValue(raw, scopeI);
+            const outputs = [];
+            for (let index = 0; index < count; index++) {
+                const iterationScope = isRepeat ? { ...scope, [node.iterationVariable || 'i']: index } : scope;
+                const subScope = buildParameterScope(template.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined);
+                const subInputs = {};
+                for (const [port, ref] of Object.entries(initialInputs)) {
+                    const type = typeOf(ref);
+                    if (parallel && Array.isArray(type)) {
+                        if (type.length !== count) throw new Error(`Parallel repeat needs ${count} items in every input collection`);
+                        subInputs[port] = select(ref, index, `${id}_${index}_input_${port}`);
+                    } else {
+                        subInputs[port] = !parallel && isRepeat && index > 0 ? carry : ref;
+                    }
                 }
-                const subPlan = expandGraph(tpl.graph, scopeI, ctx);
-                patchPlanInputs(subPlan, tpl.graph, [carry]);
-                renameSubPlanIds(subPlan, `r_${id}_${i}`);
-                for (const item of subPlan.items) items.push(item);
+                const subPlan = expandGraph(template.graph, subScope, ctx, {
+                    prefix: `${id}_${index}__`, externalInputs: subInputs, depth: depth + 1,
+                });
+                items.push(...subPlan.items);
                 carry = subPlan.finalId ?? carry;
+                outputs.push(carry);
             }
-            outRef[id] = carry ?? id;
+            outRef[nodeId] = parallel ? emit(id, outputs, (xs) => `(${xs.join(', ')},)`, outputs.map(typeOf)) : carry;
             continue;
         }
-
         items.push({ id, kind: 'passthrough', inputs: inputRefs });
-        outRef[id] = id;
+        outRef[nodeId] = id;
     }
-
-    // Apply gradient-op edge wrappers: when an outgoing edge from `src` to
-    // `tgt` carries detach/stop/reverse, replace tgt's input reference with
-    // a wrapper plan item.
-    for (const edge of graph.edges) {
-        const op = edge.gradientOp ?? 'none';
-        if (op === 'none') continue;
-        const tgtItem = items.find((it) => it.id === edge.target);
-        if (!tgtItem || !tgtItem.inputs) continue;
-        const srcRef = outRef[edge.source];
-        const wrapperId = `${edge.id}_${op}`;
-        const lambd = edge.gradientOpLambda ?? 1;
-        if (op === 'reverse') ctx.usesGRL = true;
-        const wrapperExpr = (x) =>
-            op === 'detach' ? `${x}.detach()` :
-            op === 'stop'   ? `${x}.detach()` :
-            op === 'reverse' ? `_grad_reverse(${x}, ${lambd})` :
-            x;
-        items.splice(items.indexOf(tgtItem), 0, {
-            id: wrapperId,
-            kind: 'gradop',
-            inputs: [srcRef],
-            expr: wrapperExpr,
-        });
-        // Replace this specific input ref in the target item.
-        tgtItem.inputs = tgtItem.inputs.map((r) => (r === srcRef ? wrapperId : r));
-    }
-
-    // Identify the final node — the last topologically-ordered output / passthrough
-    // that has no outgoing edges.
     let finalId = null;
-    /** @type {string[]} plan ids of root-level Output nodes, in topological order */
     const outputRefs = [];
-    for (const id of order) {
-        const node = graph.nodes[id];
+    for (const nodeId of order) {
+        const node = graph.nodes[nodeId];
         if (!node) continue;
-        const outs = adjacency.out[id]?.length ?? 0;
-        if (outs === 0) finalId = outRef[id] ?? id;
-        if (node.kind === 'layer' && node.libraryKey === 'deepflow.io.Output') outputRefs.push(outRef[id] ?? id);
+        if ((adjacency.out[nodeId]?.length ?? 0) === 0) finalId = outRef[nodeId] ?? unique(nodeId);
+        if (node.kind === 'layer' && node.libraryKey === 'deepflow.io.Output') outputRefs.push(outRef[nodeId] ?? unique(nodeId));
+        if (node.kind === 'layer' && node.libraryKey === 'deepflow.template.Output') finalId = outRef[nodeId] ?? unique(nodeId);
     }
     return { items, finalId, outputRefs };
-}
-
-function buildSubScope(freeParameters, bindings, parentScope) {
-    const sub = { ...parentScope };
-    for (const fp of freeParameters) {
-        const raw =
-            bindings && bindings[fp.name] !== undefined ? bindings[fp.name] : fp.default;
-        sub[fp.name] = resolveParameterValue(raw, parentScope);
-    }
-    return sub;
-}
-
-/**
- * Rewrite all item ids inside a sub-plan to be unique by appending a
- * suffix. This is what lets the same template be expanded multiple times
- * (Repeat or repeated SuperNode use) without forward-pass variables
- * colliding into a single name.
- */
-function renameSubPlanIds(subPlan, suffix) {
-    /** @type {Object<string, string>} */
-    const map = {};
-    for (const it of subPlan.items) map[it.id] = `${it.id}_${suffix}`;
-    for (const it of subPlan.items) {
-        it.id = map[it.id];
-        if (it.inputs) it.inputs = it.inputs.map((r) => map[r] ?? r);
-    }
-    if (subPlan.finalId && map[subPlan.finalId]) {
-        subPlan.finalId = map[subPlan.finalId];
-    }
-    return map;
-}
-
-/**
- * After expanding a sub-plan, replace any references its boundary-input
- * passthrough items had to "external inputs" with the actual ref(s) coming
- * from the parent.
- */
-function patchPlanInputs(subPlan, tplGraph, parentRefs) {
-    const tplInputIds = Object.values(tplGraph.nodes ?? {})
-        .filter((n) => n.kind === 'layer' && n.libraryKey === 'deepflow.template.Input')
-        .map((n) => n.id);
-    if (!tplInputIds.length) return;
-    const ref = parentRefs[0] ?? null;
-    for (const item of subPlan.items) {
-        if (tplInputIds.includes(item.id) && item.kind === 'passthrough') {
-            item.inputs = [ref];
-        }
-    }
 }
 
 /** Render the keyword args for a layer instantiation, restricted to the

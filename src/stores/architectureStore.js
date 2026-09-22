@@ -125,6 +125,8 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         openPaths: path.length ? [path] : [],
         /** @type {string[]} library keys of recently-added blocks (most recent first) */
         recentLibraryKeys: [],
+        /** Per-pane previews of a repeat's shared body, keyed by its absolute level path. */
+        inspectedIterations: {},
 
         /** @returns {import('../domain/architecture/types.js').ArchitectureGraph} */
         getViewGraph: () => getViewGraph(get()),
@@ -166,7 +168,7 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
          * (optionally) its bound parameter values as the formula for
          * iteration 0.
          */
-        convertInstanceToRepeat: (instanceId, count = 2) => {
+        convertInstanceToRepeat: (instanceId, count = 2, mode = 'sequential') => {
             const view = getViewGraph(get());
             const node = view.nodes[instanceId];
             if (!node || node.kind !== 'supernode') return null;
@@ -176,6 +178,7 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
                 position: node.position,
                 label: node.label,
                 count,
+                mode,
                 iterationVariable: 'i',
                 bindings: { ...(node.parameterValues ?? {}) },
             });
@@ -309,7 +312,7 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
             if (!isActive()) return;
             const level = resolveLevel(get());
             if (level.isRoot) {
-                set({ graph: initialGraph(), selectedNodeIds: [], expandedNodeId: null, currentPath: [], openPaths: [] });
+                set({ graph: initialGraph(), selectedNodeIds: [], expandedNodeId: null, currentPath: [], openPaths: [], inspectedIterations: {} });
             } else {
                 useTemplatesStore.getState().patchTemplate(level.templateId, { graph: emptyGraph() });
                 set({ selectedNodeIds: [], expandedNodeId: null });
@@ -343,6 +346,23 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
 
         enterSupernode: (supernodeId) => get().openLevel([...get().currentPath, supernodeId]),
 
+        setInspectedIteration: (path, index) => {
+            if (!Array.isArray(path) || !path.length || !Number.isInteger(index) || index < 0) return false;
+            const state = get();
+            if (!isValidLevelPath(state.graph, useTemplatesStore.getState().templates, path)) return false;
+            const parent = resolveGraphLevel(state.graph, path.slice(0, -1), useTemplatesStore.getState().templates);
+            if (parent.graph.nodes[path.at(-1)]?.kind !== 'repeat') return false;
+            const key = JSON.stringify(path);
+            if (state.inspectedIterations[key] !== index) set({ inspectedIterations: { ...state.inspectedIterations, [key]: index } });
+            return true;
+        },
+
+        enterRepeatIteration: (repeatId, index) => {
+            const path = [...get().currentPath, repeatId];
+            if (!get().setInspectedIteration(path, index)) return false;
+            return get().openLevel(path);
+        },
+
         exitSupernode: () => {
             const path = get().currentPath;
             if (path.length) get().openLevel(path.slice(0, -1));
@@ -371,6 +391,7 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
             const state = get();
             const view = getViewGraph(state);
             const idSet = new Set(nodeIds);
+            if (nodeIds.some((id) => !view.nodes[id])) return null;
 
             /** @type {import('../domain/architecture/types.js').ArchEdge[]} */
             const internalEdges = [];
@@ -394,6 +415,12 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
                 );
                 return null;
             }
+
+            // A standalone layer or disconnected chain still needs usable
+            // template boundaries when wrapped from the creation toolbar.
+            const entryIds = nodeIds.filter((id) => !internalEdges.some((edge) => edge.target === id));
+            const exitIds = nodeIds.filter((id) => !internalEdges.some((edge) => edge.source === id));
+            if ((!incomingEdges.length && entryIds.length !== 1) || (!outgoingEdges.length && exitIds.length !== 1)) return null;
 
             // Build the template's internal subgraph.
             const internalNodes = {};
@@ -435,12 +462,14 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
             const newInternalEdges = [...internalEdges];
             // Wire boundary input → original incoming targets
             for (const e of incomingEdges) {
-                newInternalEdges.push(createEdge({ source: tplInput.id, target: e.target }));
+                newInternalEdges.push(createEdge({ source: tplInput.id, target: e.target, targetHandle: e.targetHandle }));
             }
             // Wire original outgoing sources → boundary output
             for (const e of outgoingEdges) {
-                newInternalEdges.push(createEdge({ source: e.source, target: tplOutput.id }));
+                newInternalEdges.push(createEdge({ source: e.source, sourceHandle: e.sourceHandle, target: tplOutput.id }));
             }
+            if (!incomingEdges.length) newInternalEdges.push(createEdge({ source: tplInput.id, target: entryIds[0] }));
+            if (!outgoingEdges.length) newInternalEdges.push(createEdge({ source: exitIds[0], target: tplOutput.id }));
 
             const templateGraph = {
                 nodes: { ...internalNodes, [tplInput.id]: tplInput, [tplOutput.id]: tplOutput },

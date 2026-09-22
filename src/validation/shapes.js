@@ -1,3 +1,6 @@
+import { isShapeCollection, shapeCollection, flattenShapeInputs } from '../domain/shapeCollections.js';
+import { resolveRepeatCount } from '../domain/expressions.js';
+
 /**
  * Static shape inference. A shape is an array of dimensions, where each
  * dim is either a positive integer or `null` (unknown). The leading batch
@@ -217,7 +220,16 @@ const RULES = {
     'deepflow.op.Add':      elementwiseRule,
     'deepflow.op.Multiply': elementwiseRule,
     'deepflow.op.Concat':   concatRule,
-    'deepflow.op.Split':    passthrough,
+    'deepflow.op.Split':    splitRule,
+    'deepflow.op.Broadcast': broadcastRule,
+    'deepflow.op.Stack': stackRule,
+    'deepflow.op.Transpose': transposeRule,
+    'deepflow.op.MatMul': matmulRule,
+    'deepflow.op.Scale': passthrough,
+    'deepflow.op.CausalMask': ([shape]) => ({
+        output: shape ?? null,
+        errors: shape && shape.length < 2 ? ['Causal Mask expects a tensor of rank at least 2'] : [],
+    }),
 };
 
 function parseSpatial(value, fallback) {
@@ -268,7 +280,9 @@ function adaptivePoolRule([s], p) {
 }
 
 function elementwiseRule(inputs) {
-    if (inputs.length < 2) {
+    const hasCollection = inputs.some(isShapeCollection);
+    inputs = flattenShapeInputs(inputs);
+    if (inputs.length < (hasCollection ? 1 : 2)) {
         return { output: inputs[0] ?? null, errors: ['Element-wise op needs at least 2 inputs'] };
     }
     const present = inputs.filter(Boolean);
@@ -292,17 +306,20 @@ function elementwiseRule(inputs) {
 }
 
 function concatRule(inputs, p) {
-    if (inputs.length < 2) {
+    const hasCollection = inputs.some(isShapeCollection);
+    inputs = flattenShapeInputs(inputs);
+    if (inputs.length < (hasCollection ? 1 : 2)) {
         return { output: inputs[0] ?? null, errors: ['Concat needs at least 2 inputs'] };
     }
     const present = inputs.filter(Boolean);
-    if (present.length < 2) return { output: null, errors: [] };
+    if (!present.length) return { output: null, errors: [] };
     const axis = numOrNull(p.dim) ?? 1;
     const ref = present[0];
     if (!present.every((s) => s.length === ref.length)) {
         return { output: ref, errors: ['Concat inputs must have equal rank'] };
     }
-    const concatDim = axis < 0 ? ref.length + axis : axis;
+    const concatDim = normalizeAxis(axis, ref.length);
+    if (concatDim === null) return { output: null, errors: [`Concat dim ${axis} is outside rank ${ref.length}`] };
     const errors = [];
     /** @type {Shape} */
     const out = ref.map((d, i) => {
@@ -328,7 +345,11 @@ function concatRule(inputs, p) {
  * @param {Object<string, *>} parameters
  * @returns {ShapeResult}
  */
-export function inferShape(libraryKey, inputShapes, parameters) {
+export function inferShape(libraryKey, inputShapes, parameters = {}) {
+    const collectionAware = new Set(['deepflow.io.Output', 'deepflow.template.Input', 'deepflow.template.Output', 'deepflow.op.Concat', 'deepflow.op.Add', 'deepflow.op.Multiply', 'deepflow.op.Stack']);
+    if (inputShapes.some(isShapeCollection) && !collectionAware.has(libraryKey)) {
+        return { output: null, errors: ['This block expects a tensor; reduce the collection with Concat, Stack, or Add first'] };
+    }
     const rule = RULES[libraryKey];
     if (!rule) {
         return { output: inputShapes[0] ?? null, errors: [] };
@@ -339,5 +360,81 @@ export function inferShape(libraryKey, inputShapes, parameters) {
 /** @param {Shape | null} shape */
 export function formatShape(shape) {
     if (!shape) return '?';
+    if (isShapeCollection(shape)) {
+        const item = shape.items[0];
+        const same = shape.items.every((candidate) => JSON.stringify(candidate) === JSON.stringify(item));
+        return same ? `${shape.items.length} × ${formatShape(item)}` : `${shape.items.length} tensors`;
+    }
     return '(' + shape.map((d) => (d === null ? '?' : String(d))).join(', ') + ')';
+}
+
+function normalizeAxis(raw, rank, insert = false) {
+    const limit = rank + (insert ? 1 : 0);
+    if (!Number.isInteger(raw)) return null;
+    const axis = raw < 0 ? limit + raw : raw;
+    return axis >= 0 && axis < limit ? axis : null;
+}
+
+function splitRule([shape], parameters) {
+    const { count, error } = resolveRepeatCount(parameters.chunks === undefined ? 2 : parameters.chunks);
+    if (error) return { output: null, errors: [error.replace('Repeat count', 'Split chunks')] };
+    if (!shape) return { output: shapeCollection(Array(count).fill(null)), errors: [] };
+    const axis = normalizeAxis(parameters.dim === undefined ? -1 : Number(parameters.dim), shape.length);
+    if (axis === null) return { output: null, errors: ['Split dim is outside the input rank'] };
+    if (shape[axis] !== null && shape[axis] % count !== 0) {
+        return { output: null, errors: [`Split dimension ${shape[axis]} must be divisible by ${count} chunks`] };
+    }
+    const part = shape.map((size, index) => index === axis && size !== null ? size / count : size);
+    return { output: shapeCollection(Array.from({ length: count }, () => [...part])), errors: [] };
+}
+
+function broadcastRule([shape], parameters) {
+    const { count, error } = resolveRepeatCount(parameters.count === undefined ? 2 : parameters.count);
+    if (error) return { output: null, errors: [error.replace('Repeat count', 'Broadcast count')] };
+    return { output: shapeCollection(Array.from({ length: count }, () => shape ? [...shape] : null)), errors: [] };
+}
+
+function stackRule(inputs, parameters) {
+    const flattened = flattenShapeInputs(inputs);
+    const present = flattened.filter(Boolean);
+    if (!present.length) return { output: null, errors: flattened.length ? [] : ['Stack needs at least one input'] };
+    const ref = present[0];
+    const result = elementwiseRule([shapeCollection(flattened)]);
+    const axis = normalizeAxis(parameters.dim === undefined ? 0 : Number(parameters.dim), ref.length, true);
+    if (axis === null) return { output: null, errors: ['Stack dim is outside the output rank'] };
+    return { output: [...ref.slice(0, axis), flattened.length, ...ref.slice(axis)], errors: result.errors };
+}
+
+function transposeRule([shape], parameters) {
+    if (!shape) return { output: null, errors: [] };
+    const dim0 = normalizeAxis(parameters.dim0 === undefined ? -2 : Number(parameters.dim0), shape.length);
+    const dim1 = normalizeAxis(parameters.dim1 === undefined ? -1 : Number(parameters.dim1), shape.length);
+    if (dim0 === null || dim1 === null) return { output: null, errors: ['Transpose dimensions must be within the input rank'] };
+    const output = [...shape];
+    [output[dim0], output[dim1]] = [output[dim1], output[dim0]];
+    return { output, errors: [] };
+}
+
+function matmulRule(inputs) {
+    if (inputs.length !== 2) return { output: null, errors: ['MatMul needs two inputs (a and b)'] };
+    const [a, b] = inputs;
+    if (!a || !b) return { output: null, errors: [] };
+    if (!a.length || !b.length) return { output: null, errors: ['MatMul expects tensors of rank at least 1'] };
+    const left = a.length === 1 ? [1, ...a] : a;
+    const right = b.length === 1 ? [...b, 1] : b;
+    const errors = [];
+    const innerA = left.at(-1), innerB = right.at(-2);
+    if (innerA !== null && innerB !== null && innerA !== innerB) errors.push(`MatMul inner dimensions mismatch: ${innerA} vs ${innerB}`);
+    const batchA = left.slice(0, -2), batchB = right.slice(0, -2);
+    const batch = [];
+    for (let offset = 1; offset <= Math.max(batchA.length, batchB.length); offset++) {
+        const x = offset <= batchA.length ? batchA.at(-offset) : 1;
+        const y = offset <= batchB.length ? batchB.at(-offset) : 1;
+        if (x !== null && y !== null && x !== y && x !== 1 && y !== 1) errors.push(`MatMul batch dimensions mismatch: ${x} vs ${y}`);
+        batch.unshift(x === y ? x : x === 1 ? y : y === 1 ? x : x === null || y === null ? null : x);
+    }
+    const output = [...batch];
+    if (a.length > 1) output.push(left.at(-2));
+    if (b.length > 1) output.push(right.at(-1));
+    return { output, errors };
 }

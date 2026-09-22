@@ -7,8 +7,9 @@
  * The block is a parametric template (d_model, n_heads) with two residual
  * streams, so it exercises the Repeat primitive on a real modern network.
  */
-import { createEdge, createLayerNode } from '../domain/architecture/index.js';
+import { createEdge, createLayerNode, createSuperNodeInstance } from '../domain/architecture/index.js';
 import { getEntry } from '../domain/library/index.js';
+import { registerAttentionTemplates } from './attention.js';
 
 const X = 400;       // main column (node centre)
 const X_BRANCH = 820; // positional-embedding branch
@@ -24,10 +25,14 @@ function layer(key, position, parameters = {}, label) {
 }
 
 /** Pre-LN GPT-2 block, expressed as a template graph with boundary blocks. */
-export function buildTransformerBlockGraph() {
+export function buildTransformerBlockGraph({ attentionTemplateId } = {}) {
     const tin  = layer('deepflow.template.Input',        { x: X, y: 0 },   {}, 'block input');
     const ln1  = layer('torch.nn.LayerNorm',             { x: X, y: ROW_GAP },     { normalized_shape: '$d_model' }, 'ln_1');
-    const attn = layer('deepflow.nn.CausalSelfAttention',{ x: X, y: ROW_GAP * 2 }, { embed_dim: '$d_model', num_heads: '$n_heads', dropout: 0.1 }, 'causal self-attention');
+    // Callers without registered templates retain the standalone legacy graph API.
+    const attn = attentionTemplateId
+        ? createSuperNodeInstance({ templateId: attentionTemplateId, position: { x: X, y: ROW_GAP * 2 },
+            label: 'causal self-attention', parameterValues: { D: '$d_model', H: '$n_heads' } })
+        : layer('deepflow.nn.CausalSelfAttention', { x: X, y: ROW_GAP * 2 }, { embed_dim: '$d_model', num_heads: '$n_heads', dropout: 0.1 }, 'causal self-attention');
     const add1 = layer('deepflow.op.Add',                { x: X, y: ROW_GAP * 3 }, {}, 'residual');
     const ln2  = layer('torch.nn.LayerNorm',             { x: X, y: ROW_GAP * 4 }, { normalized_shape: '$d_model' }, 'ln_2');
     const fc   = layer('torch.nn.Linear',                { x: X, y: ROW_GAP * 5 }, { in_features: '$d_model', out_features: '4 * d_model' }, 'mlp fc');
@@ -85,10 +90,11 @@ export function gpt2Storyboard({ architectureStore, templatesStore, trainingStor
     const drop = arch.addLayerByLibraryKey('torch.nn.Dropout',  { x: X, y: ROW_GAP * 3 });
     arch.patchLayerParameters(drop, { p: 0.1 });
 
+    const { attentionTemplateId } = registerAttentionTemplates(templatesStore);
     const tplId = tpl.createTemplate({
         name: 'Transformer block',
         description: 'Pre-LN GPT-2 block: LayerNorm → causal self-attention → residual → LayerNorm → MLP (4×) → residual.',
-        graph: buildTransformerBlockGraph(),
+        graph: buildTransformerBlockGraph({ attentionTemplateId }),
     });
     tpl.addFreeParameter(tplId, { name: 'd_model', type: 'int', description: 'Model width', default: 768 });
     tpl.addFreeParameter(tplId, { name: 'n_heads', type: 'int', description: 'Attention heads', default: 12 });

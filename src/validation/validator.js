@@ -1,282 +1,149 @@
 import { topologicalSort } from './topology.js';
 import { validateLayerParameters } from './parameters.js';
 import { inferShape } from './shapes.js';
-import {
-    resolveLayerParameters,
-    resolveParameterValue,
-} from '../domain/expressions.js';
+import { buildParameterScope, resolveLayerParameters, resolveRepeatCount } from '../domain/expressions.js';
+import { getIncomingEdges, getTemplateInputIds, mapTemplateInputs, orderOperationEdges, validateInputPorts } from '../domain/graphInputs.js';
+import { isShapeCollection, shapeCollection } from '../domain/shapeCollections.js';
 
-/**
- * @typedef {Object} ValidationReport
- * @property {string[]} topo
- * @property {string[]} cyclic
- * @property {Object<string, import('./shapes.js').Shape | null>} shapes
- * @property {Object<string, string[]>} errors
- * @property {Object<string, string[]>} warnings
- * @property {string[]} globalErrors
- * @property {boolean} ok
- */
-
-const SOURCE_ONLY = new Set(['deepflow.io.Input']);
-const SINK_ONLY = new Set(['deepflow.io.Output']);
 const TEMPLATE_INPUT = 'deepflow.template.Input';
 const TEMPLATE_OUTPUT = 'deepflow.template.Output';
-
 const MAX_TEMPLATE_DEPTH = 8;
+const MAX_VALIDATED_NODES = 20000;
 
 /**
- * Validate an architecture graph.
- *
- * Options:
- *   - `templates`: a map of template id → template, used when the graph
- *     contains SuperNodeInstance nodes. Without it, supernodes degrade to
- *     opaque passthrough.
- *   - `scope`: free-parameter scope for `$ref` resolution inside this
- *     graph's layer parameters. Inherited from the parent supernode when
- *     descending.
- *   - `externalInputs`: a map of template-boundary-input node id → shape,
- *     used to inject the parent supernode's incoming shape into the
- *     template's `Template In` block during recursive validation.
- *   - `depth`: recursion depth, capped to avoid infinite template loops.
- *
- * @param {import('../domain/architecture/types.js').ArchitectureGraph} graph
- * @param {{
- *   templates?: Object<string, import('../domain/architecture/types.js').ArchitectureTemplate>,
- *   scope?: Object<string, *>,
- *   externalInputs?: Object<string, import('./shapes.js').Shape | null>,
- *   depth?: number,
- * }} [opts]
- * @returns {ValidationReport}
+ * Validate tensors and explicit collections through a graph. externalInputs
+ * maps template boundary node IDs to shapes. Repeats default to sequential;
+ * parallel repeats select item i from each incoming collection.
  */
 export function validate(graph, opts = {}) {
-    const {
-        templates = {},
-        scope = {},
-        externalInputs = {},
-        depth = 0,
-    } = opts;
-
+    const { templates = {}, scope = {}, externalInputs = {}, depth = 0 } = opts;
+    const budget = opts.budget ?? { remaining: MAX_VALIDATED_NODES };
     const { order: topo, cyclic, adjacency: adj } = topologicalSort(graph);
-
-    /** @type {Object<string, string[]>} */
-    const errors = {};
-    /** @type {Object<string, string[]>} */
-    const warnings = {};
-    /** @type {Object<string, import('./shapes.js').Shape | null>} */
-    const shapes = {};
-    /** @type {string[]} */
-    const globalErrors = [];
-
-    const push = (bucket, id, msg) => {
-        if (!bucket[id]) bucket[id] = [];
-        bucket[id].push(msg);
-    };
+    const errors = {}, warnings = {}, shapes = {}, globalErrors = [];
+    const push = (bucket, id, message) => (bucket[id] ??= []).push(message);
 
     if (cyclic.length) {
         for (const id of cyclic) push(errors, id, 'This node is part of a cycle');
         globalErrors.push(`Graph has a cycle through ${cyclic.length} node(s)`);
     }
 
-    for (const id of Object.keys(graph.nodes)) {
-        const node = graph.nodes[id];
+    for (const [id, node] of Object.entries(graph.nodes)) {
         const inDeg = adj.inn[id]?.length ?? 0;
         const outDeg = adj.out[id]?.length ?? 0;
-
         if (node.kind === 'layer') {
-            const isTplInput = node.libraryKey === TEMPLATE_INPUT;
-            const isTplOutput = node.libraryKey === TEMPLATE_OUTPUT;
-            const isSourceOnly = SOURCE_ONLY.has(node.libraryKey) || isTplInput;
-            const isSinkOnly = SINK_ONLY.has(node.libraryKey) || isTplOutput;
-
-            if (isSourceOnly && inDeg > 0) {
-                push(errors, id, 'Input nodes cannot have inputs');
-            }
-            if (!isSourceOnly && inDeg === 0) {
-                push(warnings, id, 'No incoming connections');
-            }
-            if (isSinkOnly && outDeg > 0) {
-                push(errors, id, 'Output nodes cannot have outgoing connections');
-            }
-            if (!isSinkOnly && outDeg === 0 && Object.keys(graph.nodes).length > 1) {
-                push(warnings, id, 'No outgoing connections');
-            }
-            // Resolve $param refs against the active scope before checking
-            // types, so a parameter bound to `$out` validates against the
-            // bound value rather than the literal string.
+            const isSource = node.libraryKey === TEMPLATE_INPUT || node.libraryKey === 'deepflow.io.Input';
+            const isSink = node.libraryKey === TEMPLATE_OUTPUT || node.libraryKey === 'deepflow.io.Output';
+            if (isSource && inDeg > 0) push(errors, id, 'Input nodes cannot have inputs');
+            if (!isSource && inDeg === 0) push(warnings, id, 'No incoming connections');
+            if (isSink && outDeg > 0) push(errors, id, 'Output nodes cannot have outgoing connections');
+            if (!isSink && outDeg === 0 && Object.keys(graph.nodes).length > 1) push(warnings, id, 'No outgoing connections');
             const resolved = resolveLayerParameters(node, scope);
-            for (const issue of validateLayerParameters(resolved)) {
-                push(errors, id, issue.message);
+            for (const issue of validateLayerParameters(resolved)) push(errors, id, issue.message);
+            for (const [name, raw] of Object.entries(node.parameters ?? {})) {
+                if (typeof raw === 'string' && raw.trim().startsWith('$') && resolved.parameters[name] === null) {
+                    push(errors, id, `${name} has an unresolved parameter reference: ${raw}`);
+                }
             }
         } else if (node.kind === 'supernode' || node.kind === 'repeat') {
             if (inDeg === 0) push(warnings, id, 'No incoming connections');
-            if (outDeg === 0 && Object.keys(graph.nodes).length > 1) {
-                push(warnings, id, 'No outgoing connections');
-            }
-            const tpl = templates[node.templateId];
-            if (!tpl) {
-                push(errors, id, 'Template missing — re-create or remove this node');
-            }
-            if (node.kind === 'repeat') {
-                const c = Number(node.count);
-                if (!Number.isFinite(c) || c < 1) {
-                    push(errors, id, 'Repeat count must be a positive integer');
-                }
-            }
+            if (outDeg === 0 && Object.keys(graph.nodes).length > 1) push(warnings, id, 'No outgoing connections');
+            if (!templates[node.templateId]) push(errors, id, 'Template missing — re-create or remove this node');
         }
     }
 
-    // Shape inference along the topological order. For each node:
-    //   - Layers: resolve `$param` references against `scope`, then run inference
-    //   - Supernodes: build a sub-scope from the instance's bindings and
-    //                 the template's free-parameter defaults, recursively
-    //                 validate the template's graph with the parent shape
-    //                 injected at its Template In block, and harvest the
-    //                 Template Out shape as this instance's output
-    //   - Template boundaries: pull from externalInputs[id] when injecting
     for (const id of topo) {
         const node = graph.nodes[id];
-        const inputShapes = (adj.inn[id] ?? []).map((src) => shapes[src] ?? null);
-        if (!node) {
+        if (!node) continue;
+        if (--budget.remaining < 0) {
+            push(errors, id, `Expanded graph exceeds ${MAX_VALIDATED_NODES} nodes`);
             shapes[id] = null;
-            continue;
+            break;
         }
-
+        const edges = getIncomingEdges(graph, id);
+        const inputShapes = orderOperationEdges(node, edges).map((edge) => edge ? shapes[edge.source] ?? null : null);
         if (node.kind === 'layer') {
-            if (node.libraryKey === TEMPLATE_INPUT && externalInputs[id]) {
+            if (node.libraryKey === 'deepflow.op.MatMul') {
+                for (const issue of validateInputPorts(edges, ['a', 'b'])) push(errors, id, issue);
+                if (edges.length !== 2 || orderOperationEdges(node, edges).some((edge) => !edge)) {
+                    push(errors, id, 'MatMul needs two connected inputs (a and b)');
+                }
+            }
+            if (node.libraryKey === TEMPLATE_INPUT && Object.hasOwn(externalInputs, id)) {
                 shapes[id] = externalInputs[id];
                 continue;
             }
-            const resolved = resolveLayerParameters(node, scope);
-            const result = inferShape(node.libraryKey, inputShapes, resolved.parameters);
+            const result = inferShape(node.libraryKey, inputShapes, resolveLayerParameters(node, scope).parameters);
             shapes[id] = result.output;
-            for (const e of result.errors) push(errors, id, e);
-        } else if (node.kind === 'supernode') {
-            const tpl = templates[node.templateId];
-            if (!tpl) {
-                shapes[id] = null;
-                continue;
-            }
-            if (depth >= MAX_TEMPLATE_DEPTH) {
-                push(errors, id, `Template recursion exceeds depth ${MAX_TEMPLATE_DEPTH}`);
-                shapes[id] = null;
-                continue;
-            }
-
-            // Sub-scope: start from each free-param's default, then override
-            // with whatever the instance has bound. Bindings are evaluated
-            // against the current scope so a parent's `$x` can flow down.
-            const subScope = {};
-            for (const fp of tpl.freeParameters ?? []) {
-                const raw =
-                    node.parameterValues && node.parameterValues[fp.name] !== undefined
-                        ? node.parameterValues[fp.name]
-                        : fp.default;
-                const resolved = resolveParameterValue(raw, scope);
-                subScope[fp.name] = resolved;
-            }
-
-            const tplInputIds = Object.values(tpl.graph.nodes ?? {})
-                .filter((n) => n.kind === 'layer' && n.libraryKey === TEMPLATE_INPUT)
-                .map((n) => n.id);
-            const tplOutputIds = Object.values(tpl.graph.nodes ?? {})
-                .filter((n) => n.kind === 'layer' && n.libraryKey === TEMPLATE_OUTPUT)
-                .map((n) => n.id);
-
-            const childExternalInputs = {};
-            const incoming = inputShapes[0] ?? null;
-            for (const tid of tplInputIds) childExternalInputs[tid] = incoming;
-
-            const subReport = validate(tpl.graph, {
-                templates,
-                scope: subScope,
-                externalInputs: childExternalInputs,
-                depth: depth + 1,
-            });
-
-            // Output shape = first templateOutput's shape (if any)
-            let outShape = null;
-            for (const tid of tplOutputIds) {
-                outShape = subReport.shapes[tid] ?? outShape;
-            }
-            shapes[id] = outShape;
-
-            // Surface internal issues at the instance level as a digest.
-            const subErrCount = Object.values(subReport.errors).reduce(
-                (a, e) => a + e.length,
-                0,
-            );
-            if (subErrCount > 0) {
-                push(
-                    warnings,
-                    id,
-                    `Template "${tpl.name}" has ${subErrCount} internal error${subErrCount !== 1 ? 's' : ''}`,
-                );
-            }
-        } else if (node.kind === 'repeat') {
-            const tpl = templates[node.templateId];
-            const count = Math.max(0, Number(node.count) || 0);
-            if (!tpl || count === 0) {
-                shapes[id] = inputShapes[0] ?? null;
-                continue;
-            }
-            if (depth >= MAX_TEMPLATE_DEPTH) {
-                push(errors, id, `Template recursion exceeds depth ${MAX_TEMPLATE_DEPTH}`);
-                shapes[id] = null;
-                continue;
-            }
-            const iterVar = node.iterationVariable || 'i';
-            const free = tpl.freeParameters ?? [];
-            const tplInputIds = Object.values(tpl.graph.nodes ?? {})
-                .filter((n) => n.kind === 'layer' && n.libraryKey === TEMPLATE_INPUT)
-                .map((n) => n.id);
-            const tplOutputIds = Object.values(tpl.graph.nodes ?? {})
-                .filter((n) => n.kind === 'layer' && n.libraryKey === TEMPLATE_OUTPUT)
-                .map((n) => n.id);
-
-            let carryShape = inputShapes[0] ?? null;
-            let totalSubErrors = 0;
-            for (let i = 0; i < count; i++) {
-                const subScope = { ...scope, [iterVar]: i };
-                for (const fp of free) {
-                    let raw;
-                    const binding = node.bindings?.[fp.name];
-                    if (Array.isArray(binding)) {
-                        raw = binding[i] ?? fp.default;
-                    } else if (binding !== undefined && binding !== null && binding !== '') {
-                        raw = binding;
-                    } else {
-                        raw = fp.default;
-                    }
-                    subScope[fp.name] = resolveParameterValue(raw, subScope);
-                }
-                const childExternalInputs = {};
-                for (const tid of tplInputIds) childExternalInputs[tid] = carryShape;
-                const subReport = validate(tpl.graph, {
-                    templates,
-                    scope: subScope,
-                    externalInputs: childExternalInputs,
-                    depth: depth + 1,
-                });
-                let outShape = null;
-                for (const tid of tplOutputIds) {
-                    outShape = subReport.shapes[tid] ?? outShape;
-                }
-                carryShape = outShape;
-                totalSubErrors += Object.values(subReport.errors).reduce((a, e) => a + e.length, 0);
-            }
-            shapes[id] = carryShape;
-            if (totalSubErrors > 0) {
-                push(
-                    warnings,
-                    id,
-                    `Repeat unrolling produced ${totalSubErrors} internal error${totalSubErrors !== 1 ? 's' : ''}`,
-                );
-            }
-        } else {
+            for (const error of result.errors) push(errors, id, error);
+            continue;
+        }
+        if (node.kind !== 'supernode' && node.kind !== 'repeat') {
             shapes[id] = null;
+            continue;
+        }
+        const template = templates[node.templateId];
+        if (!template) { shapes[id] = null; continue; }
+        if (depth >= MAX_TEMPLATE_DEPTH) {
+            push(errors, id, `Template recursion exceeds depth ${MAX_TEMPLATE_DEPTH}`);
+            shapes[id] = null;
+            continue;
+        }
+        const isRepeat = node.kind === 'repeat';
+        const parallel = isRepeat && node.mode === 'parallel';
+        const countResult = isRepeat ? resolveRepeatCount(node.count, scope) : { count: 1 };
+        if (countResult.error) {
+            push(errors, id, countResult.error);
+            shapes[id] = null;
+            continue;
+        }
+        const { count } = countResult;
+        if (parallel && inputShapes.some((shape) => isShapeCollection(shape) && shape.items.length !== count)) {
+            push(errors, id, `Parallel repeat needs ${count} items in every input collection`);
+            shapes[id] = null;
+            continue;
+        }
+        const inputIds = getTemplateInputIds(template.graph);
+        for (const issue of validateInputPorts(edges, inputIds)) push(errors, id, issue);
+        const outputIds = Object.values(template.graph.nodes).filter((n) => n.libraryKey === TEMPLATE_OUTPUT).map((n) => n.id);
+        const initialInputs = mapTemplateInputs(template.graph, edges, (edge) => shapes[edge.source] ?? null);
+        const connectedPorts = mapTemplateInputs(template.graph, edges, () => true);
+        if (edges.length && Object.values(connectedPorts).some((connected) => !connected)) {
+            push(errors, id, 'Connect every template input port');
+        }
+        let carry = inputShapes[0] ?? null;
+        const outputs = [];
+        const childErrors = [];
+        for (let index = 0; index < count && budget.remaining >= 0; index++) {
+            const iterationScope = isRepeat ? { ...scope, [node.iterationVariable || 'i']: index } : scope;
+            const subScope = buildParameterScope(template.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined);
+            for (const parameter of template.freeParameters ?? []) {
+                const value = subScope[parameter.name];
+                if (parameter.type === 'int' && (value === null || value === undefined || !Number.isSafeInteger(Number(value)))) {
+                    childErrors.push(`${parameter.name} must resolve to an integer (got ${String(value)})`);
+                }
+                if (parameter.type === 'float' && (value === null || value === undefined || !Number.isFinite(Number(value)))) {
+                    childErrors.push(`${parameter.name} must resolve to a finite number`);
+                }
+            }
+            let childInputs;
+            if (parallel) {
+                childInputs = Object.fromEntries(Object.entries(initialInputs).map(([port, shape]) => [port, isShapeCollection(shape) ? shape.items[index] ?? null : shape]));
+            } else if (!isRepeat || index === 0) {
+                childInputs = initialInputs;
+            } else {
+                childInputs = Object.fromEntries(inputIds.map((port) => [port, carry]));
+            }
+            const child = validate(template.graph, { templates, scope: subScope, externalInputs: childInputs, depth: depth + 1, budget });
+            carry = outputIds.reduce((output, port) => child.shapes[port] ?? output, null);
+            outputs.push(carry);
+            childErrors.push(...child.globalErrors, ...Object.values(child.errors).flat());
+        }
+        shapes[id] = parallel ? shapeCollection(outputs) : carry;
+        if (childErrors.length) {
+            const prefix = isRepeat ? 'Repeat' : `Template "${template.name}"`;
+            push(errors, id, `${prefix} has ${childErrors.length} internal error${childErrors.length === 1 ? '' : 's'}: ${[...new Set(childErrors)].slice(0, 3).join('; ')}`);
         }
     }
-
     const ok = Object.keys(errors).length === 0 && globalErrors.length === 0;
     return { topo, cyclic, shapes, errors, warnings, globalErrors, ok };
 }

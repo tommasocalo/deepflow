@@ -102,10 +102,11 @@ export function moveNodes(graph, moves) {
  * @param {import('./types.js').ArchitectureGraph} graph
  * @param {import('./types.js').ArchEdge} edge
  */
-export function isValidConnection(graph, { source, target }, ignoredEdgeId) {
+export function isValidConnection(graph, { source, target, sourceHandle, targetHandle }, ignoredEdgeId) {
     return !!source && !!target && source !== target &&
         !!graph.nodes[source] && !!graph.nodes[target] &&
-        !graph.edges.some((edge) => edge.id !== ignoredEdgeId && edge.source === source && edge.target === target);
+        !graph.edges.some((edge) => edge.id !== ignoredEdgeId && edge.source === source && edge.target === target &&
+            (edge.sourceHandle ?? null) === (sourceHandle ?? null) && (edge.targetHandle ?? null) === (targetHandle ?? null));
 }
 
 export function addEdge(graph, edge) {

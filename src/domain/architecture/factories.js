@@ -51,7 +51,8 @@ export function createSuperNodeInstance({ templateId, position, label = 'Superno
  * @param {string} args.templateId
  * @param {import('./types.js').Position} args.position
  * @param {string} [args.label]
- * @param {number} [args.count]
+ * @param {number | string} [args.count] Literal count or template expression
+ * @param {'sequential' | 'parallel'} [args.mode]
  * @param {string} [args.iterationVariable]
  * @param {Object<string, *>} [args.bindings]
  * @param {string} [args.id]
@@ -62,6 +63,7 @@ export function createRepeatNode({
     position,
     label = 'Repeat',
     count = 2,
+    mode = 'sequential',
     iterationVariable = 'i',
     bindings = {},
     id,
@@ -73,6 +75,7 @@ export function createRepeatNode({
         label,
         position,
         count,
+        mode,
         iterationVariable,
         bindings,
     };

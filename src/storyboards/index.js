@@ -7,6 +7,7 @@ import { gpt2Storyboard } from './gpt2.js';
 import { resnetStoryboard } from './resnet.js';
 import { dannStoryboard } from './dann.js';
 import { ganStoryboard } from './gan.js';
+import { attentionStoryboard } from './attention.js';
 
 export const STORYBOARDS = [
     {
@@ -14,6 +15,12 @@ export const STORYBOARDS = [
         label: 'GPT-2 small',
         summary: 'Default model: embeddings, 12 repeated pre-LN Transformer blocks with residual streams, LM head.',
         run: gpt2Storyboard,
+    },
+    {
+        id: 'attention',
+        label: 'Multi-head attention',
+        summary: 'Editable projections, tensor splits, parallel attention heads, concatenation, and output projection.',
+        run: attentionStoryboard,
     },
     {
         id: 'resnet',

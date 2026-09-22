@@ -24,7 +24,7 @@ export function validateLayerParameters(node) {
         if (v === null || v === undefined || v === '') continue;
         if (spec.type === 'int' && !Number.isInteger(Number(v))) {
             issues.push({ paramName: spec.name, message: `${spec.name} must be an integer` });
-        } else if (spec.type === 'float' && Number.isNaN(Number(v))) {
+        } else if (spec.type === 'float' && !Number.isFinite(Number(v))) {
             issues.push({ paramName: spec.name, message: `${spec.name} must be a number` });
         } else if (spec.type === 'bool' && typeof v !== 'boolean') {
             issues.push({ paramName: spec.name, message: `${spec.name} must be true or false` });

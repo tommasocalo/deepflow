@@ -44,7 +44,8 @@
  * @property {string} templateId           Template to repeat
  * @property {string} label
  * @property {Position} position
- * @property {number} count                Iterations
+ * @property {number | string} count       Iterations, or an expression in the parent template parameters
+ * @property {'sequential' | 'parallel'} [mode] Missing values retain legacy sequential behavior. Parallel branches produce a collection of tensors.
  * @property {string} iterationVariable    Name bound to the iteration index (default: 'i')
  * @property {Object<string, *>} bindings  Per-iteration formulas keyed by free-param name. Each value can be a scalar (literal or expression in the iteration variable) or an array [v0, v1, ...] of explicit per-iteration values.
  *
@@ -74,9 +75,10 @@
  * --------------------------------------------------------------------------
  *
  * Templates are the parametric definition behind a SuperNodeInstance. Their
- * internal subgraph contains layer nodes plus two distinguished boundary
+ * internal subgraph contains layer nodes plus distinguished boundary
  * blocks — `deepflow.template.Input` and `deepflow.template.Output` — that
- * mark how the supernode's external edges hook up to its internals.
+ * mark how the supernode's external edges hook up to its internals. Multiple
+ * input boundaries use their node IDs as target handles on the parent node.
  *
  * @typedef {Object} ArchitectureTemplate
  * @property {string} id

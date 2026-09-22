@@ -106,7 +106,7 @@ test('moving root and template nodes preserves reports while semantic edits inva
     assert.equal(evaluations, 2);
     inner = { ...inner, nodes: { ...inner.nodes, linear: { ...inner.nodes.linear, parameters: { ...inner.nodes.linear.parameters, in_features: 7 } } } };
     templates = { ...templates, shared: { ...templates.shared, graph: inner } };
-    assert.ok(readReport(graph, templates).warnings.block.some((message) => message.includes('internal error')));
+    assert.ok(readReport(graph, templates).errors.block.some((message) => message.includes('internal error')));
     assert.equal(evaluations, 3);
 });
 

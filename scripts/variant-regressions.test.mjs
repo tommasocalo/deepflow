@@ -29,7 +29,8 @@ test('palette exposes a single entry for each family and retains searchable vari
     assert.equal(entries.filter((entry) => entry.key === 'torch.nn.Dropout').length, 1);
     assert.equal(entries.filter((entry) => entry.key === 'torch.nn.TransformerEncoderLayer').length, 1);
     assert.deepEqual(entries.filter((entry) => entry.category === 'Operations').map((entry) => entry.key).sort(), [
-        'deepflow.op.Add', 'deepflow.op.Concat', 'deepflow.op.Multiply', 'deepflow.op.Split', 'torch.nn.Flatten',
+        'deepflow.op.Add', 'deepflow.op.Broadcast', 'deepflow.op.CausalMask', 'deepflow.op.Concat', 'deepflow.op.MatMul',
+        'deepflow.op.Multiply', 'deepflow.op.Scale', 'deepflow.op.Split', 'deepflow.op.Stack', 'deepflow.op.Transpose', 'torch.nn.Flatten',
     ]);
     assert.ok(entries.every((entry) => !entry.key.startsWith('deepflow.template.')));
 });

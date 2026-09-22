@@ -24,8 +24,8 @@ export const useTemplatesStore = create(
             /** @type {Object<string, import('../domain/architecture/types.js').ArchitectureTemplate>} */
             templates: {},
 
-            createTemplate: ({ name, description, graph, id }) => {
-                const tpl = createTemplate({ name, description, graph, id });
+            createTemplate: ({ name, description, graph, freeParameters, id }) => {
+                const tpl = createTemplate({ name, description, graph, freeParameters, id });
                 set((state) => ({ templates: { ...state.templates, [tpl.id]: tpl } }));
                 return tpl.id;
             },
