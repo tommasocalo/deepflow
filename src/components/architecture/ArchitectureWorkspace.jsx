@@ -8,6 +8,7 @@ import LevelTabs from './LevelTabs.jsx';
 import NodeInspector from './NodeInspector.jsx';
 import RepeatIterationBar from './RepeatIterationBar.jsx';
 import { OpenToSideProvider } from './OpenToSideContext.jsx';
+import { useArchitectureHistoryKeys } from '../../hooks/useArchitectureHistoryKeys.js';
 import './workspace.css';
 
 /** Canvas-only capabilities remain inside their own ReactFlow provider. */
@@ -72,6 +73,7 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
 
 /** Two independently navigable editors over the same architecture. */
 export default function ArchitectureWorkspace() {
+    useArchitectureHistoryKeys();
     const mainStore = useArchitectureStoreApi();
     const [sideStore, setSideStore] = useState(null);
     const [activePane, setActivePane] = useState('main');

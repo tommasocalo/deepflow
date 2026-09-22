@@ -12,6 +12,7 @@ import {
 import { Hand, MousePointer2 } from 'lucide-react';
 import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
+import { recordArchitectureEdit } from '../../stores/architectureHistory.js';
 import { isValidConnection, resolveGraphLevel } from '../../domain/architecture/index.js';
 import LayerNodeView from './LayerNodeView.jsx';
 import OpNodeView from './OpNodeView.jsx';
@@ -248,13 +249,15 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                 const expected = transaction.isDrag ? transaction.context : { levelKey, storeId };
                 if (transaction.cancelled || !moveNodes(transaction.moves, expected)) restorePositions();
             }
-            for (const change of changes) {
-                if (change.type === 'remove' && viewGraph.nodes[change.id]) {
-                    removeNodeStore(change.id);
-                } else if (change.type === 'select') {
-                    setNodeSelected(change.id, change.selected);
+            recordArchitectureEdit('Delete nodes', () => {
+                for (const change of changes) {
+                    if (change.type === 'remove' && viewGraph.nodes[change.id]) {
+                        removeNodeStore(change.id);
+                    } else if (change.type === 'select') {
+                        setNodeSelected(change.id, change.selected);
+                    }
                 }
-            }
+            });
         },
         [dragBatcher, dragContext, levelKey, storeId, viewGraph, moveNodes, restorePositions, removeNodeStore, setNodeSelected],
     );
@@ -268,7 +271,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     }, [architectureStore, clearExpanded, dragBatcher, dragContext, levelKey]);
 
     const onEdgesChange = useCallback(
-        (changes) => {
+        (changes) => recordArchitectureEdit('Delete connections', () => {
             for (const change of changes) {
                 if (change.type === 'remove') removeEdgeStore(change.id, { levelKey });
                 else if (change.type === 'select') {
@@ -280,9 +283,18 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                     });
                 }
             }
-        },
+        }),
         [removeEdgeStore, levelKey],
     );
+
+    const onBeforeDelete = useCallback(async ({ nodes, edges: removedEdges }) => {
+        // ReactFlow otherwise emits separate node/edge removals for one keypress.
+        // Commit the whole selection once and let the domain render the result.
+        architectureStore.getState().deleteElements({
+            nodeIds: nodes.map((node) => node.id), edgeIds: removedEdges.map((edge) => edge.id),
+        }, { levelKey, storeId });
+        return false;
+    }, [architectureStore, levelKey, storeId]);
 
     const onConnectStart = useCallback(() => {
         connectionContextRef.current = dragContext;
@@ -362,6 +374,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                     edgeTypes={edgeTypes}
                     nodeOrigin={NODE_ORIGIN}
                     onNodesChange={onNodesChange}
+                    onBeforeDelete={onBeforeDelete}
                     onNodeDragStart={onDragStart}
                     onSelectionDragStart={onDragStart}
                     onEdgesChange={onEdgesChange}

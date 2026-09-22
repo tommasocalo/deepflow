@@ -10,13 +10,14 @@ import { useTemplatesStore } from '../stores/templatesStore.js';
 import { useTrainingStore } from '../stores/trainingStore.js';
 import { gpt2Storyboard } from '../storyboards/gpt2.js';
 import { createDefaultModelSeeder } from '../storyboards/defaultModel.js';
+import { startArchitectureSession } from '../stores/architectureHistory.js';
 
 const seedDefaultModel = createDefaultModelSeeder({
-    seed: () => gpt2Storyboard({
+    seed: () => startArchitectureSession(() => gpt2Storyboard({
         architectureStore: useArchitectureStore,
         templatesStore: useTemplatesStore,
         trainingStore: useTrainingStore,
-    }),
+    })),
 });
 
 const Layout = () => {

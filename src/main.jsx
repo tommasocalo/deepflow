@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.jsx'
 import { useArchitectureStore } from './stores/architectureStore.js'
 import { useTemplatesStore } from './stores/templatesStore.js'
+import { useArchitectureHistory } from './stores/architectureHistory.js'
 import { useTrainingStore } from './stores/trainingStore.js'
 import * as validation from './validation/index.js'
 import * as codegen from './codegen/index.js'
@@ -14,6 +15,7 @@ import * as codegen from './codegen/index.js'
 if (import.meta.env.DEV) {
     window.__deepflow = {
         architectureStore: useArchitectureStore,
+        architectureHistory: useArchitectureHistory,
         templatesStore: useTemplatesStore,
         trainingStore: useTrainingStore,
         validation,

@@ -5,6 +5,7 @@ import { useArchitectureStore } from '../stores/architectureStore.js';
 import { useTemplatesStore } from '../stores/templatesStore.js';
 import { useTrainingStore } from '../stores/trainingStore.js';
 import NavButton from './NavButton.jsx';
+import { startArchitectureSession } from '../stores/architectureHistory.js';
 
 const StoryboardMenu = () => {
     const [open, setOpen] = useState(false);
@@ -64,7 +65,7 @@ const StoryboardMenu = () => {
                             key={sb.id}
                             onClick={() => {
                                 architectureStore.getState().goToLevel(0);
-                                sb.run({ architectureStore, templatesStore, trainingStore });
+                                startArchitectureSession(() => sb.run({ architectureStore, templatesStore, trainingStore }));
                                 setOpen(false);
                             }}
                             className="w-full text-left p-2 border-b border-black/10 last:border-b-0 hover:bg-stone-50"

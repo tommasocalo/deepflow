@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { withArchitectureHistory } from './architectureHistory.js';
 import {
     addEdge,
     addNode,
@@ -13,6 +14,13 @@ import {
 } from '../domain/architecture/index.js';
 
 const STORAGE_KEY = 'deepflow:templates';
+const HISTORY_ACTIONS = {
+    createTemplate: 'Create template', cloneTemplate: 'Copy template', patchTemplate: 'Edit template', removeTemplate: 'Delete template',
+    addNodeToTemplate: 'Add template node', removeNodeFromTemplate: 'Delete template node', patchTemplateNode: 'Change template node',
+    patchTemplateLayerParameters: 'Change template settings', moveTemplateNode: 'Move template node',
+    addEdgeToTemplate: 'Connect template nodes', removeEdgeFromTemplate: 'Delete template connection',
+    addFreeParameter: 'Add template parameter', patchFreeParameter: 'Change template parameter', removeFreeParameter: 'Delete template parameter',
+};
 
 /**
  * Templates store. Each template is a named, reusable subgraph that can be
@@ -21,7 +29,7 @@ const STORAGE_KEY = 'deepflow:templates';
  */
 export const useTemplatesStore = create(
     persist(
-        (set, get) => ({
+        (set, get) => withArchitectureHistory({
             /** @type {Object<string, import('../domain/architecture/types.js').ArchitectureTemplate>} */
             templates: {},
 
@@ -180,7 +188,7 @@ export const useTemplatesStore = create(
                         templates: { ...state.templates, [templateId]: { ...tpl, freeParameters: free } },
                     };
                 }),
-        }),
+        }, HISTORY_ACTIONS),
         { name: STORAGE_KEY },
     ),
 );

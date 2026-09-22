@@ -27,8 +27,19 @@ import { isValidLevelPath, nearestOpenAncestor, reconcileOpenLevels, sameLevelPa
 import { containsTemplate } from '../domain/architecture/templateReferences.js';
 import { componentBindingsForLayer, ensureStandardTemplate, getStandardComponentForLayer, STANDARD_COMPONENTS } from '../domain/components/index.js';
 import { useTemplatesStore } from './templatesStore.js';
+import { architectureDocumentReplaced, configureArchitectureHistory, isRestoringArchitectureHistory, withArchitectureHistory } from './architectureHistory.js';
 
 const STORAGE_KEY = 'deepflow:architecture-graph';
+const HISTORY_ACTIONS = {
+    addLayerByLibraryKey: 'Add operation', addSuperNodeInstance: 'Add component', addStandardComponent: 'Add component',
+    convertLayerToComponent: 'Open component definition', cloneComponent: 'Make independent component', cloneCurrentComponent: 'Make independent component',
+    addRepeatNode: 'Add repeat', convertInstanceToRepeat: 'Repeat component', convertRepeatToInstance: 'Remove repeat',
+    patchRepeatNode: 'Change repeat', patchRepeatBinding: 'Change repeat parameter',
+    deleteElements: 'Delete selection', removeNode: 'Delete node', patchNode: 'Change node', patchLayerParameters: 'Change node settings',
+    moveNode: 'Move node', moveNodes: 'Move nodes', connect: 'Connect nodes', reconnectEdge: 'Reconnect nodes',
+    removeEdge: 'Delete connection', patchEdge: 'Change connection', setEdgeGradientOp: 'Change gradient flow',
+    resetCurrentGraph: 'Reset graph', groupSelection: 'Group nodes',
+};
 
 const initialGraph = () => {
     const inputEntry = getEntry('deepflow.io.Input');
@@ -131,7 +142,7 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         return clonedLevel.templateId;
     };
 
-    return {
+    return withArchitectureHistory({
         graph,
         /** @type {string[]} ids of currently-selected nodes in the active view */
         selectedNodeIds: [],
@@ -145,6 +156,8 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         recentLibraryKeys: [],
         /** Per-pane previews of a repeat's shared body, keyed by its absolute level path. */
         inspectedIterations: {},
+        showDimensions: true,
+        setShowDimensions: (value) => set({ showDimensions: Boolean(value) }),
         showGradientFlow: false,
         setShowGradientFlow: (value) => set({ showGradientFlow: Boolean(value) }),
 
@@ -282,6 +295,22 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
                     },
                 };
             }),
+
+        deleteElements: ({ nodeIds = [], edgeIds = [] }, expected) => {
+            if (!matchesContext(expected)) return false;
+            updateCurrentGraph((graph) => {
+                let next = graph;
+                for (const id of nodeIds) next = removeNode(next, id);
+                for (const id of edgeIds) next = removeEdge(next, id);
+                return next;
+            });
+            const view = getViewGraph(get());
+            set((state) => ({
+                selectedNodeIds: state.selectedNodeIds.filter((id) => view.nodes[id]),
+                expandedNodeId: view.nodes[state.expandedNodeId] ? state.expandedNodeId : null,
+            }));
+            return true;
+        },
 
         removeNode: (id) => {
             updateCurrentGraph((g) => removeNode(g, id));
@@ -557,7 +586,7 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
 
             return tpl.id;
         },
-    };
+    }, HISTORY_ACTIONS);
 };
 
 const architectureStore = create(
@@ -595,7 +624,7 @@ function sharedGraphPatch(state, graph = state.graph) {
 
 function subscribeTemplateNavigation(store) {
     return useTemplatesStore.subscribe((state, previous) => {
-        if (state.templates === previous.templates) return;
+        if (state.templates === previous.templates || isRestoringArchitectureHistory()) return;
         const architecture = store.getState();
         if (!architecture.openPaths.length && !architecture.currentPath.length) return;
         const patch = sharedGraphPatch(architecture);
@@ -603,9 +632,32 @@ function subscribeTemplateNavigation(store) {
     });
 }
 
+// Restore document state before reconciling navigation: a cloned template may
+// disappear together with the instance that refers to it in the same undo.
+const documentPanes = new Set([architectureStore]);
+configureArchitectureHistory({
+    capture: () => ({ graph: architectureStore.getState().graph, templates: useTemplatesStore.getState().templates }),
+    restore: ({ graph, templates }) => {
+        useTemplatesStore.setState({ templates });
+        for (const pane of documentPanes) {
+            pane.setState({ graph, ...sharedGraphPatch(pane.getState(), graph) });
+        }
+    },
+});
+const unsubscribeGraphHistory = architectureStore.subscribe((state, previous) => {
+    if (state.graph !== previous.graph) architectureDocumentReplaced();
+});
+const unsubscribeTemplateHistory = useTemplatesStore.subscribe((state, previous) => {
+    if (state.templates !== previous.templates) architectureDocumentReplaced();
+});
+
 // Every pane resolves the same templates, while keeping its own open levels.
 const unsubscribeTemplateNavigation = subscribeTemplateNavigation(architectureStore);
-if (import.meta.hot) import.meta.hot.dispose(unsubscribeTemplateNavigation);
+if (import.meta.hot) import.meta.hot.dispose(() => {
+    unsubscribeTemplateNavigation();
+    unsubscribeGraphHistory();
+    unsubscribeTemplateHistory();
+});
 
 const ArchitectureStoreContext = createContext(null);
 
@@ -634,6 +686,7 @@ export function createArchitecturePaneStore({ path = [] } = {}) {
     const currentPath = isValidLevelPath(graph, useTemplatesStore.getState().templates, path) ? [...path] : [];
     let active = true;
     const pane = createStore(createArchitectureState({ graph, path: currentPath, isActive: () => active }));
+    documentPanes.add(pane);
     const unsubscribeMain = architectureStore.subscribe((state, previous) => {
         if (state.graph === previous.graph || pane.getState().graph === state.graph) return;
         const local = pane.getState();
@@ -647,6 +700,7 @@ export function createArchitecturePaneStore({ path = [] } = {}) {
     const unsubscribeTemplates = subscribeTemplateNavigation(pane);
     pane.dispose = () => {
         active = false;
+        documentPanes.delete(pane);
         unsubscribeMain();
         unsubscribePane();
         unsubscribeTemplates();

@@ -74,7 +74,8 @@
 .df-action-group { display: flex; align-items: center; border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; background: #fff; }
 .df-action-segment { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 26px; padding: 0 9px; color: #333; font-size: 10.5px; font-weight: 700; }
 .df-action-segment + .df-action-segment { border-left: 1px solid var(--border-subtle); }
-.df-action-segment:hover { background: #f3f4f6; color: #000; }
+.df-action-segment:hover:not(:disabled) { background: #f3f4f6; color: #000; }
+.df-action-segment:disabled { opacity: .35; cursor: default; }
 .df-code-button { width: 128px; }
 .react-flow__controls.df-flow-controls { overflow: hidden; border: 1px solid var(--border-subtle) !important; border-radius: 7px !important; background: white !important; box-shadow: var(--shadow-soft) !important; }
 .react-flow__controls.df-flow-controls button { width: 29px; height: 29px; border-bottom: 1px solid #00000015 !important; }
