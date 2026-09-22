@@ -25,6 +25,7 @@ import {
 import { getEntry } from '../domain/library/index.js';
 import { isValidLevelPath, nearestOpenAncestor, reconcileOpenLevels, sameLevelPath } from '../domain/architecture/levelNavigation.js';
 import { containsTemplate } from '../domain/architecture/templateReferences.js';
+import { instanceAsRepeat, repeatAsSingle, singleConversionIssue } from '../domain/architecture/repeatStructure.js';
 import { componentBindingsForLayer, ensureStandardTemplate, getStandardComponentForLayer, STANDARD_COMPONENTS } from '../domain/components/index.js';
 import { useTemplatesStore } from './templatesStore.js';
 import { architectureDocumentReplaced, configureArchitectureHistory, isRestoringArchitectureHistory, withArchitectureHistory } from './architectureHistory.js';
@@ -224,52 +225,24 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
             return node.id;
         },
 
-        /**
-         * Promote an existing SuperNodeInstance into a RepeatNode in
-         * place, preserving its template, position, label, and
-         * (optionally) its bound parameter values as the formula for
-         * iteration 0.
-         */
-        convertInstanceToRepeat: (instanceId, count = 2, mode = 'sequential') => {
-            const view = getViewGraph(get());
-            const node = view.nodes[instanceId];
+        /** Preserve repeat configuration when a component is toggled to Single. */
+        convertInstanceToRepeat: (instanceId, count, mode) => {
+            const node = getViewGraph(get()).nodes[instanceId];
             if (!node || node.kind !== 'supernode') return null;
-            const repeat = createRepeatNode({
-                id: node.id,
-                templateId: node.templateId,
-                position: node.position,
-                label: node.label,
-                count,
-                mode,
-                iterationVariable: 'i',
-                bindings: { ...(node.parameterValues ?? {}) },
-            });
-            updateCurrentGraph((g) => ({
-                ...g,
-                nodes: { ...g.nodes, [node.id]: repeat },
-            }));
+            const repeat = instanceAsRepeat(node, count, mode);
+            updateCurrentGraph((graph) => ({ ...graph, nodes: { ...graph.nodes, [node.id]: repeat } }));
             return repeat.id;
         },
 
-        /**
-         * Demote a RepeatNode back to a SuperNodeInstance. Used when
-         * the user wants a single instance instead of a repeat.
-         */
+        getSingleConversionIssue: (id) => singleConversionIssue(getViewGraph(get()).nodes[id], useTemplatesStore.getState().templates),
+
+        /** Single uses iteration 0; unchanged formulas return when repeated again. */
         convertRepeatToInstance: (repeatId) => {
-            const view = getViewGraph(get());
-            const node = view.nodes[repeatId];
-            if (!node || node.kind !== 'repeat') return null;
-            const instance = createSuperNodeInstance({
-                id: node.id,
-                templateId: node.templateId,
-                position: node.position,
-                label: node.label,
-                parameterValues: { ...(node.bindings ?? {}) },
-            });
-            updateCurrentGraph((g) => ({
-                ...g,
-                nodes: { ...g.nodes, [node.id]: instance },
-            }));
+            const node = getViewGraph(get()).nodes[repeatId];
+            const templates = useTemplatesStore.getState().templates;
+            if (singleConversionIssue(node, templates)) return null;
+            const instance = repeatAsSingle(node, templates[node.templateId]);
+            updateCurrentGraph((graph) => ({ ...graph, nodes: { ...graph.nodes, [node.id]: instance } }));
             return instance.id;
         },
 

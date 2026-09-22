@@ -37,6 +37,7 @@
  * @property {string} label                 Per-instance display label
  * @property {Position} position
  * @property {Object<string, *>} [parameterValues]   Bound values for the template's free parameters (literal or expression strings)
+ * @property {{count: number|string, mode: string, iterationVariable: string, bindings: Object<string, *>, singleValues: Object<string, *>}} [repeatSettings] Remembered repetition plus its iteration-0 projection, used to restore formulas unless the Single values were edited.
  *
  * @typedef {Object} RepeatNode
  * @property {string} id

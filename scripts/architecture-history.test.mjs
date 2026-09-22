@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { createEdge, createLayerNode, createRepeatNode, createSuperNodeInstance, createTemplate } from '../src/domain/architecture/index.js';
 import { getEntry } from '../src/domain/library/index.js';
 import { createDragBatcher } from '../src/components/architecture/flowAdapter.js';
+import { resolveDimensionTuple } from '../src/domain/expressions.js';
 import { architectureHistoryCommand } from '../src/hooks/architectureHistoryKeys.js';
 
 const saved = new Map();
@@ -279,4 +280,108 @@ test('shortcuts support Mac/Windows redo and preserve native text undo inside di
     assert.equal(architectureHistoryCommand(event(doc.body, { isComposing: true })), null);
     assert.equal(architectureHistoryCommand(event(doc.body, { defaultPrevented: true })), null);
     dom.window.close();
+});
+
+test('repeat to Single round-trip remembers expression count/index, metadata, edges and bindings', () => {
+    const template = repeatedFixture();
+    const repeat = architecture.getState().graph.nodes.repeat;
+    const configured = { ...repeat, count: '$heads', iterationVariable: 'head', label: 'Attention heads', annotation: { author: 'user' },
+        bindings: { width: 'D * 2 ** head', chosen: [32, 64, 128], scale: '1e-3 * (head + 1)', untouched: '$head_dim' } };
+    const edge = createEdge({ source: 'repeat', target: 'other', sourceHandle: 'output', targetHandle: 'features', gradientOp: 'reverse' });
+    architecture.setState({ graph: { nodes: { ...architecture.getState().graph.nodes, repeat: configured }, edges: [edge] } });
+    const before = document();
+    assert.equal(architecture.getState().getSingleConversionIssue('repeat'), null);
+    assert.equal(architecture.getState().convertRepeatToInstance('repeat'), 'repeat');
+    const single = architecture.getState().graph.nodes.repeat;
+    assert.equal(single.kind, 'supernode');
+    assert.deepEqual(single.parameterValues, { width: 'D * 2 ** 0', chosen: 32, scale: 0.001, untouched: '$head_dim' });
+    assert.equal(single.parameterValues.width.includes('D'), true, 'Upstream parameters are not frozen to their current numeric values');
+    assert.equal(single.annotation, configured.annotation);
+    assert.equal(single.position, configured.position);
+    assert.equal(single.templateId, template.id);
+    assert.equal(architecture.getState().graph.edges[0], edge);
+    assert.equal(architecture.getState().convertInstanceToRepeat('repeat', undefined, 'sequential'), 'repeat');
+    const restored = architecture.getState().graph.nodes.repeat;
+    assert.deepEqual(restored, { ...configured, mode: 'sequential' });
+    assert.equal(restored.count, '$heads');
+    assert.equal(history.getState().undoCount, 2);
+    history.getState().undo(); history.getState().undo();
+    assert.deepEqual(document(), before);
+    history.getState().redo(); history.getState().redo();
+    assert.deepEqual(architecture.getState().graph.nodes.repeat, restored);
+});
+
+test('edited Single values override remembered formulas while untouched values and count survive', () => {
+    repeatedFixture();
+    architecture.getState().patchRepeatNode('repeat', { count: 12, iterationVariable: 'j', bindings: { width: '64 * 2 ** j', dropout: [0.1, 0.2], removed: 'j + 1' } });
+    architecture.getState().convertRepeatToInstance('repeat');
+    architecture.getState().patchNode('repeat', { parameterValues: { width: '$D', dropout: 0.1, extra: '$H' } });
+    architecture.getState().convertInstanceToRepeat('repeat', undefined, 'sequential');
+    let repeat = architecture.getState().graph.nodes.repeat;
+    assert.equal(repeat.count, 12);
+    assert.equal(repeat.iterationVariable, 'j');
+    assert.deepEqual(repeat.bindings, { width: '$D', dropout: [0.1, 0.2], extra: '$H' });
+    architecture.getState().convertRepeatToInstance('repeat');
+    architecture.getState().convertInstanceToRepeat('repeat', '$new_count', 'parallel');
+    repeat = architecture.getState().graph.nodes.repeat;
+    assert.equal(repeat.count, '$new_count', 'An explicit count always overrides remembered settings');
+    assert.equal(repeat.mode, 'parallel');
+});
+
+test('index-dependent defaults and tuple/array bindings project safely and return to inherited defaults', () => {
+    repeatedFixture();
+    templates.getState().patchTemplate('body', { freeParameters: [
+        { name: 'width', type: 'int', default: 'D * (i + 1)' },
+        { name: 'nullable', type: 'int', nullable: true, default: 'i + 1' },
+    ] });
+    architecture.getState().patchRepeatNode('repeat', { bindings: { nullable: null, shape: '(i, 3)', tupleSequence: [['i + 1', '$D'], [2, 3]] } });
+    const before = architecture.getState().graph.nodes.repeat;
+    architecture.getState().convertRepeatToInstance('repeat');
+    assert.deepEqual(architecture.getState().graph.nodes.repeat.parameterValues, {
+        width: 'D * (0 + 1)', nullable: null, shape: '(0, 3)', tupleSequence: [1, '$D'],
+    });
+    assert.deepEqual(resolveDimensionTuple(architecture.getState().graph.nodes.repeat.parameterValues.shape), [0, 3]);
+    architecture.getState().convertInstanceToRepeat('repeat');
+    assert.deepEqual(architecture.getState().graph.nodes.repeat, before, 'Unmodified inherited defaults remain inherited after restoring repeat');
+});
+
+test('Single conversion blocks free internal index references without mutating graph or history', () => {
+    repeatedFixture();
+    templates.getState().patchTemplateLayerParameters('body', 'linear', { out_features: '64 * 2 ** i' });
+    history.getState().clear();
+    const before = document();
+    assert.match(architecture.getState().getSingleConversionIssue('repeat'), /uses the repeat index “i” directly/);
+    assert.equal(architecture.getState().convertRepeatToInstance('repeat'), null);
+    assert.deepEqual(document(), before);
+    assert.equal(history.getState().canUndo, false);
+    // An explicit template parameter gives those operations a valid Single scope.
+    templates.getState().addFreeParameter('body', { name: 'i', type: 'int', default: 'i' });
+    assert.equal(architecture.getState().getSingleConversionIssue('repeat'), null);
+    architecture.getState().convertRepeatToInstance('repeat');
+    assert.equal(architecture.getState().graph.nodes.repeat.parameterValues.i, 0);
+});
+
+test('free index checks respect nested repeat scopes and inspect each independently bound instance', () => {
+    repeatedFixture();
+    const child = createTemplate({ id: 'child', name: 'Child', graph: graphOf(layer('child-linear')), freeParameters: [{ name: 'width', type: 'int', default: '64 * (i + 1)' }] });
+    templates.setState({ templates: { ...templates.getState().templates, child } });
+    templates.getState().patchTemplate('body', { graph: graphOf(
+        createSuperNodeInstance({ id: 'safe', templateId: 'child', parameterValues: { width: 64 }, position }),
+        createSuperNodeInstance({ id: 'unsafe', templateId: 'child', position }),
+    ) });
+    assert.match(architecture.getState().getSingleConversionIssue('repeat'), /index/);
+    templates.getState().patchTemplate('body', { graph: graphOf(createRepeatNode({ id: 'nested', templateId: 'child', count: 2, iterationVariable: 'i', position })) });
+    assert.equal(architecture.getState().getSingleConversionIssue('repeat'), null, 'A nested repeat defines its own index');
+    templates.getState().patchTemplateNode('body', 'nested', { count: 'i + 1' });
+    assert.match(architecture.getState().getSingleConversionIssue('repeat'), /index/, 'Its count is still evaluated in the parent scope');
+});
+
+test('literal operation names do not block Single while numeric formulas still do', () => {
+    repeatedFixture();
+    const output = { ...layer('output', 'deepflow.io.Output'), parameters: { name: 'i' } };
+    templates.getState().patchTemplate('body', { graph: graphOf(output) });
+    assert.equal(architecture.getState().getSingleConversionIssue('repeat'), null);
+    const scale = { ...layer('scale', 'deepflow.op.Scale'), parameters: { factor: 'i + 1' } };
+    templates.getState().patchTemplate('body', { graph: graphOf(output, scale) });
+    assert.match(architecture.getState().getSingleConversionIssue('repeat'), /index/);
 });
