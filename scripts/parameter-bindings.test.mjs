@@ -30,6 +30,7 @@ test('dimension references and dependent defaults appear among parameter consume
     assert.deepEqual(parameterReferences(['1e-5', '$width', 'width * 2', '.5']), ['width']);
     assert.deepEqual(resolvedFieldValue(['$D', 'D * 4'], { D: 64 }), [64, 256]);
     assert.equal(resolvedFieldValue('D / H', { D: null, H: 8 }), null);
+    assert.deepEqual(resolvedFieldValue([1024, '$'], {}), [1024, null], 'An unfinished reference cannot be converted to a local value');
 });
 
 test('exposing a field preserves its value and changes only the named field atomically', () => {

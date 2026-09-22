@@ -66,7 +66,7 @@ export function resolvedFieldValue(value, scope, depth = 0) {
     const resolved = resolveParameterValue(value, scope);
     if (Array.isArray(resolved)) return resolved.map((part) => resolvedFieldValue(part, scope, depth + 1));
     // An unresolved arithmetic expression must not masquerade as a resolved value.
-    if (typeof resolved === 'string' && parameterReferences(value).some((name) => !Object.hasOwn(scope, name) || scope[name] == null)) return null;
+    if (typeof resolved === 'string' && (resolved.includes('$') || parameterReferences(value).some((name) => !Object.hasOwn(scope, name) || scope[name] == null))) return null;
     return resolved;
 }
 

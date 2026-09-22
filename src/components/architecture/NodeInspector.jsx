@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { AlertCircle, AlertTriangle, Boxes, ChevronDown, Copy, Repeat, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Boxes, ChevronDown, Repeat, X } from 'lucide-react';
 import { PYTORCH_BLOCKS, getEntry } from '../../domain/library/index.js';
-import { createVariantPatch, getNodeFamily } from '../../domain/library/nodeFamilies.js';
+import { createVariantPatch, getNodeFamily, isOperationKey } from '../../domain/library/nodeFamilies.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
@@ -9,7 +9,7 @@ import { useValidation, useValidationContext } from '../../hooks/useValidation.j
 import { resolveComponentContext } from '../../domain/componentContext.js';
 import { STANDARD_COMPONENTS } from '../../domain/components/index.js';
 import ParameterField from './ParameterField.jsx';
-import ParameterBinding, { DerivedParameter, ParameterBindingsProvider } from './ParameterBinding.jsx';
+import ParameterBinding, { DerivedParameter, ExposeParameter, ParameterBindingsProvider } from './ParameterBinding.jsx';
 import OperationIcon from './OperationIcon.jsx';
 import { useInspectorPlacement } from './useInspectorPlacement.js';
 import { compactConnectionWarnings, compactParameterError, partitionParameterErrors } from './inspectorIssues.js';
@@ -33,31 +33,19 @@ const FIELD_LABELS = {
     requires_grad: 'Trainable', keepdim: 'Keep axis', enabled: 'Enabled',
     bias: 'Bias',
     H: 'Heads', D: 'Width', d_head: 'Head width', n_heads: 'Heads', dropout: 'Dropout',
+    shape: 'Shape', factor: 'Factor', value: 'Value', exponent: 'Exponent', chunks: 'Parts', name: 'Name',
 };
 
-// A few width bands keep numeric settings small without resizing for every keystroke.
-function inspectorWidth(node) {
-    if (node.kind !== 'layer') return 200;
-    const entry = getEntry(node.libraryKey);
-    const primary = (entry?.parameters ?? []).filter((p) => p.required || SHAPE_PRIORITY.includes(p.name));
-    const longest = Math.max(0, ...primary.map((p) => {
-        const value = node.parameters[p.name];
-        return String(Array.isArray(value) ? value.join(', ') : value ?? '').length;
-    }));
-    const contentWidth = longest <= 7 ? 168 : longest <= 11 ? 200 : 224;
-    const variantWidth = node.libraryKey === 'deepflow.nn.PositionalEmbedding' ? 200
-        : getNodeFamily(node.libraryKey)?.key === 'attention' ? 200 : 168;
-    return Math.max(contentWidth, variantWidth);
+// Width follows the field schema, never the number of characters being typed.
+function inspectorWidth(node, template) {
+    const parameters = node.kind === 'layer' ? getEntry(node.libraryKey)?.parameters ?? [] : template?.freeParameters ?? [];
+    return parameters.some((parameter) => parameter.type === 'tuple' && (parameter.name === 'shape' || parameter.editor === 'dimensions')) ? 328 : 248;
 }
 
-function InspectorField({ param, value, label, inline = false, ...props }) {
-    const display = value ?? props.placeholder ?? param.default ?? (param.required ? 'Required' : 'Default');
-    const text = Array.isArray(display) ? display.join(', ') : String(display);
-    const wide = text.length > 13;
-    const width = text.length <= 4 ? 5 : text.length <= 8 ? 9 : 14;
+function InspectorField({ param, value, label, fullRow = false, ...props }) {
+    const wide = ['tuple', 'string'].includes(param.type) || param.name === 'factor';
     return (
-        <div className={`df-inspector-field${wide ? ' is-wide' : ''}${inline ? ' is-inline' : ''}`} data-parameter={param.name}
-            style={{ '--inspector-control-width': `calc(${width}ch + 12px)` }}>
+        <div className={`df-inspector-field${wide ? ' is-wide' : ''}${fullRow ? ' is-alone' : ''}`} data-parameter={param.name}>
             <ParameterBinding param={param} value={value} onChange={props.onChange}><ParameterField
                 param={{ ...param, description: `${param.name}${param.description ? ` — ${param.description}` : ''}` }}
                 value={value}
@@ -81,6 +69,7 @@ function ParamGroup({ params, values, fieldErrors, onPatch, collapsed = false })
         <InspectorField
             key={p.name}
             param={p}
+            fullRow={params.length === 1}
             value={values[p.name]}
             onChange={(v) => onPatch({ [p.name]: v })}
             errors={(fieldErrors[p.name] ?? []).map((message) => compactParameterError(p.name, message))}
@@ -128,7 +117,7 @@ function LayerBody({ id, node, fieldErrors }) {
                 <label className="df-inspector-module">
                     <span>Type</span>
                     <span className="df-inspector-select">
-                        <select aria-label={family ? "Operation type" : "Module"} title={selectedModule?.name} value={node.libraryKey} onChange={(e) => switchModule(e.target.value)}>
+                        <select aria-label={family || isOperationKey(node.libraryKey) ? "Operation type" : "Module"} title={selectedModule?.name} value={node.libraryKey} onChange={(e) => switchModule(e.target.value)}>
                             {moduleOptions.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
                         </select>
                         <ChevronDown size={11} strokeWidth={3} aria-hidden="true" />
@@ -154,6 +143,7 @@ function Bindings({ freeParams, values, onChange, hint }) {
                     <InspectorField
                         key={p.name}
                         param={p}
+                        fullRow={freeParams.filter((parameter) => !parameter.derived).length === 1}
                         label={FIELD_LABELS[p.name] ?? p.name.replaceAll('_', ' ')}
                         value={values[p.name]}
                         placeholder={p.default != null ? String(p.default) : 'Default'}
@@ -170,14 +160,10 @@ function Bindings({ freeParams, values, onChange, hint }) {
 function SupernodeBody({ id, node }) {
     const template = useTemplatesStore((s) => s.templates[node.templateId]);
     const patchNode = useArchitectureStore((s) => s.patchNode);
-    const cloneComponent = useArchitectureStore((s) => s.cloneComponent);
     const values = node.parameterValues ?? {};
     return (
         <>
             {!template && <p className="df-inspector-note">Template missing — re-create or delete this node.</p>}
-            <div className="df-inspector-actions">
-                <button type="button" disabled={!template} onClick={() => cloneComponent(id)} title="Copy this definition and its nested components for this instance"><Copy size={12} /> Make copy</button>
-            </div>
             <Bindings
                 freeParams={template?.freeParameters ?? []}
                 values={values}
@@ -209,7 +195,7 @@ function RepeatBody({ id, node }) {
                     <InspectorField
                         param={{ name: 'count', type: 'int', description: 'Number of instances, or a template parameter such as $H; each instance has its own weights' }}
                         label={mode === 'parallel' ? 'Instances' : 'Steps'}
-                        inline
+                        fullRow
                         value={node.count}
                         onChange={(v) => patchRepeatNode(id, { count: v })}
                         errors={error ? [error] : []}
@@ -228,7 +214,6 @@ function RepeatBody({ id, node }) {
                     <InspectorField
                         param={{ name: 'iterationVariable', type: 'string', description: 'Zero-based index available in parameter formulas; instance 1 uses index 0' }}
                         label="Index variable"
-                        inline
                         value={iterVar}
                         onChange={(v) => patchRepeatNode(id, { iterationVariable: (v || 'i').trim() || 'i' })}
                     />
@@ -267,15 +252,16 @@ export default function NodeInspector() {
     const ContainerIcon = node.kind === 'repeat' ? Repeat : Boxes;
     const componentTemplate = templates[node.templateId];
     const standard = STANDARD_COMPONENTS.find((component) => component.key === (componentTemplate?.standardKey ?? componentTemplate?.componentStyleKey));
+    const operation = node.kind === 'layer' && isOperationKey(node.libraryKey) && getEntry(node.libraryKey)?.category !== 'Parameters';
     const rename = (label) => (node.kind === 'repeat' ? patchRepeatNode(id, { label }) : patchNode(id, { label }));
 
     return (
-        <aside ref={panelRef} className="df-inspector df-panel-subtle nodrag nopan nowheel" aria-label={`${node.label} inspector`} style={{ '--df-inspector-width': `${inspectorWidth(node)}px` }} onKeyDown={(e) => e.stopPropagation()}>
+        <aside ref={panelRef} className="df-inspector df-panel-subtle nodrag nopan nowheel" aria-label={`${node.label} inspector`} style={{ '--df-inspector-width': `${inspectorWidth(node, componentTemplate)}px` }} onKeyDown={(e) => e.stopPropagation()}>
             <header className="df-inspector-header">
                 {node.kind === 'layer'
                     ? <OperationIcon libraryKey={node.libraryKey} size={24} />
                     : standard ? <OperationIcon libraryKey={standard.libraryKey} size={24} /> : <ContainerIcon size={22} strokeWidth={2.5} aria-hidden="true" />}
-                <input aria-label="Block name" title="Block name" value={node.label} onChange={(e) => rename(e.target.value)} />
+                {operation ? <strong className="df-inspector-title" title={node.label}>Operation</strong> : <input aria-label="Block name" title="Block name" value={node.label} onChange={(e) => rename(e.target.value)} />}
                 <button type="button" className="df-inspector-close" onClick={clearExpanded} aria-label="Close inspector"><X size={13} strokeWidth={3} /></button>
             </header>
             <ParameterBindingsProvider key={node.id} node={node}><div className="df-inspector-body">
@@ -283,6 +269,7 @@ export default function NodeInspector() {
                 {node.kind === 'supernode' && <SupernodeBody id={id} node={node} />}
                 {node.kind === 'repeat' && <RepeatBody id={id} node={node} />}
                 <Issues errors={nodeErrors} warnings={warnings} />
+                <ExposeParameter />
             </div></ParameterBindingsProvider>
         </aside>
     );

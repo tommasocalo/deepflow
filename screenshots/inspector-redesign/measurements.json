@@ -1,0 +1,146 @@
+[
+  {
+    "name": "01-transformer-settings-1440",
+    "left": 677,
+    "right": 925,
+    "top": 617,
+    "bottom": 828,
+    "width": 248,
+    "viewport": 1440,
+    "height": 1000,
+    "scrollWidth": 244,
+    "clientWidth": 244
+  },
+  {
+    "name": "02-position-table-dimensions-1440",
+    "left": 1056,
+    "right": 1384,
+    "top": 406,
+    "bottom": 696.5,
+    "width": 328,
+    "viewport": 1440,
+    "height": 1000,
+    "scrollWidth": 324,
+    "clientWidth": 324
+  },
+  {
+    "name": "03-shape-variable-suggestions-1440",
+    "left": 1056,
+    "right": 1384,
+    "top": 406,
+    "bottom": 759.6875,
+    "width": 328,
+    "viewport": 1440,
+    "height": 1000,
+    "scrollWidth": 324,
+    "clientWidth": 324,
+    "list": {
+      "left": 1066,
+      "right": 1374,
+      "top": 534,
+      "bottom": 573.6875
+    }
+  },
+  {
+    "name": "three-axis-shape",
+    "left": 1056,
+    "right": 1384,
+    "top": 406,
+    "bottom": 696.5,
+    "width": 328,
+    "viewport": 1440,
+    "height": 1000,
+    "scrollWidth": 324,
+    "clientWidth": 324
+  },
+  {
+    "name": "04-position-table-dimensions-1024",
+    "left": 591,
+    "right": 919,
+    "top": 363,
+    "bottom": 653.5,
+    "width": 328,
+    "viewport": 1024,
+    "height": 768,
+    "scrollWidth": 324,
+    "clientWidth": 324
+  },
+  {
+    "name": "05-shape-variable-suggestions-1024",
+    "left": 335,
+    "right": 663,
+    "top": 220,
+    "bottom": 680,
+    "width": 328,
+    "viewport": 1024,
+    "height": 768,
+    "scrollWidth": 324,
+    "clientWidth": 324,
+    "list": {
+      "left": 345,
+      "right": 653,
+      "top": 348,
+      "bottom": 503.75
+    }
+  },
+  {
+    "name": "06-attention-heads-linked-1440",
+    "left": 843,
+    "right": 1091,
+    "top": 549,
+    "bottom": 928.5,
+    "width": 248,
+    "viewport": 1440,
+    "height": 1000,
+    "scrollWidth": 244,
+    "clientWidth": 244
+  },
+  {
+    "name": "07-dropout-link-1440",
+    "left": 678,
+    "right": 926,
+    "top": 591,
+    "bottom": 798,
+    "width": 248,
+    "viewport": 1440,
+    "height": 1000,
+    "scrollWidth": 244,
+    "clientWidth": 244
+  },
+  {
+    "name": "08-expose-single-field-1440",
+    "left": 306,
+    "right": 554,
+    "top": 650,
+    "bottom": 988,
+    "width": 248,
+    "viewport": 1440,
+    "height": 1000,
+    "scrollWidth": 244,
+    "clientWidth": 244
+  },
+  {
+    "name": "09-dropout-link-1024",
+    "left": 488,
+    "right": 736,
+    "top": 420,
+    "bottom": 627,
+    "width": 248,
+    "viewport": 1024,
+    "height": 768,
+    "scrollWidth": 244,
+    "clientWidth": 244
+  },
+  {
+    "name": "10-operation-type-1024",
+    "left": 463,
+    "right": 711,
+    "top": 371,
+    "bottom": 473.5,
+    "width": 248,
+    "viewport": 1024,
+    "height": 768,
+    "scrollWidth": 244,
+    "clientWidth": 244
+  }
+]
