@@ -1,4 +1,4 @@
-import { evaluateExpression } from '../expressions.js';
+import { evaluateExpression, repeatBindingValue } from '../expressions.js';
 import { getEntry } from '../library/index.js';
 
 // Keep scientific literals intact and match whole identifiers, including $refs.
@@ -9,8 +9,8 @@ const hasIndex = (value, variable) => Array.isArray(value)
 const sameValue = (left, right) => left === right || JSON.stringify(left) === JSON.stringify(right);
 
 /** Pin only the repeat index; upstream width/head expressions stay symbolic. */
-function firstValue(value, variable) {
-    const first = Array.isArray(value) ? value[0] : value;
+function firstValue(value, variable, parameter) {
+    const first = repeatBindingValue(value, parameter, 0);
     const substitute = (item) => {
         if (Array.isArray(item)) return item.map(substitute);
         if (!hasIndex(item, variable)) return item;
@@ -70,11 +70,12 @@ export function singleConversionIssue(node, templates) {
 export function repeatAsSingle(node, template) {
     const variable = node.iterationVariable || 'i';
     const bindings = node.bindings ?? {};
-    const parameterValues = Object.fromEntries(Object.entries(bindings).map(([name, value]) => [name, firstValue(value, variable)]));
+    const parameters = new Map((template.freeParameters ?? []).map((parameter) => [parameter.name, parameter]));
+    const parameterValues = Object.fromEntries(Object.entries(bindings).map(([name, value]) => [name, firstValue(value, variable, parameters.get(name))]));
     for (const parameter of template.freeParameters ?? []) {
         const raw = parameterValues[parameter.name];
         if ((raw === undefined || (raw === null && !parameter.nullable) || raw === '') && hasIndex(parameter.default, variable)) {
-            parameterValues[parameter.name] = firstValue(parameter.default, variable);
+            parameterValues[parameter.name] = firstValue(parameter.default, variable, parameter);
         }
     }
     const single = {

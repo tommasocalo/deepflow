@@ -156,6 +156,18 @@ export function resolveDerivedParameter(derived, externalInputs = {}) {
     return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
+/**
+ * A tuple's flat array describes its axes, not separate repeat instances.
+ * Explicit per-instance tuples remain supported as nested arrays or tuple
+ * strings, while scalar parameters retain their existing array bindings.
+ */
+export function repeatBindingValue(value, parameter, index) {
+    if (!Array.isArray(value) || index === undefined) return value;
+    if (parameter?.type === 'tuple' && !value.some((part) => Array.isArray(part)
+        || (typeof part === 'string' && part.includes(',')))) return value;
+    return value[index];
+}
+
 /** Resolve ordered exposed controls and derived input dimensions in the local scope. */
 export function buildParameterScope(freeParameters, bindings = {}, parentScope = {}, iterationIndex, externalInputs = {}) {
     const result = { ...parentScope };
@@ -164,8 +176,7 @@ export function buildParameterScope(freeParameters, bindings = {}, parentScope =
             result[parameter.name] = resolveDerivedParameter(parameter.derived, externalInputs);
             continue;
         }
-        let raw = bindings[parameter.name];
-        if (Array.isArray(raw) && iterationIndex !== undefined) raw = raw[iterationIndex];
+        let raw = repeatBindingValue(bindings[parameter.name], parameter, iterationIndex);
         if (raw === undefined || (raw === null && !parameter.nullable) || raw === '') raw = parameter.default;
         result[parameter.name] = resolveParameterValue(raw, result);
     }

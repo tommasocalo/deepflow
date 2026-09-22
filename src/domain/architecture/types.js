@@ -49,7 +49,7 @@
  * @property {number | string} count       Iterations, an expression in the parent parameters, or 'auto' to use incoming collection length for parallel repeat.
  * @property {'sequential' | 'parallel'} [mode] Missing values retain legacy sequential behavior. Parallel branches produce a collection of tensors.
  * @property {string} iterationVariable    Name bound to the iteration index (default: 'i')
- * @property {Object<string, *>} bindings  Per-iteration formulas keyed by free-param name. Each value can be a scalar (literal or expression in the iteration variable) or an array [v0, v1, ...] of explicit per-iteration values.
+ * @property {Object<string, *>} bindings Per-iteration formulas keyed by free-param name. Scalar parameters accept an array [v0, v1, ...] of explicit per-iteration values. Tuple parameters use flat arrays for axes and nested arrays (or tuple strings) for explicit per-iteration tuples.
  *
  * @typedef {LayerNode | SuperNodeInstance | RepeatNode} ArchNode
  *
