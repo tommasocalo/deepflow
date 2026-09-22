@@ -142,10 +142,10 @@ async function typeText(input, text) {
 const blur = (input) => act(() => input.blur());
 const graphNodes = () => Object.values(useArchitectureStore.getState().graph.nodes);
 
-function ParameterHarness({ initial = null, type = 'float', name = 'width', defaultValue, onValue }) {
+function ParameterHarness({ initial = null, type = 'float', name = 'width', editor, defaultValue, onValue }) {
     const [value, setValue] = useState(initial);
     return h(ParameterField, {
-        param: { name, type, default: defaultValue }, value,
+        param: { name, type, editor, default: defaultValue }, value,
         onChange(next) { setValue(next); onValue?.(next); },
     });
 }
@@ -252,6 +252,52 @@ test('weight shapes edit ordered dimensions without parsing or truncating expres
     assert.equal(byAria('Remove shape dimension 1').disabled, true);
     await typeText(byAria('shape dimension 1'), '');
     assert.deepEqual(latest, [''], 'An unfinished axis remains editable instead of disappearing');
+});
+
+test('whole-shape references remain a single binding until replaced by local dimensions', async () => {
+    let latest;
+    await render(h(ParameterHarness, { name: 'shape', type: 'tuple', initial: '$weight_shape', onValue: (value) => { latest = value; } }));
+    assert.equal(byAria('shape').value, '$weight_shape');
+    assert.equal(byAria('Add shape dimension'), null);
+    assert.equal(byAria('shape dimension 1'), null);
+    await typeText(byAria('shape'), '$other_shape');
+    await blur(byAria('shape'));
+    assert.equal(latest, '$other_shape', 'Editing a tuple reference never wraps it in a dimension array');
+    assert.equal(byAria('shape').value, '$other_shape');
+
+    await render(h(ParameterField, { param: { name: 'weight_shape', type: 'tuple', editor: 'dimensions' }, value: [32, 16], onChange: (value) => { latest = value; } }));
+    assert.equal(byAria('weight_shape dimension 1').value, '32');
+    assert.equal(byAria('weight_shape dimension 2').value, '16');
+    await click(byAria('Add weight_shape dimension'));
+    assert.deepEqual(latest, [32, 16, 1], 'Exposed shape aliases retain the dimension editor metadata');
+});
+
+test('shape bindings expose symbolic axes, keep the tuple linked, and detach to editable local cells', async () => {
+    const weight = createLayerNode({ id: 'weight', libraryKey: 'deepflow.op.Parameter', entry: getEntry('deepflow.op.Parameter'), label: 'weight', position: { x: 0, y: 0 }, parameters: { shape: ['$out_features', '$in_features'] } });
+    const template = createTemplate({ id: 'projection-body', name: 'Projection', graph: { nodes: { weight }, edges: [] }, freeParameters: [
+        { name: 'out_features', type: 'int', default: 32 }, { name: 'in_features', type: 'int', default: 16 },
+    ] });
+    const projection = createSuperNodeInstance({ id: 'projection', templateId: template.id, label: 'Projection', position: { x: 0, y: 0 } });
+    useTemplatesStore.setState({ templates: { [template.id]: template } });
+    useArchitectureStore.setState({ graph: { nodes: { projection }, edges: [] }, currentPath: ['projection'], openPaths: [['projection']], expandedNodeId: 'weight' });
+    await render(h(GraphHarness));
+    const shapeField = byAria('shape dimension 1').closest('.df-field-binding');
+    assert.equal(shapeField.querySelector('.df-parameter-source strong').textContent, '32 × 16');
+    await click(byAria('Parameter options for shape'));
+    await typeText(byAria('Exposed name for shape'), 'weight_shape');
+    await act(() => byAria('Exposed name for shape').closest('form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
+    assert.equal(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, '$weight_shape');
+    assert.equal(byAria('shape').value, '$weight_shape');
+    assert.equal(byAria('Add shape dimension'), null);
+    await click(byAria('Parameter options for shape'));
+    const detach = [...container.querySelectorAll('.df-parameter-action')].find((button) => button.textContent.includes('Use local value'));
+    assert.ok(detach, 'The linked array has a resolved local value');
+    await click(detach);
+    assert.deepEqual(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, [32, 16]);
+    assert.equal(byAria('shape dimension 1').value, '32');
+    assert.equal(byAria('shape dimension 2').value, '16');
+    await click(byAria('Add shape dimension'));
+    assert.deepEqual(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, [32, 16, 1]);
 });
 
 test('repeated parameter names have unique stable label associations', async () => {

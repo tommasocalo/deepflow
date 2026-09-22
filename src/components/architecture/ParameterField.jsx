@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import './parameter-shape.css';
 
 const NUMBER_LITERAL = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
@@ -21,8 +21,19 @@ function shapeDimensions(value) {
 }
 
 function ShapeField({ value, onChange, common, className, name }) {
+    const [editingReference, setEditingReference] = useState(false);
+    const wholeReference = typeof value === 'string' && /^\$?[A-Za-z_][A-Za-z0-9_]*$/.test(value.trim());
     const dimensions = shapeDimensions(value);
     const update = (index, next) => onChange(dimensions.map((dimension, at) => at === index ? next : dimension));
+    // A reference can resolve to the entire tuple. It is not one scalar axis:
+    // preserve it until the binding menu's "Use local value" supplies an array.
+    // Keep the same input while its reference text is temporarily incomplete.
+    if (!Array.isArray(value) && (wholeReference || editingReference)) return <input {...common}
+        aria-label={common['aria-label'] ?? name} className={`${className} is-expression`}
+        type="text" spellCheck={false} autoComplete="off" value={value ?? ''}
+        title="Linked shape. Use local value in parameter options to edit its individual dimensions."
+        onFocus={() => setEditingReference(true)} onBlur={() => setEditingReference(false)}
+        onChange={(event) => onChange(event.target.value)} />;
     return <div className="df-param-shape" role="group" aria-label={`${name} dimensions`}>
         {dimensions.map((dimension, index) => <span className="df-shape-dimension" key={index}>
             {index > 0 && <span className="df-shape-times" aria-hidden="true">×</span>}
@@ -82,7 +93,7 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
                 {label ?? param.name}
                 {param.required && <span className="df-param-required" title="Required">*</span>}
             </label>
-            {param.name === 'shape' && param.type === 'tuple' ? (
+            {(param.name === 'shape' || param.editor === 'dimensions') && param.type === 'tuple' ? (
                 <ShapeField value={value ?? param.default} onChange={onChange} common={common} className={className} name={ariaLabel ?? param.name} />
             ) : inlineBoolean ? (
                 <input {...common} className="df-param-checkbox nodrag" type="checkbox" checked={checked}
