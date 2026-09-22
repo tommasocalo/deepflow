@@ -25,6 +25,7 @@ import {
 import { getEntry } from '../domain/library/index.js';
 import { isValidLevelPath, nearestOpenAncestor, reconcileOpenLevels, sameLevelPath } from '../domain/architecture/levelNavigation.js';
 import { containsTemplate } from '../domain/architecture/templateReferences.js';
+import { copyGraphSelection, pasteGraphSelection } from '../domain/architecture/clipboard.js';
 import { instanceAsRepeat, repeatAsSingle, singleConversionIssue } from '../domain/architecture/repeatStructure.js';
 import { componentBindingsForLayer, ensureStandardTemplate, getStandardComponentForLayer, STANDARD_COMPONENTS } from '../domain/components/index.js';
 import { useTemplatesStore } from './templatesStore.js';
@@ -40,6 +41,7 @@ const HISTORY_ACTIONS = {
     moveNode: 'Move node', moveNodes: 'Move nodes', connect: 'Connect nodes', reconnectEdge: 'Reconnect nodes',
     removeEdge: 'Delete connection', patchEdge: 'Change connection', setEdgeGradientOp: 'Change gradient flow',
     resetCurrentGraph: 'Reset graph', groupSelection: 'Group nodes',
+    pasteSelection: 'Paste nodes',
 };
 
 const initialGraph = () => {
@@ -166,6 +168,18 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         getViewGraph: () => getViewGraph(get()),
         getLevel: () => resolveLevel(get()),
         getMutationContext: () => ({ storeId, levelKey: JSON.stringify(get().currentPath), graph: getViewGraph(get()) }),
+
+        copySelection: () => copyGraphSelection(getViewGraph(get()), get().selectedNodeIds),
+
+        pasteSelection: (selection, offset, expected) => {
+            if (!matchesContext(expected)) return { error: 'The destination changed. Paste again in the current graph.' };
+            const level = resolveLevel(get());
+            const result = pasteGraphSelection(level.graph, selection, { offset, templateId: level.templateId, templates: useTemplatesStore.getState().templates });
+            if (result.error) return result;
+            updateCurrentGraph(() => result.graph);
+            set({ selectedNodeIds: result.nodeIds, expandedNodeId: null });
+            return { nodeIds: result.nodeIds };
+        },
 
         addLayerByLibraryKey: (libraryKey, position) => {
             const entry = getEntry(libraryKey);

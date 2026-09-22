@@ -22,6 +22,7 @@ import ArchitectureEdge from './ArchitectureEdge.jsx';
 import GraphStatusPanel from './GraphStatusPanel.jsx';
 import GradientFlowControls from './GradientFlowControls.jsx';
 import { useGradientFlow } from '../../hooks/useGradientFlow.js';
+import { useArchitectureClipboard } from '../../hooks/useArchitectureClipboard.js';
 import { residualEdgeIds } from './residualEdges.js';
 import { tensorFlowNodeIds } from './tensorFlow.js';
 import { createDragBatcher, syncFlowNodes } from './flowAdapter.js';
@@ -68,6 +69,7 @@ function toFlowEdges(edges, selectedEdgeSet, residuals, gradients) {
 
 const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) => {
     const architectureStore = useArchitectureStoreApi();
+    const clipboardNotice = useArchitectureClipboard(architectureStore, keyboardActive);
     const storeId = useMemo(() => architectureStore.getState().getMutationContext().storeId, [architectureStore]);
     const rootGraph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
@@ -433,6 +435,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                 {overlay}
                 {showGradientFlow && <GradientFlowControls graph={viewGraph} report={gradientReport} edge={selectedEdgeIds.length === 1 ? viewGraph.edges.find((edge) => edge.id === selectedEdgeIds[0]) : null} onClose={() => setSelectedEdgeIds([])} />}
                 {keyboardActive && spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
+                {clipboardNotice && !spacePressed && <div className="df-space-hint" role="status">{clipboardNotice}</div>}
             </div>
         </div>
     );
