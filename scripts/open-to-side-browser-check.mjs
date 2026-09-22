@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const directory = 'screenshots/open-to-side';
+const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/open-to-side';
 await mkdir(directory, { recursive: true });
 const browser = await chromium.launch();
 try {

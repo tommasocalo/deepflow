@@ -6,8 +6,8 @@ import {
     ControlButton,
     ConnectionLineType,
     ReactFlowProvider,
-    useNodesInitialized,
     useReactFlow,
+    useStore as useFlowStore,
 } from '@xyflow/react';
 import { Hand, MousePointer2 } from 'lucide-react';
 import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
@@ -83,7 +83,6 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     const addSuperNodeInstance = useArchitectureStore((s) => s.addSuperNodeInstance);
 
     const { screenToFlowPosition, getViewport, setViewport, setNodes, fitView } = useReactFlow();
-    const nodesInitialized = useNodesInitialized();
     const wrapperRef = useRef(null);
     const lastViewportKeyRef = useRef(null);
     const mountedRef = useRef(false);
@@ -113,7 +112,13 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
         [viewGraph.edges, selectedEdgeSet, residuals],
     );
     const showPanCursor = interactionMode === 'pan' || (keyboardActive && spacePressed);
-    const graphIsEmpty = Object.keys(viewGraph.nodes).length === 0;
+    const nodeCount = Object.keys(viewGraph.nodes).length;
+    const graphIsEmpty = nodeCount === 0;
+    // One boolean subscription also changes when navigating between instances
+    // of the same template, where IDs and measured dimensions are reused.
+    const levelNodesReady = useFlowStore(useCallback((state) => state.nodes.length === nodeCount
+        && state.nodes.every((node) => node.data.levelKey === levelKey && node.measured?.width > 0 && node.measured?.height > 0),
+    [nodeCount, levelKey]));
 
     useEffect(() => {
         mountedRef.current = true;
@@ -175,6 +180,8 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     }, [keyboardActive]);
 
     // Keep the same graph point centred as a split opens, closes or resizes.
+    // A new level starts a new baseline: its iteration bar may change canvas
+    // height, but its saved viewport must not receive an extra resize offset.
     useEffect(() => {
         const canvas = wrapperRef.current;
         let previous = canvas.getBoundingClientRect();
@@ -189,11 +196,13 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
         });
         observer.observe(canvas);
         return () => observer.disconnect();
-    }, [getViewport, setViewport]);
+    }, [getViewport, setViewport, levelKey]);
 
     // Restore viewport per level; movement is saved once in onMoveEnd.
     useEffect(() => {
-        if (!nodesInitialized && !graphIsEmpty) return;
+        // setNodes is queued; initialization can still describe the previous
+        // level until the destination's own measured nodes reach ReactFlow.
+        if (!levelNodesReady) return;
         const key = viewportKey(currentPath, paneId);
         if (lastViewportKeyRef.current === key) return;
         lastViewportKeyRef.current = key;
@@ -212,7 +221,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
         } else {
             fitView({ padding: 0.2, minZoom: 0.2, maxZoom: 1, duration: 0 });
         }
-    }, [currentPath, paneId, nodesInitialized, graphIsEmpty, setViewport, fitView]);
+    }, [currentPath, paneId, levelNodesReady, graphIsEmpty, setViewport, fitView]);
 
     const handleMoveEnd = useCallback(
         (_event, vp) => {

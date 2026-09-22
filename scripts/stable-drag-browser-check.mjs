@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const directory = 'screenshots/close-inspector-on-drag';
+const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/close-inspector-on-drag';
 await mkdir(directory, { recursive: true });
 const browser = await chromium.launch();
 try {
@@ -23,12 +23,28 @@ try {
     const center = async (locator) => {
         const box = await locator.boundingBox();
         assert.ok(box);
-        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        const viewport = locator.page().viewportSize();
+        assert.ok(point.x > 0 && point.x < viewport.width && point.y > 0 && point.y < viewport.height,
+            'A drag must start on a node inside the visible viewport');
+        return point;
     };
 
     await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).click();
+    // A first visit must frame the destination level, without a manual Fit.
+    // Checking before clicking a node also prevents Playwright's scrolling
+    // from hiding an incorrect viewport restored from the previous level.
+    await page.waitForFunction(() => {
+        const canvas = document.querySelector('[data-architecture-canvas]').getBoundingClientRect();
+        const nodes = [...document.querySelectorAll('.react-flow__node')];
+        return nodes.length > 0 && nodes.every((node) => {
+            const rect = node.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && rect.top >= canvas.top && rect.bottom <= canvas.bottom
+                && rect.left >= canvas.left && rect.right <= canvas.right;
+        });
+    });
     await page.getByRole('button', { name: 'Inspect mlp fc', exact: true }).click();
     await settle();
     const initial = await graph();

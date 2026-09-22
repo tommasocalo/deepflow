@@ -59,6 +59,7 @@ try {
     await ribbon.getByRole('button', { name: 'Open to the side', exact: true }).click();
     const main = page.locator('[data-graph-pane="main"]');
     const side = page.locator('[data-graph-pane="side"]');
+    assert.equal(await side.getByRole('spinbutton', { name: 'Inspected instance index' }).inputValue(), '7', 'Open to side preserves the source pane inspection context');
     await side.getByRole('spinbutton', { name: 'Inspected instance index' }).fill('7');
     await fit();
     await main.locator('.react-flow__pane').click({ position: { x: 100, y: 150 } });
