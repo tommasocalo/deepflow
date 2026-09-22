@@ -16,6 +16,20 @@ export default function OperationIcon({ libraryKey, size = 32, className = '' })
     switch (libraryKey) {
         case 'deepflow.op.Add': mark = <path d="M16 7v18M7 16h18" />; break;
         case 'deepflow.op.Multiply': mark = <path d="m9 9 14 14M23 9 9 23" />; break;
+        case 'deepflow.op.Subtract': mark = <path d="M6 16h20" />; break;
+        case 'deepflow.op.Parameter': mark = <><rect x="4" y="4" width="24" height="24" /><path d="M12 7v18m8-18v18M7 12h18M7 20h18" /></>; break;
+        case 'deepflow.op.Gather': mark = <><path d="M3 5h11v22H3zM3 12h11m-11 8h11M19 16h10m-5-5 5 5-5 5" /><path d="M5 15h7v3H5z" fill="currentColor" stroke="none" /></>; break;
+        case 'deepflow.op.PositionIndices': mark = <><path d="M4 27h24" /><text x="16" y="21" fill="currentColor" stroke="none" fontFamily="monospace" fontWeight="900" fontSize="17" textAnchor="middle">0…</text></>; break;
+        case 'deepflow.op.Mean': mark = <><path d="M7 7h18" /><text x="16" y="25" fill="currentColor" stroke="none" fontFamily="serif" fontWeight="900" fontSize="21" textAnchor="middle">μ</text></>; break;
+        case 'deepflow.op.Pow': mark = <><text x="12" y="24" fill="currentColor" stroke="none" fontWeight="900" fontSize="22" textAnchor="middle">x</text><text x="24" y="13" fill="currentColor" stroke="none" fontSize="11" fontWeight="900" textAnchor="middle">n</text></>; break;
+        case 'deepflow.op.Rsqrt': mark = <><path d="M3 20h4l4 7 6-21h12M20 13l7 9m0-9-7 9" /><path d="M4 6v7" /></>; break;
+        case 'deepflow.op.AddScalar': mark = <><path d="M4 16h12m-6-6v12" /><text x="25" y="22" fill="currentColor" stroke="none" fontFamily="monospace" fontWeight="900" fontSize="20" textAnchor="middle">c</text></>; break;
+        case 'deepflow.op.Sin': mark = <path d="M3 17c4-18 9-18 13 0s9 18 13 0" />; break;
+        case 'deepflow.op.Cos': mark = <path d="M3 5c7 0 7 22 14 22S23 5 29 5" />; break;
+        case 'deepflow.op.Exp': mark = <><text x="13" y="24" fill="currentColor" stroke="none" fontFamily="serif" fontWeight="900" fontSize="27" textAnchor="middle">e</text><text x="25" y="12" fill="currentColor" stroke="none" fontWeight="900" fontSize="12" textAnchor="middle">x</text></>; break;
+        case 'deepflow.op.Unsqueeze': mark = <><path d="M5 9h22v14H5zM16 3v6m0 14v6M12 5l4 4 4-4m-8 22 4-4 4 4" /></>; break;
+        case 'deepflow.op.Arange': mark = <><path d="M4 20h24m-20-5v10m8-10v10m8-10v10" /><path d="m23 4 5 5-5 5M4 9h24" /></>; break;
+        case 'deepflow.op.Slice': mark = <><rect x="4" y="5" width="24" height="22" /><path d="M12 3v26m8-26v26" strokeDasharray="3 3" /></>; break;
         case 'deepflow.op.MatMul': mark = <><path d="M8 4H4v24h4m16-24h4v24h-4M11 11l10 10m0-10L11 21" /></>; break;
         case 'deepflow.op.Transpose': mark = <><rect x="5" y="5" width="8" height="20" /><path d="M18 6h8v8m0-8-8 8M19 21h8v5H17" /></>; break;
         case 'deepflow.op.Scale': mark = <><path d="m6 7 9 9m0-9-9 9M24 5v22M20 27h8" /><path d="M5 23h10" /></>; break;

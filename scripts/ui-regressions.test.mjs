@@ -139,24 +139,24 @@ async function typeText(input, text) {
 const blur = (input) => act(() => input.blur());
 const graphNodes = () => Object.values(useArchitectureStore.getState().graph.nodes);
 
-function ParameterHarness({ initial = null, type = 'float', onValue }) {
+function ParameterHarness({ initial = null, type = 'float', defaultValue, onValue }) {
     const [value, setValue] = useState(initial);
     return h(ParameterField, {
-        param: { name: 'width', type }, value,
+        param: { name: 'width', type, default: defaultValue }, value,
         onChange(next) { setValue(next); onValue?.(next); },
     });
 }
 
-function PaletteHarness({ initialSection = 'blocks' }) {
+function PaletteHarness({ section = 'components' }) {
     // The library now delegates insertion to its host. Canvas coordinates and
     // routing to the focused pane are covered by the ribbon browser check.
     return h(BlockPalette, {
-        initialSection,
+        section,
         onClose() {},
         onAdd(entry, isTemplate) {
             const state = useArchitectureStore.getState();
             const position = { x: 250, y: 200 };
-            const id = isTemplate ? state.addSuperNodeInstance(entry.key, position, entry.name) : state.addLayerByLibraryKey(entry.key, position);
+            const id = entry.standardComponentKey ? state.addStandardComponent(entry.standardComponentKey, position) : isTemplate ? state.addSuperNodeInstance(entry.key, position, entry.name) : state.addLayerByLibraryKey(entry.key, position);
             if (id) { state.selectOnly(id); state.clearExpanded(); }
             return id;
         },
@@ -206,6 +206,28 @@ test('numeric fields preserve expressions and unfinished literals without NaN or
     assert.equal(latest, null);
 });
 
+test('boolean bindings show their default checkbox while expressions remain editable text', async () => {
+    let latest;
+    await render(h(ParameterField, { param: { name: 'bias', type: 'bool', default: true }, value: undefined, onChange: (value) => { latest = value; } }));
+    const checkbox = container.querySelector('input[type="checkbox"]');
+    assert.ok(checkbox, 'An unset boolean binding uses a checkbox');
+    assert.equal(checkbox.checked, true, 'An unset binding reflects the true template default');
+    assert.equal(container.querySelector('.df-param-bool span').textContent, 'Default');
+    await click(checkbox);
+    assert.equal(latest, false, 'The default can be overridden explicitly');
+
+    await render(h(ParameterHarness, { initial: '$bias', type: 'bool', defaultValue: true, onValue: (value) => { latest = value; } }));
+    const expression = container.querySelector('input[type="text"]');
+    assert.ok(expression, 'A boolean expression stays text instead of appearing as checked True');
+    assert.equal(expression.value, '$bias');
+    assert.equal(container.querySelectorAll('input[type="checkbox"]').length, 0);
+    assert.ok(expression.classList.contains('is-expression'));
+    await setText(expression, '$other_bias');
+    await blur(expression);
+    assert.equal(expression.value, '$other_bias');
+    assert.equal(latest, '$other_bias');
+});
+
 test('repeated parameter names have unique stable label associations', async () => {
     await render(h('div', null, h(ParameterHarness), h(ParameterHarness)));
     const inputs = [...container.querySelectorAll('input')];
@@ -245,23 +267,24 @@ test('compact nodes open the inspector and editing keeps node geometry unchanged
     assert.equal(byFieldLabel('in_features').value, '768');
 });
 
-test('family tiles add the family default once without opening settings', async () => {
+test('component menu inserts editable standard components and keeps less common modules available', async () => {
     await render(h(PaletteHarness));
     assert.equal(container.querySelector('.df-library-category'), null, 'Families are available without opening an accordion');
-    for (const name of ['Linear', 'Attention', 'Normalization', 'Activation', 'Convolution', 'Pooling', 'Recurrent']) {
-        assert.ok(byAria(`Add ${name}`)?.matches('.df-library-tile'), `${name} has a directly available tile`);
+    for (const name of ['Linear', 'Embedding', 'Attention', 'Norm', 'Activation', 'Convolution', 'Pooling', 'Recurrent']) {
+        assert.ok(byAria(`Add ${name}`)?.matches('.df-insert-item'), `${name} has a directly available tile`);
     }
     assert.equal(byAria('Add LayerNorm'), null);
-    assert.equal(byAria('Add BatchNorm1d'), null);
+    assert.ok(byAria('Add BatchNorm1d'), 'Other normalization modules stay available');
     assert.equal(graphNodes().length, 0);
-    await typeText(byAria('Search blocks'), 'layer norm');
-    const add = byAria('Add Normalization');
-    assert.ok(add, 'Searching a variant finds its family tile');
-    assert.equal(container.querySelectorAll('.df-library-tile').length, 1);
+    await typeText(byAria('Search components'), 'layer norm');
+    const add = byAria('Add Norm');
+    assert.ok(add, 'Searching LayerNorm finds the editable Norm component');
+    assert.equal(container.querySelectorAll('.df-insert-item').length, 1);
     await click(add);
     const nodes = graphNodes();
     assert.equal(nodes.length, 1);
-    assert.equal(nodes[0].libraryKey, 'torch.nn.LayerNorm');
+    assert.equal(nodes[0].kind, 'supernode');
+    assert.equal(useTemplatesStore.getState().templates[nodes[0].templateId].standardKey, 'layernorm');
     assert.deepEqual(useArchitectureStore.getState().selectedNodeIds, [nodes[0].id]);
     assert.equal(useArchitectureStore.getState().expandedNodeId, null);
     assert.ok(Number.isFinite(nodes[0].position.x) && Number.isFinite(nodes[0].position.y));
@@ -270,10 +293,10 @@ test('family tiles add the family default once without opening settings', async 
 test('template library searches reusable components and hides recursive insertions', async () => {
     const template = createTemplate({ id: 'decoder-template', name: 'Decoder block', graph: emptyGraph() });
     useTemplatesStore.setState({ templates: { [template.id]: template } });
-    await render(h(PaletteHarness, { initialSection: 'templates' }));
-    assert.ok(byAria('Add Decoder block template')?.matches('.df-library-tile'));
+    await render(h(PaletteHarness, { section: 'templates' }));
+    assert.ok(byAria('Add Decoder block template')?.matches('.df-insert-item'));
     assert.equal(graphNodes().length, 0);
-    await typeText(byAria('Search blocks'), 'decoder block');
+    await typeText(byAria('Search templates'), 'decoder block');
     assert.ok(byAria('Add Decoder block template'), 'Search filters the opened template library');
     await click(byAria('Add Decoder block template'));
     assert.equal(graphNodes().length, 1);
@@ -282,8 +305,8 @@ test('template library searches reusable components and hides recursive insertio
     assert.equal(useArchitectureStore.getState().expandedNodeId, null);
     await act(() => useArchitectureStore.getState().enterSupernode(graphNodes()[0].id));
     assert.equal(byAria('Add Decoder block template'), null, 'An unavailable recursive template is hidden');
-    assert.equal(container.querySelector('section[aria-label="Reusable components"]'), null, 'Empty template section is hidden too');
-    await act(() => byAria('Search blocks').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    assert.equal(container.querySelector('section[aria-label="Saved templates"]'), null, 'Empty template section is hidden too');
+    await act(() => byAria('Search templates').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
     assert.equal(Object.keys(useTemplatesStore.getState().templates[template.id].graph.nodes).length, 0);
 });
 
@@ -321,18 +344,18 @@ test('normalization inspector switches variants, preserves a custom name and sho
 
 test('ribbon keyboard shortcut opens library search and Escape restores trigger focus', async () => {
     await render(h(ArchitectureRibbon, { paneId: 'main', onInsert() { assert.fail('Opening a library must not insert a block'); }, onFitView() {} }));
-    assert.ok(byAria('Search all blocks'));
-    assert.equal(byAria('Search blocks'), null);
+    assert.ok(byAria('Insert operations'));
+    assert.equal(byAria('Search operations'), null);
     await act(() => window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true })));
     await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
-    const search = byAria('Search blocks');
+    const search = byAria('Search operations');
     assert.ok(search);
     assert.equal(document.activeElement, search);
     assert.equal(graphNodes().length, 0);
     await act(() => search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
-    assert.equal(byAria('Search blocks'), null);
-    assert.equal(document.activeElement, byAria('Search all blocks'));
-    assert.equal(byAria('Search all blocks').getAttribute('aria-expanded'), 'false');
+    assert.equal(byAria('Search operations'), null);
+    assert.equal(document.activeElement, byAria('Insert operations'));
+    assert.equal(byAria('Insert operations').getAttribute('aria-expanded'), 'false');
 });
 
 test('inspector shows accessible field errors once and reveals invalid options', async () => {
@@ -434,17 +457,17 @@ test('architecture edges stay unlabeled and preserve training semantics', async 
     assert.equal(container.querySelector('.df-gradient-picker'), null);
 });
 
-test('search ArrowDown focuses a result and Enter adds the matching layer once', async () => {
-    await render(h(PaletteHarness));
-    const search = byAria('Search blocks');
-    await typeText(search, 'layer norm');
+test('operation search supports ArrowDown and adds its match exactly once on Enter', async () => {
+    await render(h(PaletteHarness, { section: 'operations' }));
+    const search = byAria('Search operations');
+    await typeText(search, 'MatMul');
     await act(() => search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
-    assert.equal(document.activeElement, byAria('Add Normalization'));
+    assert.equal(document.activeElement, byAria('Add MatMul'));
     assert.equal(graphNodes().length, 0);
     await act(() => search.focus());
     await act(() => search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
     assert.equal(graphNodes().length, 1);
-    assert.equal(graphNodes()[0].libraryKey, 'torch.nn.LayerNorm');
+    assert.equal(graphNodes()[0].libraryKey, 'deepflow.op.MatMul');
     assert.deepEqual(useArchitectureStore.getState().selectedNodeIds, [graphNodes()[0].id]);
 });
 

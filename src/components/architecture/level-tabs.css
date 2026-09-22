@@ -1,0 +1,13 @@
+/* Flat document tabs share the canvas surface; the active view has one ink line. */
+.df-graph-pane-header .df-levels { display: flex; align-items: stretch; gap: 0; height: 32px; padding: 0 12px; background: #fff; border-bottom: 1px solid #e3e3dc; overflow-x: auto; }
+.df-levels .df-level-card { display: inline-flex; align-items: stretch; height: 31px; min-width: 64px; border: 0; border-radius: 0; background: transparent; color: #777; box-shadow: none; overflow: visible; flex-shrink: 0; }
+.df-levels .df-level-card + .df-level-card { margin-left: 5px; }
+.df-levels .df-level-card.is-active { background: transparent; color: #111; border: 0; box-shadow: none; }
+.df-levels .df-level-card.is-active::after { height: 2px; left: 7px; right: 7px; bottom: -1px; background: #111; }
+.df-levels .df-level-card:not(.is-active):hover { background: #f8f8f4; color: #111; }
+.df-levels .df-level-tab { height: 31px; padding: 0 9px; gap: 5px; font-size: 11px; font-weight: 500; justify-content: flex-start; }
+.df-levels .df-level-card.is-active .df-level-tab { font-weight: 700; }
+.df-levels .df-level-count { padding-left: 2px; font-size: 9px; color: #777; }
+.df-levels .df-level-close { align-self: center; width: 19px; height: 19px; margin: 0 4px 0 -3px; border-radius: 1px; opacity: .55; }
+.df-levels .df-level-close:hover, .df-levels .df-level-close:focus-visible { opacity: 1; background: #ededE8; }
+.df-levels .df-level-tab:focus-visible, .df-levels .df-level-close:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }

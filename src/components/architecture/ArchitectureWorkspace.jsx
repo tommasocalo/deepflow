@@ -37,7 +37,8 @@ function CanvasCommandBridge({ paneId, register }) {
                 position = clamp({ x: position.x + 32, y: position.y + 42 });
             }
             const state = architectureStore.getState();
-            const id = isTemplate ? state.addSuperNodeInstance(entry.key, position, entry.name) : state.addLayerByLibraryKey(entry.key, position);
+            const id = entry.standardComponentKey ? state.addStandardComponent(entry.standardComponentKey, position)
+                : isTemplate ? state.addSuperNodeInstance(entry.key, position, entry.name) : state.addLayerByLibraryKey(entry.key, position);
             if (id) { state.selectOnly(id); state.clearExpanded(); }
             return id;
         },

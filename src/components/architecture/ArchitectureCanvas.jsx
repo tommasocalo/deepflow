@@ -19,6 +19,8 @@ import SuperNodeInstanceView from './SuperNodeInstanceView.jsx';
 import RepeatNodeView from './RepeatNodeView.jsx';
 import ArchitectureEdge from './ArchitectureEdge.jsx';
 import GraphStatusPanel from './GraphStatusPanel.jsx';
+import GradientFlowControls from './GradientFlowControls.jsx';
+import { useGradientFlow } from '../../hooks/useGradientFlow.js';
 import { residualEdgeIds } from './residualEdges.js';
 import { tensorFlowNodeIds } from './tensorFlow.js';
 import { createDragBatcher, syncFlowNodes } from './flowAdapter.js';
@@ -47,7 +49,7 @@ function viewportKey(currentPath, paneId) {
     return `${prefix}:${currentPath.join('/')}`;
 }
 
-function toFlowEdges(edges, selectedEdgeSet, residuals) {
+function toFlowEdges(edges, selectedEdgeSet, residuals, gradients) {
     return edges.map((edge) => ({
         id: edge.id,
         source: edge.source,
@@ -55,7 +57,7 @@ function toFlowEdges(edges, selectedEdgeSet, residuals) {
         sourceHandle: edge.sourceHandle,
         targetHandle: edge.targetHandle,
         type: 'archEdge',
-        data: { detour: residuals.has(edge.id) },
+        data: { detour: residuals.has(edge.id), gradient: gradients?.edges[edge.id] },
         selected: selectedEdgeSet.has(edge.id),
         animated: false,
         interactionWidth: 20,
@@ -81,6 +83,9 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     const clearExpanded = useArchitectureStore((s) => s.clearExpanded);
     const addLayerByLibraryKey = useArchitectureStore((s) => s.addLayerByLibraryKey);
     const addSuperNodeInstance = useArchitectureStore((s) => s.addSuperNodeInstance);
+    const addStandardComponent = useArchitectureStore((s) => s.addStandardComponent);
+    const showGradientFlow = useArchitectureStore((s) => s.showGradientFlow);
+    const gradientReport = useGradientFlow(showGradientFlow);
 
     const { screenToFlowPosition, getViewport, setViewport, setNodes, fitView } = useReactFlow();
     const wrapperRef = useRef(null);
@@ -108,8 +113,8 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     // Moving nodes does not change the topology or rebuild stationary wires.
     const residuals = useMemo(() => residualEdgeIds(viewGraph.edges), [viewGraph.edges]);
     const edges = useMemo(
-        () => toFlowEdges(viewGraph.edges, selectedEdgeSet, residuals),
-        [viewGraph.edges, selectedEdgeSet, residuals],
+        () => toFlowEdges(viewGraph.edges, selectedEdgeSet, residuals, gradientReport),
+        [viewGraph.edges, selectedEdgeSet, residuals, gradientReport],
     );
     const showPanCursor = interactionMode === 'pan' || (keyboardActive && spacePressed);
     const nodeCount = Object.keys(viewGraph.nodes).length;
@@ -325,9 +330,10 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
             e.preventDefault();
             const libraryKey = e.dataTransfer.getData('application/deepflow-lib-key');
             const templateId = e.dataTransfer.getData('application/deepflow-template-id');
-            if (!libraryKey && !templateId) return;
+            const componentKey = e.dataTransfer.getData('application/deepflow-component-key');
+            if (!libraryKey && !templateId && !componentKey) return;
             const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-            const id = templateId
+            const id = componentKey ? addStandardComponent(componentKey, position) : templateId
                 ? addSuperNodeInstance(templateId, position, templates[templateId]?.name)
                 : addLayerByLibraryKey(libraryKey, position);
             if (id) {
@@ -335,7 +341,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                 clearExpanded();
             }
         },
-        [screenToFlowPosition, addLayerByLibraryKey, addSuperNodeInstance, templates, selectOnly, clearExpanded],
+        [screenToFlowPosition, addLayerByLibraryKey, addSuperNodeInstance, addStandardComponent, templates, selectOnly, clearExpanded],
     );
 
     return (
@@ -412,6 +418,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                     </Controls>
                 </ReactFlow>
                 {overlay}
+                {showGradientFlow && <GradientFlowControls graph={viewGraph} report={gradientReport} edge={selectedEdgeIds.length === 1 ? viewGraph.edges.find((edge) => edge.id === selectedEdgeIds[0]) : null} onClose={() => setSelectedEdgeIds([])} />}
                 {keyboardActive && spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
             </div>
         </div>

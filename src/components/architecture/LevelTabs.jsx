@@ -4,6 +4,7 @@ import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { useOpenToSideMenu } from './OpenToSideContext.jsx';
+import './level-tabs.css';
 
 function LevelCard({ card, active, onOpen, onClose }) {
     const menuProps = useOpenToSideMenu(card.path);
@@ -14,6 +15,7 @@ function LevelCard({ card, active, onOpen, onClose }) {
                 type="button"
                 role="tab"
                 aria-selected={active}
+                tabIndex={active ? 0 : -1}
                 aria-keyshortcuts={menuProps['aria-keyshortcuts']}
                 className="df-level-tab"
                 onClick={() => onOpen(card.path)}
@@ -69,13 +71,18 @@ export default function LevelTabs() {
     }
 
     return (
-        <div className="df-levels" role="tablist" aria-label="Open levels">
+        <div className="df-levels" role="tablist" aria-label="Open levels" onKeyDown={(event) => {
+            if (event.target.getAttribute('role') !== 'tab' || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')];
+            const index = tabs.indexOf(event.target);
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+            tabs[next]?.focus();
+            tabs[next]?.click();
+        }}>
             {cards.map((card, i) => (
                 <LevelCard key={card.key} card={card} active={card.key === activeKey} onOpen={openLevel} onClose={i > 0 ? closeLevel : null} />
             ))}
-            {currentPath.length > 0 && (
-                <span className="df-levels-hint">Edits inside a template apply to every instance.</span>
-            )}
         </div>
     );
 }

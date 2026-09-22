@@ -15,6 +15,7 @@ const STYLES = {
     Recurrent:        { card: 'bg-rose-100',              pill: 'bg-rose-200',              accent: '#f43f5e' },
     'Element-wise':   { card: 'bg-yellow-100',            pill: 'bg-yellow-200',            accent: '#eab308' },
     Combine:          { card: 'bg-stone-200',             pill: 'bg-stone-300',             accent: '#78716c' },
+    Parameters:       { card: 'bg-amber-50',              pill: 'bg-amber-100',             accent: '#a16207' },
 };
 
 const FALLBACK = { card: 'bg-white', pill: 'bg-gray-200', accent: '#000000' };

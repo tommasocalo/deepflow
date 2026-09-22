@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { AlertCircle, AlertTriangle, Boxes, ChevronDown, ChevronRight, Repeat, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Boxes, ChevronDown, ChevronRight, Copy, Repeat, X } from 'lucide-react';
 import { PYTORCH_BLOCKS, getEntry } from '../../domain/library/index.js';
 import { createVariantPatch, getNodeFamily } from '../../domain/library/nodeFamilies.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
@@ -7,6 +7,7 @@ import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
 import { resolveRepeatCount } from '../../domain/expressions.js';
+import { getStandardComponentForLayer, STANDARD_COMPONENTS } from '../../domain/components/index.js';
 import ParameterField from './ParameterField.jsx';
 import OperationIcon from './OperationIcon.jsx';
 import { useInspectorPlacement } from './useInspectorPlacement.js';
@@ -17,7 +18,7 @@ import './inspector.css';
 const SHAPE_PRIORITY = [
     'in_channels', 'out_channels', 'in_features', 'out_features', 'embed_dim', 'num_heads',
     'd_model', 'nhead', 'hidden_size', 'input_size', 'num_features', 'num_embeddings', 'embedding_dim',
-    'max_len', 'normalized_shape', 'kernel_size', 'p', 'shape', 'name', 'start_dim', 'end_dim', 'dim', 'dim0', 'dim1', 'chunks', 'count', 'factor',
+    'max_len', 'normalized_shape', 'kernel_size', 'p', 'shape', 'name', 'start_dim', 'end_dim', 'dim', 'dim0', 'dim1', 'chunks', 'count', 'factor', 'requires_grad', 'value', 'exponent', 'start', 'end', 'step',
 ];
 const TEMPLATE_ONLY = new Set(['deepflow.template.Input', 'deepflow.template.Output']);
 
@@ -28,6 +29,7 @@ const FIELD_LABELS = {
     max_len: 'Context', normalized_shape: 'Shape', kernel_size: 'Kernel', p: 'Dropout',
     start_dim: 'Start dim', end_dim: 'End dim', dim: 'Axis', iterationVariable: 'Index',
     split_size_or_sections: 'Sections', padding_idx: 'Padding index',
+    requires_grad: 'Trainable', keepdim: 'Keep axis', enabled: 'Enabled',
 };
 
 // A few width bands keep numeric settings small without resizing for every keystroke.
@@ -99,6 +101,9 @@ function LayerBody({ id, node, fieldErrors }) {
     const entry = getEntry(node.libraryKey);
     const patchNode = useArchitectureStore((s) => s.patchNode);
     const patchLayerParameters = useArchitectureStore((s) => s.patchLayerParameters);
+    const convertLayerToComponent = useArchitectureStore((s) => s.convertLayerToComponent);
+    const enterSupernode = useArchitectureStore((s) => s.enterSupernode);
+    const component = getStandardComponentForLayer(node);
     const params = entry?.parameters ?? [];
     const primary = params.filter((p) => p.required || SHAPE_PRIORITY.includes(p.name));
     const options = params.filter((p) => !p.required && !SHAPE_PRIORITY.includes(p.name));
@@ -114,6 +119,7 @@ function LayerBody({ id, node, fieldErrors }) {
     const onPatch = (patch) => patchLayerParameters(id, patch);
     return (
         <>
+            {component && <div className="df-inspector-actions"><button type="button" onClick={() => { if (convertLayerToComponent(id)) enterSupernode(id); }}><Boxes size={12} /> Open operations</button></div>}
             {moduleOptions.length > 1 && (
                 <label className="df-inspector-module">
                     <span>Type</span>
@@ -161,6 +167,7 @@ function SupernodeBody({ id, node }) {
     const patchNode = useArchitectureStore((s) => s.patchNode);
     const enterSupernode = useArchitectureStore((s) => s.enterSupernode);
     const convertInstanceToRepeat = useArchitectureStore((s) => s.convertInstanceToRepeat);
+    const cloneComponent = useArchitectureStore((s) => s.cloneComponent);
     const values = node.parameterValues ?? {};
     return (
         <>
@@ -168,6 +175,7 @@ function SupernodeBody({ id, node }) {
             <div className="df-inspector-actions">
                 <button type="button" disabled={!template} onClick={() => enterSupernode(id)}><ChevronRight size={12} strokeWidth={3} /> Open template</button>
                 <button type="button" disabled={!template} onClick={() => convertInstanceToRepeat(id, 2)} title="Repeat this template N times"><Repeat size={12} strokeWidth={3} /> Repeat</button>
+                <button type="button" disabled={!template} onClick={() => cloneComponent(id)} title="Copy this definition and its nested components for this instance"><Copy size={12} /> Make copy</button>
             </div>
             <Bindings
                 freeParams={template?.freeParameters ?? []}
@@ -258,6 +266,8 @@ export default function NodeInspector() {
         : node.kind === 'repeat' ? [{ name: 'count' }] : [];
     const { fields: fieldErrors, remaining: nodeErrors } = partitionParameterErrors(issueParameters, errors);
     const ContainerIcon = node.kind === 'repeat' ? Repeat : Boxes;
+    const componentTemplate = templates[node.templateId];
+    const standard = STANDARD_COMPONENTS.find((component) => component.key === (componentTemplate?.standardKey ?? componentTemplate?.componentStyleKey));
     const rename = (label) => (node.kind === 'repeat' ? patchRepeatNode(id, { label }) : patchNode(id, { label }));
 
     return (
@@ -265,7 +275,7 @@ export default function NodeInspector() {
             <header className="df-inspector-header">
                 {node.kind === 'layer'
                     ? <OperationIcon libraryKey={node.libraryKey} size={24} />
-                    : <ContainerIcon size={22} strokeWidth={2.5} aria-hidden="true" />}
+                    : standard ? <OperationIcon libraryKey={standard.libraryKey} size={24} /> : <ContainerIcon size={22} strokeWidth={2.5} aria-hidden="true" />}
                 <input aria-label="Block name" title="Block name" value={node.label} onChange={(e) => rename(e.target.value)} />
                 <button type="button" className="df-inspector-close" onClick={clearExpanded} aria-label="Close inspector"><X size={13} strokeWidth={3} /></button>
             </header>

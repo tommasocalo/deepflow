@@ -19,5 +19,5 @@ export function activationLabel(shape) {
 
 export const OP_KEYS = new Set(['deepflow.op.Add', 'deepflow.op.Multiply', 'deepflow.op.Concat', 'deepflow.op.Split', 'deepflow.op.Broadcast', 'deepflow.op.Stack', 'deepflow.op.MatMul', 'deepflow.op.Transpose', 'deepflow.op.Scale', 'deepflow.op.CausalMask', 'torch.nn.Flatten']);
 export function isOpKey(libraryKey) {
-    return OP_KEYS.has(libraryKey);
+    return (libraryKey?.startsWith('deepflow.op.') && libraryKey !== 'deepflow.op.Parameter') || OP_KEYS.has(libraryKey);
 }

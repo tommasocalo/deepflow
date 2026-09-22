@@ -1,0 +1,135 @@
+import { topologicalSort } from '../validation/topology.js';
+import { buildParameterScope, resolveLayerParameters, resolveRepeatCount } from './expressions.js';
+import { getIncomingEdges, getTemplateInputIds, mapInputEdgesToPorts, orderOperationEdges } from './graphInputs.js';
+import { defaultParameterValues, getEntry } from './library/index.js';
+
+const tensor = (requires = 'unknown', dtype = 'float', dependencies = []) => ({ requires, dtype, dependencies: [...new Set(dependencies)] });
+const items = (value) => value?.items ? value.items.flatMap(items) : [value ?? tensor()];
+const merge = (values) => {
+    const all = values.flatMap(items);
+    const requires = all.some((v) => v.requires === 'yes') ? 'yes' : all.some((v) => v.requires === 'unknown') ? 'unknown' : 'no';
+    return tensor(requires, all.every((v) => v.dtype === 'index') ? 'index' : 'float', all.flatMap((v) => v.dependencies));
+};
+const detach = (value) => value?.items ? { items: value.items.map(detach) } : tensor('no', value?.dtype ?? 'float');
+const cut = (edge) => ['stop', 'detach'].includes(edge.gradientOp) || (edge.gradientOp === 'reverse' && Number(edge.gradientOpLambda ?? 1) === 0);
+const trainableModule = (key) => /^torch\.nn\.(Linear|Embedding|Bilinear|Conv|BatchNorm|LayerNorm|GroupNorm|InstanceNorm|RNN|GRU|LSTM|MultiheadAttention|Transformer)/.test(key)
+    || key === 'deepflow.nn.PositionalEmbedding' || key === 'deepflow.nn.CausalSelfAttention';
+const unknownModule = (key) => /^(deepflow\.op\.|deepflow\.(io|template)\.|torch\.nn\.|deepflow\.nn\.)/.test(key) === false;
+
+/** Static autograd structure. This describes paths, never measured gradients. */
+export function analyzeGradientFlow(graph, { templates = {}, scope = {}, externalInputs = {}, depth = 0, budget = { remaining: 20000 } } = {}) {
+    const report = { graph, scope, nodes: {}, edges: {}, children: {}, output: tensor(), inputDependencies: [] };
+    const allowed = new Set();
+    const { order } = topologicalSort(graph);
+    for (const id of order) {
+        if (--budget.remaining < 0) break;
+        const node = graph.nodes[id];
+        const incoming = getIncomingEdges(graph, id);
+        const valueFor = (edge) => !edge ? tensor() : cut(edge) ? detach(report.nodes[edge.source]) : report.nodes[edge.source] ?? tensor();
+        let used = incoming;
+        let output;
+        if (node.kind === 'supernode' || node.kind === 'repeat') {
+            const template = templates[node.templateId];
+            const count = node.kind === 'repeat' ? resolveRepeatCount(node.count, scope).count : 1;
+            if (!template || !count || depth >= 8) { report.nodes[id] = tensor(); continue; }
+            const ports = getTemplateInputIds(template.graph);
+            const mapped = mapInputEdgesToPorts(incoming, ports);
+            const initial = Object.fromEntries(ports.map((port) => [port, valueFor(mapped[port])]));
+            const children = [];
+            const outputs = [];
+            let carry;
+            let carryPorts = new Set();
+            const usedPorts = new Set();
+            for (let index = 0; index < count && budget.remaining > 0; index++) {
+                const repeated = node.kind === 'repeat';
+                const childScope = buildParameterScope(template.freeParameters, repeated ? node.bindings : node.parameterValues,
+                    repeated ? { ...scope, [node.iterationVariable || 'i']: index } : scope, repeated ? index : undefined);
+                const external = Object.fromEntries(ports.map((port) => [port, node.mode === 'parallel'
+                    ? initial[port]?.items?.[index] ?? initial[port] : index === 0 ? initial[port] : carry]));
+                const child = analyzeGradientFlow(template.graph, { templates, scope: childScope, externalInputs: external, depth: depth + 1, budget });
+                children.push(child);
+                if (node.mode === 'parallel') for (const port of child.inputDependencies) usedPorts.add(port);
+                else carryPorts = index === 0 ? new Set(child.inputDependencies) : child.inputDependencies.length ? carryPorts : new Set();
+                // Dependency names are local to a template; map back through its boundary.
+                const dependencies = child.inputDependencies.flatMap((port) => items(external[port]).flatMap((v) => v.dependencies));
+                const remap = (value) => value?.items ? { items: value.items.map(remap) } : { ...value, dependencies };
+                carry = remap(child.output);
+                outputs.push(carry);
+            }
+            report.children[id] = children;
+            used = incoming.filter((edge) => [...(node.mode === 'parallel' ? usedPorts : carryPorts)].some((port) => mapped[port]?.id === edge.id));
+            output = node.mode === 'parallel' ? { items: outputs } : outputs.at(-1) ?? tensor();
+        } else {
+            const key = node.libraryKey;
+            const params = resolveLayerParameters({ ...node, parameters: { ...defaultParameterValues(getEntry(key)), ...node.parameters } }, scope).parameters;
+            if (key === 'deepflow.template.Input') {
+                const input = externalInputs[id] ?? tensor();
+                const mark = (value) => value?.items ? { items: value.items.map(mark) } : { ...value, dependencies: [id] };
+                output = mark(input);
+                used = [];
+            } else if (key === 'deepflow.io.Input') {
+                const integer = ['int32', 'int64'].includes(params.dtype);
+                output = tensor(integer ? 'no' : params.requires_grad === true ? 'yes' : params.requires_grad === false ? 'no' : 'unknown', integer ? 'index' : 'float');
+                used = [];
+            } else if (key === 'deepflow.op.Parameter') {
+                output = tensor(params.requires_grad === false || params.enabled === false ? 'no' : 'yes');
+                used = [];
+            } else if (key === 'deepflow.op.PositionIndices' || key === 'deepflow.op.Arange') {
+                output = tensor('no', key === 'deepflow.op.PositionIndices' ? 'index' : 'float');
+                used = [];
+            } else if (key === 'deepflow.op.Gather') {
+                const ports = mapInputEdgesToPorts(incoming, ['indices', 'weight'], { broadcastSingle: false });
+                used = ports.weight ? [ports.weight] : [];
+                output = valueFor(ports.weight);
+            } else if (key === 'torch.nn.Embedding' || key === 'deepflow.nn.PositionalEmbedding') {
+                used = [];
+                output = tensor('yes');
+            } else if (key === 'deepflow.op.Split' || key === 'deepflow.op.Broadcast') {
+                const count = Number(params.chunks ?? params.count);
+                const value = merge(incoming.map(valueFor));
+                output = Number.isInteger(count) && count > 0 && count <= 256 ? { items: Array.from({ length: count }, () => value) } : tensor();
+            } else {
+                used = orderOperationEdges(node, incoming).filter(Boolean);
+                output = merge(used.map(valueFor));
+                const affine = key === 'torch.nn.LayerNorm' ? params.elementwise_affine !== false : /Norm/.test(key) ? params.affine !== false : true;
+                if (trainableModule(key) && affine) output = { ...output, requires: 'yes', dtype: 'float' };
+                if (unknownModule(key)) output = tensor();
+            }
+        }
+        report.nodes[id] = output;
+        for (const edge of used) if (!cut(edge)) allowed.add(edge.id);
+    }
+    const outputs = Object.values(graph.nodes).filter((node) => ['deepflow.io.Output', 'deepflow.template.Output'].includes(node.libraryKey));
+    report.output = outputs.length ? report.nodes[outputs.at(-1).id] ?? tensor() : tensor();
+    report.inputDependencies = merge([report.output]).dependencies;
+    const reachable = new Set(outputs.map((node) => node.id));
+    for (const id of [...order].reverse()) {
+        if (reachable.has(id)) for (const edge of getIncomingEdges(graph, id)) if (allowed.has(edge.id)) reachable.add(edge.source);
+    }
+    for (const edge of graph.edges) {
+        const source = merge([report.nodes[edge.source]]);
+        let status, reason;
+        if (cut(edge)) { status = 'stopped'; reason = 'Gradient is explicitly stopped on this connection'; }
+        else if (!report.nodes[edge.source] || !report.nodes[edge.target]) { status = 'unknown'; reason = 'Gradient path cannot be resolved for this graph'; }
+        else if (!allowed.has(edge.id)) { status = 'constant'; reason = 'This input is used as indices or metadata, without a derivative'; }
+        else if (source.dtype === 'index') { status = 'constant'; reason = 'Integer indices have no gradient'; }
+        else if (!reachable.has(edge.target) && outputs.length) { status = 'constant'; reason = 'No differentiable route from this connection to a graph output'; }
+        else if (source.requires === 'no') { status = 'constant'; reason = 'Constant or frozen tensor: no upstream gradient'; }
+        else if (source.requires === 'unknown') { status = 'unknown'; reason = 'Input gradient requirement is not specified'; }
+        else { status = edge.gradientOp === 'reverse' ? 'reverse' : 'flow'; reason = status === 'reverse' ? 'Gradient sign is reversed on this connection' : 'Differentiable path from trainable values'; }
+        report.edges[edge.id] = { status, reason };
+    }
+    return report;
+}
+
+export function gradientReportAtPath(report, path, inspectedIterations = {}) {
+    const traversed = [];
+    for (const id of path) {
+        traversed.push(id);
+        const children = report?.children[id];
+        if (!children?.length) return null;
+        const index = Math.max(0, Math.min(children.length - 1, inspectedIterations[JSON.stringify(traversed)] ?? 0));
+        report = children[index];
+    }
+    return report;
+}

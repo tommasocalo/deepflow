@@ -10,7 +10,7 @@ import { isInteractive } from './nodeGeometry.js';
 import OperationIcon from './OperationIcon.jsx';
 import PortShapeLabels from './PortShapeLabels.jsx';
 
-const INPUT_ONLY = new Set(['deepflow.io.Input', 'deepflow.template.Input']);
+const INPUT_ONLY = new Set(['deepflow.io.Input', 'deepflow.template.Input', 'deepflow.op.Parameter', 'deepflow.op.Arange']);
 const OUTPUT_ONLY = new Set(['deepflow.io.Output', 'deepflow.template.Output']);
 
 /**

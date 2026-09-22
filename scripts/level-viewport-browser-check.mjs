@@ -9,10 +9,14 @@ try {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
     await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).waitFor();
+    await page.evaluate(() => document.fonts.ready);
     const ids = await page.evaluate(() => {
         const state = window.__deepflow.architectureStore.getState();
         const first = Object.values(state.graph.nodes).find((node) => node.kind === 'repeat');
         const second = state.addSuperNodeInstance(first.templateId, { x: 800, y: 300 }, 'Second instance');
+        const template = window.__deepflow.templatesStore.getState().templates[first.templateId];
+        const fc = Object.values(template.graph.nodes).find((node) => node.label === 'mlp fc');
+        if (fc?.kind !== 'supernode') throw new Error('Viewport fixture requires an editable mlp fc component');
         return { first: first.id, second };
     });
     const main = page.locator('[data-graph-pane="main"]');

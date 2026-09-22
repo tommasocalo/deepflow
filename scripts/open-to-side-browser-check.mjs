@@ -60,11 +60,11 @@ try {
 
     // Shared ribbon shortcuts and deletion affect only the pane being used.
     await page.keyboard.press('Control+k');
-    assert.equal(await page.getByRole('textbox', { name: 'Search blocks' }).evaluate((element) => element === document.activeElement), true);
+    assert.equal(await page.getByRole('textbox', { name: 'Search operations' }).evaluate((element) => element === document.activeElement), true);
     assert.equal(await ribbon.getAttribute('data-active-pane'), 'side');
     assert.equal(await ribbon.count(), 1);
     const beforeAdd = await template();
-    await page.getByRole('dialog', { name: 'Block library', exact: true }).getByRole('button', { name: 'Add Linear', exact: true }).click();
+    await page.getByRole('menu', { name: 'Insert operations', exact: true }).getByRole('menuitem', { name: 'Add Scale', exact: true }).click();
     const added = Object.values((await template()).nodes).find((node) => !beforeAdd.nodes[node.id]);
     assert.ok(added);
     await side.locator(`.react-flow__node[data-id="${added.id}"]`).click();
@@ -91,7 +91,7 @@ try {
     await ribbon.getByRole('button', { name: 'Browse templates', exact: true }).click();
     const countBeforeDrop = Object.keys((await template()).nodes).length;
     const canvas = side.locator('.react-flow__pane');
-    await page.getByRole('button', { name: 'Add Transformer block template', exact: true }).dragTo(canvas, { targetPosition: { x: 140, y: 160 } });
+    await page.getByRole('menuitem', { name: 'Add Transformer block template', exact: true }).dragTo(canvas, { targetPosition: { x: 140, y: 160 } });
     await settle();
     assert.equal(Object.keys((await template()).nodes).length, countBeforeDrop, 'A template cannot be dropped inside itself from the other pane');
     await ribbon.getByRole('button', { name: 'Add Linear', exact: true }).dragTo(canvas, { targetPosition: { x: 140, y: 160 } });

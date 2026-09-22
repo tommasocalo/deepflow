@@ -14,10 +14,11 @@ export default function NodeInputPorts({ node, shapes }) {
     const portKey = ports.map((port) => port.id).join('|');
     useEffect(() => { updateNodeInternals(node.id); }, [node.id, node.mode, portKey, updateNodeInternals]);
     if (ports.length < 2) return <Handle type="target" position={Position.Top} className="df-handle" />;
-    const edges = mapInputEdgesToPorts(getIncomingEdges(getViewGraph(), node.id), ports.map((port) => port.id), { broadcastSingle: node.libraryKey !== 'deepflow.op.MatMul' });
+    const isOperation = node.libraryKey?.startsWith('deepflow.op.');
+    const edges = mapInputEdgesToPorts(getIncomingEdges(getViewGraph(), node.id), ports.map((port) => port.id), { broadcastSingle: !isOperation });
     return ports.map((port, index) => {
-        const sidePort = node.libraryKey === 'deepflow.op.MatMul' && index === 1;
-        const left = node.libraryKey === 'deepflow.op.MatMul' ? '50%' : `${(index + .5) / ports.length * 100}%`;
+        const sidePort = isOperation && index === 1;
+        const left = isOperation ? '50%' : `${(index + .5) / ports.length * 100}%`;
         const shape = activationLabel(shapes[edges[port.id]?.source]) ?? '—';
         return <span key={port.id}>
             <Handle id={port.id} type="target" position={sidePort ? Position.Right : Position.Top} className="df-handle" style={sidePort ? undefined : { left }} title={port.label} aria-label={`Input ${port.label}`} />

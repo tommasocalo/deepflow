@@ -19,7 +19,7 @@ try {
     };
     const paths = () => page.locator('.react-flow__edge').evaluateAll((edges) => Object.fromEntries(edges.map((edge) => [edge.dataset.id, edge.querySelector('.react-flow__edge-path').getAttribute('d')])));
     const graph = () => page.evaluate(() => window.__deepflow.architectureStore.getState().getViewGraph());
-    const block = (id) => page.locator(`.react-flow__node[data-id="${id}"] .df-block`);
+    const block = (id) => page.locator(`.react-flow__node[data-id="${id}"]`).getByRole('button', { name: /^Inspect / });
     const center = async (locator) => {
         const box = await locator.boundingBox();
         assert.ok(box);
@@ -49,6 +49,8 @@ try {
     await settle();
     const initial = await graph();
     const fc = Object.values(initial.nodes).find((node) => node.label === 'mlp fc');
+    assert.equal(fc.kind, 'supernode', 'The drag fixture uses the editable Linear component');
+    assert.equal(await block(fc.id).evaluate((element) => element.classList.contains('df-container')), true);
     const unrelated = initial.edges.filter((edge) => edge.source !== fc.id && edge.target !== fc.id);
     const originalPaths = await paths();
     assert.equal(await panel.isVisible(), true);
@@ -80,6 +82,7 @@ try {
 
     // Dragging a different node also dismisses the open inspector.
     const gelu = Object.values(committed.nodes).find((node) => node.label === 'gelu');
+    assert.equal(gelu.kind, 'layer', 'The second drag exercises a regular activation layer');
     const otherStart = await center(block(gelu.id));
     await page.mouse.move(otherStart.x, otherStart.y);
     await page.mouse.down();

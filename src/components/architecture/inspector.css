@@ -186,3 +186,4 @@
 .df-inspector .df-inspector-issue svg { margin-top: 0; }
 .df-inspector .df-inspector-issue.is-error,
 .df-inspector .df-inspector-issue.is-warning { border: 0; background: transparent; }
+.df-inspector .df-param-tuple { height: auto; min-height: 40px; line-height: 16px; resize: vertical; white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -1,6 +1,6 @@
 import { activationLabel } from './nodeGeometry.js';
 
-const INPUTS = new Set(['deepflow.io.Input', 'deepflow.template.Input']);
+const INPUTS = new Set(['deepflow.io.Input', 'deepflow.template.Input', 'deepflow.op.Parameter', 'deepflow.op.Arange']);
 const OUTPUTS = new Set(['deepflow.io.Output', 'deepflow.template.Output']);
 
 /** Shape reports describe outputs; each inlet receives its upstream output. */

@@ -1,82 +1,89 @@
-/* A single compact ribbon leaves the graph's edges and nodes unobstructed. */
-.df-architecture-ribbon { position: relative; z-index: 60; flex-shrink: 0; width: 100%; color: #111; background: #fff; border-bottom: 1px solid #b9b9b4; }
-.df-ribbon-row { display: flex; align-items: stretch; min-height: 82px; padding: 5px 12px 4px; gap: 10px; }
-.df-ribbon-group { flex-shrink: 0; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #dfdfda; padding-right: 10px; min-width: 0; }
-.df-ribbon-group h2 { margin: 3px 0 0; color: #777; font: 700 9px/13px ui-sans-serif, system-ui, sans-serif; letter-spacing: .09em; text-transform: uppercase; text-align: center; }
-.df-ribbon-actions { display: flex; align-items: stretch; gap: 3px; }
-.df-ribbon-button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 48px; height: 53px; padding: 5px 6px 3px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #171717; font-size: 10px; font-weight: 600; line-height: 12px; cursor: pointer; white-space: nowrap; }
+/* Compact commands stay in the ribbon; insertion menus attach to their trigger. */
+.df-architecture-ribbon { position: relative; z-index: 60; flex-shrink: 0; width: 100%; color: #111; background: #fff; border-bottom: 1px solid #d4d4ce; }
+.df-ribbon-row { display: flex; align-items: stretch; min-height: 78px; padding: 5px 12px 4px; gap: 10px; }
+.df-ribbon-group { flex-shrink: 0; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #e1e1dc; padding-right: 10px; min-width: 0; }
+.df-ribbon-group:last-of-type { border-right: 0; padding-right: 0; }
+.df-ribbon-group h2 { margin: 3px 0 0; color: #777; font: 700 9px/12px ui-sans-serif, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+.df-ribbon-actions { display: flex; align-items: stretch; gap: 2px; }
+.df-ribbon-button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 44px; height: 50px; padding: 4px 6px 3px; border: 1px solid transparent; border-radius: 2px; background: transparent; color: #171717; font-size: 10px; font-weight: 600; line-height: 12px; cursor: pointer; white-space: nowrap; }
 .df-ribbon-button > span { display: flex; align-items: center; gap: 3px; }
-.df-ribbon-family { width: 58px; }
+.df-ribbon-family { width: 55px; }
 .df-ribbon-button[draggable="true"] { cursor: grab; }
-.df-ribbon-button:hover:not(:disabled), .df-ribbon-button[aria-expanded="true"] { border-color: #111; background: #f8f8f3; box-shadow: 2px 2px 0 #111; }
-.df-ribbon-button:active:not(:disabled) { box-shadow: none; transform: translate(1px, 1px); }
-.df-ribbon-button[aria-pressed="true"] { background: #fef3c7; border-color: #c6ae55; }
-.df-ribbon-button:disabled { opacity: .32; cursor: default; }
-.df-architecture-ribbon button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-.df-ribbon-context { display: flex; flex-direction: column; justify-content: center; gap: 3px; margin-left: auto; padding: 2px 2px 7px 5px; min-width: 70px; max-width: 180px; }
-.df-ribbon-context > span { font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #777; }
-.df-ribbon-context strong { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.df-ribbon-context small { font-size: 9px; color: #777; white-space: nowrap; }
-.df-ribbon-popover { position: absolute; top: calc(100% + 5px); z-index: 70; max-width: calc(100vw - 24px); max-height: min(600px, calc(100dvh - 220px)); overflow-y: auto; background: #fff; border: 1.5px solid #111; border-radius: 5px; box-shadow: 4px 4px 0 #111; }
-.df-ribbon-popover > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; border-bottom: 1px solid #ddd; font-size: 11px; }
+.df-ribbon-button:hover:not(:disabled) { background: #f4f4ef; border-color: #d4d4ce; }
+.df-ribbon-button[aria-expanded="true"] { background: #f5f5ee; border-color: #111; }
+.df-ribbon-button[aria-pressed="true"] { background: #fff6cf; border-color: #111; }
+.df-ribbon-button:disabled, .df-ribbon-command-list button:disabled { opacity: .32; cursor: default; }
+.df-architecture-ribbon button:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.df-ribbon-command-list { display: flex; flex-direction: column; justify-content: center; width: 110px; gap: 1px; }
+.df-ribbon-command-list button { display: flex; align-items: center; gap: 5px; height: 17px; padding: 0 4px; border: 1px solid transparent; border-radius: 2px; font-size: 10px; font-weight: 600; text-align: left; }
+.df-ribbon-command-list button:hover:not(:disabled), .df-ribbon-command-list button[aria-expanded="true"] { background: #f4f4ef; border-color: #d4d4ce; }
+.df-ribbon-pane-cue { display: inline-flex; align-items: center; gap: 3px; margin: auto 0 auto auto; padding: 0 2px; color: #666; font-size: 9px; font-weight: 600; white-space: nowrap; }
+.df-ribbon-dropdown, .df-ribbon-popover { position: absolute; top: calc(100% - 1px); z-index: 70; max-width: calc(100vw - 16px); max-height: min(740px, calc(100dvh - 190px)); background: #fff; border: 1px solid #111; border-radius: 0 0 3px 3px; box-shadow: 2px 2px 0 #111; }
+.df-ribbon-dropdown { overflow: hidden; }
+.df-ribbon-popover { overflow-y: auto; }
+.df-ribbon-popover > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-bottom: 1px solid #e5e5df; font-size: 11px; }
 .df-ribbon-popover > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.df-ribbon-popover > header button { display: grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; border-radius: 3px; }
+.df-ribbon-popover > header button { display: grid; place-items: center; flex-shrink: 0; width: 20px; height: 20px; }
 .df-ribbon-popover > header button:hover { background: #eee; }
-.df-ribbon-popover-library { left: 12px; width: 410px; overflow: hidden; }
-.df-ribbon-popover-group { left: min(55%, 590px); width: 285px; }
-.df-ribbon-popover-parameters { right: 100px; width: 310px; }
-.df-ribbon-popover-group form { display: grid; gap: 10px; padding: 12px; }
+.df-ribbon-popover-group form { display: grid; gap: 9px; padding: 10px; }
 .df-ribbon-popover-group label { display: grid; gap: 5px; font-size: 11px; font-weight: 600; }
-.df-ribbon-popover-group input { width: 100%; height: 30px; border: 1px solid #777; border-radius: 4px; padding: 4px 7px; outline: none; font-size: 12px; }
+.df-ribbon-popover-group input { width: 100%; height: 29px; border: 1px solid #777; border-radius: 2px; padding: 4px 7px; outline: none; font-size: 12px; }
 .df-ribbon-popover-group input:focus { border-color: #111; box-shadow: 0 0 0 1px #111; }
-.df-ribbon-popover-group p { margin: 0; color: #666; font-size: 11px; line-height: 1.5; }
-.df-ribbon-primary { padding: 7px 10px; border: 1px solid #111; border-radius: 4px; color: #111; background: #fef3c7; box-shadow: 2px 2px #111; font-size: 11px; font-weight: 700; }
+.df-ribbon-popover-group p, .df-ribbon-preferences > p { margin: 0; color: #666; font-size: 11px; line-height: 1.5; }
+.df-ribbon-primary { padding: 7px 10px; border: 1px solid #111; border-radius: 2px; color: #111; background: #fff4c5; font-size: 11px; font-weight: 700; }
 .df-ribbon-primary:hover { background: #fde68a; }
 .df-ribbon-popover .df-ribbon-error { color: #b91c1c; }
 .df-ribbon-popover-parameters .df-template-inspector { border-top: 0; }
-.df-ribbon-popover-parameters .df-template-summary { padding: 10px 11px; }
-.df-ribbon-popover-parameters .df-template-content { padding: 0 11px 12px; }
-.df-ribbon-notice { position: absolute; top: calc(100% + 8px); right: 12px; z-index: 80; display: flex; align-items: center; gap: 7px; max-width: min(380px, calc(100vw - 24px)); padding: 7px 9px; border: 1px solid #111; border-radius: 4px; background: #f0fdf4; box-shadow: 2px 2px #111; font-size: 10px; }
+.df-ribbon-popover-parameters .df-template-summary { padding: 9px 10px; }
+.df-ribbon-popover-parameters .df-template-content { padding: 0 10px 11px; }
+.df-ribbon-notice { position: absolute; top: calc(100% + 8px); right: 12px; z-index: 80; display: flex; align-items: center; gap: 7px; max-width: min(380px, calc(100vw - 24px)); padding: 6px 8px; border: 1px solid #333; border-radius: 2px; background: #f6fff8; font-size: 10px; }
 .df-ribbon-notice.is-error { background: #fef2f2; color: #991b1b; }
 .df-ribbon-notice button { display: grid; place-items: center; margin-left: 5px; }
-.df-ribbon-library.df-library { position: static; width: 100%; max-width: none; max-height: min(560px, calc(100dvh - 225px)); border: 0; border-radius: 0; }
-.df-ribbon-library .df-library-header { padding: 9px 11px; min-height: 35px; }
-.df-ribbon-library .df-library-collapse { margin-left: auto; }
-.df-ribbon-library .df-library-collapse svg { transform: none; }
-.df-ribbon-library .df-library-search { margin: 8px 10px; min-height: 31px; }
-.df-ribbon-library .df-library-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
-.df-ribbon-library .df-library-tile { min-height: 67px; }
-.df-ribbon-library .df-library-name { font-size: 10px; }
-.df-ribbon-library .df-library-footer { padding: 8px 11px; background: #f8f8f5; }
-.df-ribbon-library-tabs { display: flex; gap: 5px; padding: 8px 10px 0; }
-.df-ribbon-library-tabs button { padding: 4px 8px; border: 1px solid #deded9; border-radius: 4px; color: #777; font-size: 10px; font-weight: 700; }
-.df-ribbon-library-tabs button[aria-pressed="true"] { background: #fef3c7; color: #111; border-color: #111; }
-.df-ribbon-library-tabs span { margin-left: 4px; font-family: monospace; font-size: 9px; }
-@media (max-width: 1180px) {
+.df-insert-menu { display: flex; flex-direction: column; max-height: min(720px, calc(100dvh - 195px)); min-height: 0; }
+.df-insert-search { display: flex; align-items: center; gap: 6px; margin: 7px 8px 3px; padding: 0 5px; border: 1px solid #dfdfd8; color: #777; min-height: 27px; flex-shrink: 0; }
+.df-insert-search:focus-within { border-color: #111; }
+.df-insert-search input { min-width: 0; width: 100%; outline: none; border: 0; padding: 5px 0; font-size: 11px; color: #111; background: transparent; }
+.df-insert-search button { display: grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0; }
+.df-insert-menu-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; padding: 0 6px 5px; scrollbar-width: thin; scrollbar-color: #999 #f5f5ef; }
+.df-insert-menu-scroll::-webkit-scrollbar { width: 6px; }
+.df-insert-menu-scroll::-webkit-scrollbar-track { background: #f5f5ef; }
+.df-insert-menu-scroll::-webkit-scrollbar-thumb { background: #999; }
+.df-insert-section + .df-insert-section { border-top: 1px solid #e8e8e1; margin-top: 3px; }
+.df-insert-section h3 { padding: 7px 4px 4px; margin: 0; font-size: 9px; line-height: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #777; }
+.df-insert-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 3px; }
+.df-insert-item { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 31px; padding: 4px 6px; border: 1px solid transparent; border-radius: 2px; font-size: 11px; line-height: 15px; font-weight: 500; text-align: left; cursor: grab; }
+.df-insert-item:hover { border-color: #111; background: #fff8d9; }
+.df-insert-item:active { cursor: grabbing; }
+.df-insert-item > span { min-width: 0; overflow-wrap: anywhere; }
+.df-insert-item > svg, .df-insert-item > img { flex-shrink: 0; }
+.df-insert-menu--templates .df-insert-items { grid-template-columns: minmax(0, 1fr); }
+.df-insert-menu--templates .df-insert-item { min-height: 33px; }
+.df-insert-empty { margin: 0; padding: 12px 5px; font-size: 11px; color: #777; }
+.df-insert-customize, .df-ribbon-restore-pins { display: flex; align-items: center; gap: 6px; padding: 9px 10px; min-height: 32px; border-top: 1px solid #deded8; color: #555; font-size: 10px; flex-shrink: 0; text-align: left; width: 100%; }
+.df-insert-customize:hover, .df-ribbon-restore-pins:hover { color: #111; background: #f6f6f2; }
+.df-ribbon-preferences > p { padding: 8px 10px 5px; }
+.df-ribbon-pin-list { display: grid; grid-template-columns: 1fr 1fr; padding: 0 8px 8px; gap: 1px 6px; }
+.df-ribbon-pin-list label { display: flex; align-items: center; gap: 5px; padding: 5px 2px; font-size: 10px; cursor: pointer; }
+.df-ribbon-pin-list input { accent-color: #111; width: 12px; height: 12px; }
+.df-ribbon-pin-list label:has(input:disabled) { opacity: .4; }
+@media (max-width: 1190px) {
     .df-ribbon-row { padding-left: 8px; padding-right: 8px; gap: 6px; }
     .df-ribbon-group { padding-right: 6px; }
     .df-ribbon-actions { gap: 1px; }
-    .df-ribbon-family { width: 49px; }
-    .df-ribbon-button { min-width: 41px; padding-left: 5px; padding-right: 5px; font-size: 9px; }
-    .df-ribbon-context { max-width: 105px; }
-    .df-ribbon-context small { display: none; }
+    .df-ribbon-family { width: 46px; }
+    .df-ribbon-button { min-width: 36px; padding-left: 4px; padding-right: 4px; font-size: 9px; }
+    .df-ribbon-command-list { width: 101px; }
+    .df-ribbon-command-list button { font-size: 9px; gap: 4px; }
+    .df-ribbon-pane-cue { position: absolute; right: 8px; bottom: 4px; font-size: 8px; }
 }
-@media (max-width: 1030px) {
-    .df-ribbon-context { display: none; }
-    .df-ribbon-row { justify-content: space-between; }
-    .df-ribbon-group:last-of-type { border-right: 0; padding-right: 0; }
-}
-@media (max-width: 860px) {
+@media (max-width: 930px) {
     .df-ribbon-family:nth-child(n+5) { display: none; }
-    .df-ribbon-row { min-height: 78px; }
-    .df-ribbon-popover-group { left: auto; right: 12px; }
-    .df-ribbon-popover-parameters { right: 12px; }
+    .df-ribbon-pane-cue { display: none; }
 }
-@media (max-width: 620px) {
+@media (max-width: 760px) {
     .df-ribbon-family:nth-child(n+3) { display: none; }
-    .df-ribbon-button { min-width: 37px; font-size: 8px; padding-left: 3px; padding-right: 3px; }
-    .df-ribbon-family { width: 37px; }
+    .df-ribbon-button { min-width: 30px; font-size: 8px; padding-left: 3px; padding-right: 3px; }
     .df-ribbon-row { gap: 4px; }
     .df-ribbon-group { padding-right: 4px; }
-    .df-ribbon-group h2 { font-size: 8px; }
+    .df-ribbon-command-list { width: 94px; }
 }
