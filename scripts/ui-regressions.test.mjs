@@ -287,17 +287,19 @@ test('shape bindings expose symbolic axes, keep the tuple linked, and detach to 
     await typeText(byAria('Exposed name for shape'), 'weight_shape');
     await act(() => byAria('Exposed name for shape').closest('form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
     assert.equal(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, '$weight_shape');
+    assert.deepEqual(useTemplatesStore.getState().templates[template.id].freeParameters.at(-1).default, ['$out_features', '$in_features'], 'Exposure preserves symbolic dimensions rather than freezing this instance');
+    await act(() => useTemplatesStore.getState().patchFreeParameter(template.id, 'out_features', { default: 48 }));
     assert.equal(byAria('shape').value, '$weight_shape');
     assert.equal(byAria('Add shape dimension'), null);
     await click(byAria('Parameter options for shape'));
     const detach = [...container.querySelectorAll('.df-parameter-action')].find((button) => button.textContent.includes('Use local value'));
     assert.ok(detach, 'The linked array has a resolved local value');
     await click(detach);
-    assert.deepEqual(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, [32, 16]);
-    assert.equal(byAria('shape dimension 1').value, '32');
+    assert.deepEqual(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, [48, 16]);
+    assert.equal(byAria('shape dimension 1').value, '48');
     assert.equal(byAria('shape dimension 2').value, '16');
     await click(byAria('Add shape dimension'));
-    assert.deepEqual(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, [32, 16, 1]);
+    assert.deepEqual(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, [48, 16, 1]);
 });
 
 test('repeated parameter names have unique stable label associations', async () => {

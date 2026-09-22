@@ -60,9 +60,11 @@ export function parameterConsumers(template, name) {
     return uses;
 }
 
-export function resolvedFieldValue(value, scope) {
-    if (Array.isArray(value)) return value.map((part) => resolvedFieldValue(part, scope));
+export function resolvedFieldValue(value, scope, depth = 0) {
+    if (depth > 16) return null;
+    if (Array.isArray(value)) return value.map((part) => resolvedFieldValue(part, scope, depth + 1));
     const resolved = resolveParameterValue(value, scope);
+    if (Array.isArray(resolved)) return resolved.map((part) => resolvedFieldValue(part, scope, depth + 1));
     // An unresolved arithmetic expression must not masquerade as a resolved value.
     if (typeof resolved === 'string' && parameterReferences(value).some((name) => !Object.hasOwn(scope, name) || scope[name] == null)) return null;
     return resolved;

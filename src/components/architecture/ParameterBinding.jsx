@@ -62,7 +62,9 @@ export default function ParameterBinding({ param, value, onChange, children }) {
     const expose = (event) => {
         event.preventDefault();
         if (!owner || !validName) return;
-        if (exposeField(owner.id, { nodeId: node.id, field: param.name, name, spec: param, defaultValue: resolved })) setOpen(false);
+        // Expose the original expression, not a snapshot of this instance:
+        // references and index formulas must keep following their inputs.
+        if (exposeField(owner.id, { nodeId: node.id, field: param.name, name, spec: param, defaultValue: raw })) setOpen(false);
     };
     const canDetach = references.length > 0 && resolved != null && (!Array.isArray(resolved) || resolved.every((part) => part != null));
     return <div className={`df-field-binding${open ? ' is-open' : ''}`}>

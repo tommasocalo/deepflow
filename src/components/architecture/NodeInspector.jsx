@@ -278,7 +278,7 @@ export default function NodeInspector() {
                 <input aria-label="Block name" title="Block name" value={node.label} onChange={(e) => rename(e.target.value)} />
                 <button type="button" className="df-inspector-close" onClick={clearExpanded} aria-label="Close inspector"><X size={13} strokeWidth={3} /></button>
             </header>
-            <ParameterBindingsProvider node={node}><div className="df-inspector-body">
+            <ParameterBindingsProvider key={node.id} node={node}><div className="df-inspector-body">
                 {node.kind === 'layer' && <LayerBody id={id} node={node} fieldErrors={fieldErrors} />}
                 {node.kind === 'supernode' && <SupernodeBody id={id} node={node} />}
                 {node.kind === 'repeat' && <RepeatBody id={id} node={node} />}
