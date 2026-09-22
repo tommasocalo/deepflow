@@ -6,9 +6,10 @@ import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
-import { resolveRepeatCount } from '../../domain/expressions.js';
+import { resolveComponentContext } from '../../domain/componentContext.js';
 import { STANDARD_COMPONENTS } from '../../domain/components/index.js';
 import ParameterField from './ParameterField.jsx';
+import ParameterBinding, { DerivedParameter, ParameterBindingsProvider } from './ParameterBinding.jsx';
 import OperationIcon from './OperationIcon.jsx';
 import { useInspectorPlacement } from './useInspectorPlacement.js';
 import { compactConnectionWarnings, compactParameterError, partitionParameterErrors } from './inspectorIssues.js';
@@ -31,6 +32,7 @@ const FIELD_LABELS = {
     split_size_or_sections: 'Sections', padding_idx: 'Padding index',
     requires_grad: 'Trainable', keepdim: 'Keep axis', enabled: 'Enabled',
     bias: 'Bias',
+    H: 'Heads', D: 'Width', d_head: 'Head width', n_heads: 'Heads', dropout: 'Dropout',
 };
 
 // A few width bands keep numeric settings small without resizing for every keystroke.
@@ -56,14 +58,14 @@ function InspectorField({ param, value, label, inline = false, ...props }) {
     return (
         <div className={`df-inspector-field${wide ? ' is-wide' : ''}${inline ? ' is-inline' : ''}`} data-parameter={param.name}
             style={{ '--inspector-control-width': `calc(${width}ch + 12px)` }}>
-            <ParameterField
+            <ParameterBinding param={param} value={value} onChange={props.onChange}><ParameterField
                 param={{ ...param, description: `${param.name}${param.description ? ` — ${param.description}` : ''}` }}
                 value={value}
                 label={label ?? FIELD_LABELS[param.name] ?? param.name.replaceAll('_', ' ')}
                 ariaLabel={param.name}
                 compactBoolean={param.name === 'bias'}
                 {...props}
-            />
+            /></ParameterBinding>
         </div>
     );
 }
@@ -148,17 +150,18 @@ function Bindings({ freeParams, values, onChange, hint }) {
     return (
         <section className="df-inspector-group">
             <div className="df-inspector-fields">
-                {freeParams.map((p) => (
+                {freeParams.filter((p) => !p.derived).map((p) => (
                     <InspectorField
                         key={p.name}
                         param={p}
-                        label={p.name === 'bias' ? 'Bias' : `$${p.name}`}
+                        label={FIELD_LABELS[p.name] ?? p.name.replaceAll('_', ' ')}
                         value={values[p.name]}
                         placeholder={p.default != null ? String(p.default) : 'Default'}
                         onChange={(v) => onChange(p.name, v)}
                     />
                 ))}
             </div>
+            {freeParams.some((p) => p.derived) && <div className="df-derived-parameters">{freeParams.filter((p) => p.derived).map((p) => <DerivedParameter key={p.name} param={p} />)}</div>}
             {hint && <p className="df-inspector-note">{hint}</p>}
         </section>
     );
@@ -189,7 +192,8 @@ function RepeatBody({ id, node }) {
     const patchRepeatNode = useArchitectureStore((s) => s.patchRepeatNode);
     const patchRepeatBinding = useArchitectureStore((s) => s.patchRepeatBinding);
     const context = useValidationContext();
-    const { count, error } = resolveRepeatCount(node.count, context?.scope);
+    const report = useValidation();
+    const { count, error } = resolveComponentContext(node, template, context.graph, report.shapes, context.scope);
     const mode = node.mode ?? 'sequential';
     const iterVar = node.iterationVariable || 'i';
     return (
@@ -197,7 +201,11 @@ function RepeatBody({ id, node }) {
             {!template && <p className="df-inspector-note">Template missing — re-create or delete this node.</p>}
             <section className="df-inspector-group">
                 <p className="df-inspector-note">{mode === 'parallel' ? 'One input slice per instance. Output is a tensor collection: connect Concat, Add or Stack to combine it.' : 'Each block feeds the next. Output from the last block.'}</p>
-                <div className="df-inspector-fields">
+                {node.count === 'auto' ? <div className="df-repeat-auto">
+                    <div className="df-derived-parameter"><span>Instances</span><strong>{count ?? 'Unresolved'}</strong><small>Auto · from input collections</small></div>
+                    <button type="button" onClick={() => patchRepeatNode(id, { count: count ?? 2 })}>Set manually</button>
+                    {error && <p className="df-param-errors">{error}</p>}
+                </div> : <><div className="df-inspector-fields">
                     <InspectorField
                         param={{ name: 'count', type: 'int', description: 'Number of instances, or a template parameter such as $H; each instance has its own weights' }}
                         label={mode === 'parallel' ? 'Instances' : 'Steps'}
@@ -207,6 +215,7 @@ function RepeatBody({ id, node }) {
                         errors={error ? [error] : []}
                     />
                 </div>
+                {mode === 'parallel' && <button type="button" className="df-repeat-infer" onClick={() => patchRepeatNode(id, { count: 'auto' })}>Use input count</button>}</>}
             </section>
             <Bindings
                 freeParams={template?.freeParameters ?? []}
@@ -269,12 +278,12 @@ export default function NodeInspector() {
                 <input aria-label="Block name" title="Block name" value={node.label} onChange={(e) => rename(e.target.value)} />
                 <button type="button" className="df-inspector-close" onClick={clearExpanded} aria-label="Close inspector"><X size={13} strokeWidth={3} /></button>
             </header>
-            <div className="df-inspector-body">
+            <ParameterBindingsProvider node={node}><div className="df-inspector-body">
                 {node.kind === 'layer' && <LayerBody id={id} node={node} fieldErrors={fieldErrors} />}
                 {node.kind === 'supernode' && <SupernodeBody id={id} node={node} />}
                 {node.kind === 'repeat' && <RepeatBody id={id} node={node} />}
                 <Issues errors={nodeErrors} warnings={warnings} />
-            </div>
+            </div></ParameterBindingsProvider>
         </aside>
     );
 }

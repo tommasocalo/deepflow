@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Pencil, Ruler, Variable, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
+import { resolveComponentContext } from '../../domain/componentContext.js';
+import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
 import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { recordArchitectureEdit } from '../../stores/architectureHistory.js';
@@ -43,6 +45,8 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const showGradientFlow = useArchitectureStore((s) => s.showGradientFlow);
     const showDimensions = useArchitectureStore((s) => s.showDimensions) !== false;
     const templates = useTemplatesStore((s) => s.templates);
+    const validation = useValidation();
+    const validationContext = useValidationContext();
     const openToSide = useOpenToSide();
     const [popup, setPopup] = useState(null);
     const [popupLeft, setPopupLeft] = useState(0);
@@ -131,6 +135,13 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     function repeatSelection(mode) {
         setError('');
         const disableRepeat = selectedRepeatMode === mode;
+        let explicitCount;
+        if (!disableRepeat && mode === 'sequential' && (selectedComponent?.count === 'auto' || selectedComponent?.repeatSettings?.count === 'auto')) {
+            const repeated = { ...selectedComponent, kind: 'repeat', count: 'auto', mode: 'parallel' };
+            const result = resolveComponentContext(repeated, template, level.graph, validation.shapes, validationContext.scope);
+            if (!result.count) { setError(result.error ?? 'Connect the component before choosing a sequential count.'); return; }
+            explicitCount = result.count;
+        }
         const label = disableRepeat ? 'Use single instance' : `Repeat ${mode === 'parallel' ? 'in parallel' : 'sequentially'}`;
         const id = recordArchitectureEdit(label, () => {
             const id = selectedComponent?.id ?? groupNodes(selection.length === 1 ? selection[0].label : 'Component');
@@ -141,8 +152,8 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 if (issue) { setError(issue); return null; }
                 if (!state.convertRepeatToInstance(id)) return null;
             }
-            else if (selectedComponent?.kind === 'repeat') state.patchRepeatNode(id, { mode });
-            else if (!state.convertInstanceToRepeat(id, undefined, mode)) return null;
+            else if (selectedComponent?.kind === 'repeat') state.patchRepeatNode(id, { mode, ...(explicitCount !== undefined ? { count: explicitCount } : {}) });
+            else if (!state.convertInstanceToRepeat(id, explicitCount, mode)) return null;
             state.selectOnly(id);
             state.setExpanded(id);
             return id;

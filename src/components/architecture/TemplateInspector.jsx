@@ -1,13 +1,14 @@
 import { useId, useState } from 'react';
-import { ChevronDown, Plus, Trash2, Variable } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, Plus, Trash2, Variable } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
+import { parameterConsumers } from '../../domain/parameterBindings.js';
 import './template-inspector.css';
 
 const PARAM_TYPES = ['int', 'float', 'string', 'bool', 'tuple', 'enum'];
 
-function TemplateParameters({ template, embedded, initiallyOpen }) {
+function TemplateParameters({ template, embedded, initiallyOpen, onOpenConsumer }) {
     const patchTemplate = useTemplatesStore((s) => s.patchTemplate);
     const addFreeParameter = useTemplatesStore((s) => s.addFreeParameter);
     const patchFreeParameter = useTemplatesStore((s) => s.patchFreeParameter);
@@ -15,10 +16,11 @@ function TemplateParameters({ template, embedded, initiallyOpen }) {
     const [draftName, setDraftName] = useState('');
     const hintId = useId();
 
-    const free = template.freeParameters ?? [];
+    const free = (template.freeParameters ?? []).filter((parameter) => !parameter.derived);
+    const derived = (template.freeParameters ?? []).filter((parameter) => parameter.derived);
     const name = draftName.trim();
     const validName = /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
-    const duplicate = free.some((parameter) => parameter.name === name);
+    const duplicate = (template.freeParameters ?? []).some((parameter) => parameter.name === name);
     const canAdd = validName && !duplicate;
     const nameHint = duplicate
         ? 'A parameter with this name already exists.'
@@ -67,7 +69,9 @@ function TemplateParameters({ template, embedded, initiallyOpen }) {
                     {free.length === 0 && (
                         <p className="df-template-note">Use <code>$name</code> in block parameters.</p>
                     )}
-                    {free.map((parameter) => (
+                    {free.map((parameter) => {
+                        const uses = parameterConsumers(template, parameter.name);
+                        return (
                         <section key={parameter.name} className="df-template-parameter" aria-label={`Parameter ${parameter.name}`}>
                             <div className="df-template-parameter-heading">
                                 <code>${parameter.name}</code>
@@ -75,8 +79,9 @@ function TemplateParameters({ template, embedded, initiallyOpen }) {
                                     type="button"
                                     className="df-template-remove"
                                     onClick={() => removeFreeParameter(template.id, parameter.name)}
+                                    disabled={uses.length > 0}
                                     aria-label={`Remove parameter ${parameter.name}`}
-                                    title={`Remove ${parameter.name}`}
+                                    title={uses.length ? 'Unlink the fields using this parameter before removing it' : `Remove ${parameter.name}`}
                                 >
                                     <Trash2 size={13} aria-hidden="true" />
                                 </button>
@@ -109,8 +114,14 @@ function TemplateParameters({ template, embedded, initiallyOpen }) {
                                     onChange={(event) => patchFreeParameter(template.id, parameter.name, { description: event.target.value })}
                                 />
                             </label>
+                            <details className="df-template-uses">
+                                <summary>Used by {uses.length} {uses.length === 1 ? 'field' : 'fields'}</summary>
+                                {uses.map((use) => use.parameter ? <span key={`${use.label}-${use.field}`}>{use.label} · default</span> : <button type="button" key={`${use.nodeId}-${use.field}`} disabled={!onOpenConsumer} onClick={() => onOpenConsumer?.(use.nodeId)}>{use.label} · {use.field}<ArrowUpRight size={11} /></button>)}
+                                {!uses.length && <span>Link an internal field to ${parameter.name}.</span>}
+                            </details>
                         </section>
-                    ))}
+                    ); })}
+                    {derived.length > 0 && <section className="df-template-derived"><h3>From inputs</h3>{derived.map((parameter) => <p key={parameter.name}><strong>{parameter.name}</strong><span>{template.graph.nodes[parameter.derived.inputId]?.label ?? 'Input'} · {parameter.derived.axis === -1 ? 'last dimension' : `axis ${parameter.derived.axis}`}</span></p>)}</section>}
                 </div>
 
                 <form className="df-template-add" onSubmit={handleAdd}>
@@ -140,10 +151,17 @@ function TemplateParameters({ template, embedded, initiallyOpen }) {
 export default function TemplateInspector({ embedded = false, templateId, initiallyOpen = false }) {
     const graph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
+    const selectedNodeIds = useArchitectureStore((s) => s.selectedNodeIds);
+    const openLevel = useArchitectureStore((s) => s.openLevel);
+    const selectOnly = useArchitectureStore((s) => s.selectOnly);
+    const setExpanded = useArchitectureStore((s) => s.setExpanded);
     const templates = useTemplatesStore((s) => s.templates);
     const level = resolveGraphLevel(graph, currentPath, templates);
     const template = templates[templateId ?? level.templateId];
 
     if (!template) return null;
-    return <TemplateParameters key={template.id} template={template} embedded={embedded} initiallyOpen={initiallyOpen} />;
+    const selected = selectedNodeIds.map((id) => level.graph.nodes[id]).find((node) => node?.templateId === template.id);
+    const path = level.templateId === template.id ? currentPath : selected ? [...currentPath, selected.id] : null;
+    const openConsumer = path ? (id) => { openLevel(path); selectOnly(id); setExpanded(id); } : null;
+    return <TemplateParameters key={template.id} template={template} embedded={embedded} initiallyOpen={initiallyOpen} onOpenConsumer={openConsumer} />;
 }

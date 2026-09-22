@@ -40,11 +40,15 @@ Saved opaque layers stay unchanged until you open their structure with the node 
 
 Choose **Examples → Multi-head attention** to open its internal graph. **GPT-2 small** also uses this template inside its sequential Transformer blocks.
 
-- **Component → Parameters** exposes `D = 768` (model width), `H = 12` (head count), `d_head = D / H`, and `dropout = 0.1`. Change `H` to another divisor of `D`; the splits, parallel head count, and derived head width update together.
-- In GPT-2, attention inherits `D` and `H` from the Transformer block's `d_model` and `n_heads` bindings. Change those bindings on the Transformer repeat to configure that instance; a bound value takes precedence over a template default.
+- **Component → Parameters** exposes `H = 12` (head count), `dropout = 0.1`, and `bias`. Attention width comes from its input tensor; each head's width comes from its actual Q input, before the scores MatMul. These dimensions are read-only and remain unresolved until the inputs are known. Change `H` to another divisor of the input width; Split and the inferred parallel count update together.
+- In GPT-2, attention inherits `H` from the Transformer block's `n_heads`. The `d_model` choice sizes the surrounding projections; Attention reads the resulting tensor width. Existing saved definitions retain their original behavior; loading an example uses the new standard definition.
 - Follow Q/K/V projections → Split → parallel attention heads → Concat → output projection. Open a head to edit Transpose, MatMul, Scale, Causal mask, Softmax, Dropout, and the final MatMul. These are ordinary editable nodes.
 - Named Q/K/V ports route each collection to its matching template input; MatMul uses ordered `a` and `b` ports. Wire to the intended port rather than relying on edge creation order.
-- Head inspection uses **zero-based indices**: index `0` is the first head. The preview shows that instance's resolved parameters and shapes. Body edits affect all instances of the shared template; repeated learned layers have independent weights in exported Python. Inspecting another head does not create a separate definition.
+- Parallel previews show at most three representative copies and an ellipsis, regardless of count. Open the definition and use the instance navigator to inspect any head. Displayed instance numbers start at **1**; formula indices remain zero-based. Body edits affect all instances of the shared template; repeated learned layers have independent weights in exported Python.
+
+Each numeric, boolean or shape field has a link control. Choose an existing enclosing parameter, use the resolved value locally, or **Expose in component** to add an intentional control to the enclosing definition. Exposure and the field binding form one Undo step. References show their resolved value and a link to their origin; parameter options and **Component → Parameters** list the fields they control. Derived dimensions are separate from editable exposed controls. Parameter shapes use ordered dimension cells with add/remove controls and support symbolic references.
+
+Parallel **Auto** count is inferred from equally sized incoming tensor collections. For a broadcast tensor without a collection, set the count manually. Changing an Auto parallel component to Sequential materializes its current count; reconnect the tensor paths to reflect the intended sequential computation.
 
 **Sequential** repeats feed each output into the next iteration. **Parallel** repeats receive the same tensor, or item `i` from each input collection, and return a collection. Split creates equal tensor slices; Broadcast creates repeated references to one tensor. Use Concat, Stack, Add, or Multiply to combine collections explicitly.
 
