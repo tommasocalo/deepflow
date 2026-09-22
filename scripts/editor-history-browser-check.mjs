@@ -1,0 +1,195 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { chromium } from 'playwright';
+
+const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/editor-controls';
+await mkdir(directory, { recursive: true });
+const browser = await chromium.launch();
+try {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000);
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+    await page.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
+    const ribbon = page.getByRole('region', { name: /Architecture ribbon/ });
+    const main = page.locator('[data-graph-pane="main"]');
+    const side = page.locator('[data-graph-pane="side"]');
+    const undo = page.getByRole('button', { name: 'Undo', exact: true });
+    const redo = page.getByRole('button', { name: 'Redo', exact: true });
+    const dimensions = ribbon.getByRole('button', { name: 'Show dimensions', exact: true });
+    const gradients = ribbon.getByRole('button', { name: 'Show gradient flow', exact: true });
+    const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const graph = () => page.evaluate(() => window.__deepflow.architectureStore.getState().getViewGraph());
+    const document = () => page.evaluate(() => ({ graph: window.__deepflow.architectureStore.getState().graph, templates: window.__deepflow.templatesStore.getState().templates }));
+    const history = async (clear = false) => page.evaluate((reset) => {
+        const store = window.__deepflow.architectureHistory;
+        if (reset) store.getState().clear();
+        const { canUndo, canRedo, undoCount, redoCount } = store.getState();
+        return { canUndo, canRedo, undoCount, redoCount };
+    }, clear);
+    const labels = (pane) => pane.locator('[aria-label*="dimensions:"]');
+    const nodeByLabel = async (label) => Object.values((await graph()).nodes).find((node) => node.label === label);
+    const inspect = (pane, label) => pane.getByRole('button', { name: `Inspect ${label}`, exact: true });
+
+    await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    assert.equal((await history()).canUndo, false, 'The initial GPT-2 example starts a fresh editing session');
+    assert.equal(await undo.isDisabled(), true, 'Undo starts disabled before any manual history reset');
+    await history(true);
+    assert.equal(await undo.isDisabled(), true);
+    assert.equal(await redo.isDisabled(), true);
+    assert.equal(await dimensions.getAttribute('aria-pressed'), 'true');
+
+    // Reproduce the accidental Sequential/Parallel edit that motivated Undo.
+    const transformer = await nodeByLabel('Transformer blocks');
+    await main.locator(`.react-flow__node[data-id="${transformer.id}"] .df-repeat-face`).click();
+    const repeatMode = page.getByRole('combobox', { name: 'Repeat mode', exact: true });
+    assert.equal(await repeatMode.inputValue(), 'sequential');
+    await repeatMode.selectOption('parallel');
+    await repeatMode.focus();
+    assert.equal((await nodeByLabel('Transformer blocks')).mode, 'parallel');
+    assert.equal((await history()).undoCount, 1);
+    await page.keyboard.press('Control+z');
+    assert.equal((await nodeByLabel('Transformer blocks')).mode, 'sequential', 'Ctrl+Z works while the changed select retains focus');
+    assert.equal(await repeatMode.inputValue(), 'sequential');
+    await page.keyboard.press('Meta+Shift+z');
+    assert.equal((await nodeByLabel('Transformer blocks')).mode, 'parallel', 'Mac redo shortcut restores the repeat mode');
+    await undo.click();
+    assert.equal(await repeatMode.inputValue(), 'sequential');
+    await redo.click();
+    assert.equal(await repeatMode.inputValue(), 'parallel');
+    await page.keyboard.press('Control+z');
+    assert.equal(await repeatMode.inputValue(), 'sequential');
+    await page.screenshot({ path: `${directory}/01-repeat-restored.png` });
+
+    // Ribbon dialogs stop bubbling keys; focused selects must still reach
+    // document history, while local text editing retains native browser Undo.
+    await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
+    await ribbon.getByRole('button', { name: 'Edit template parameters', exact: true }).click();
+    const parameters = page.getByRole('dialog', { name: /template parameters$/ });
+    const parameterType = parameters.getByRole('combobox', { name: 'd_model type', exact: true });
+    await history(true);
+    assert.equal(await parameterType.inputValue(), 'int');
+    await parameterType.selectOption('float');
+    await parameterType.focus();
+    assert.equal(await parameterType.evaluate((element) => element === document.activeElement), true);
+    await page.keyboard.press('Control+z');
+    assert.equal(await parameterType.inputValue(), 'int', 'Undo reaches a focused select inside the ribbon parameter popup');
+    await page.keyboard.press('Control+Shift+z');
+    assert.equal(await parameterType.inputValue(), 'float');
+    const beforeDraft = await document();
+    const beforeDraftHistory = await history();
+    const draft = parameters.getByRole('textbox', { name: 'New parameter', exact: true });
+    await draft.pressSequentially('draft_parameter');
+    assert.equal(await draft.inputValue(), 'draft_parameter');
+    const nativeUndo = await page.evaluate(() => /Mac/.test(navigator.platform) ? 'Meta+z' : 'Control+z');
+    await draft.press(nativeUndo);
+    assert.notEqual(await draft.inputValue(), 'draft_parameter', 'A text field receives native browser Undo');
+    assert.deepEqual(await document(), beforeDraft, 'Native text Undo does not undo the prior document edit');
+    assert.deepEqual(await history(), beforeDraftHistory, 'Text draft Undo leaves document history untouched');
+    await parameterType.focus();
+    await page.keyboard.press('Control+z');
+    assert.equal(await parameterType.inputValue(), 'int');
+    await parameters.getByRole('button', { name: 'Close template parameters', exact: true }).click();
+
+    // A real operation variant inside a shared template uses the same history.
+    await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).click();
+    await inspect(main, 'gelu').click();
+    const operationType = page.getByRole('combobox', { name: 'Operation type', exact: true });
+    await history(true);
+    await operationType.selectOption('torch.nn.ReLU');
+    await operationType.focus();
+    assert.equal(Object.values((await graph()).nodes).find((node) => node.libraryKey === 'torch.nn.ReLU')?.kind, 'layer');
+    await page.keyboard.press('Meta+z');
+    assert.equal(await operationType.inputValue(), 'torch.nn.GELU', 'Cmd+Z restores a nested operation type');
+    await page.keyboard.press('Control+Shift+z');
+    assert.equal(await operationType.inputValue(), 'torch.nn.ReLU');
+    await undo.click();
+    assert.equal(await operationType.inputValue(), 'torch.nn.GELU');
+    await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
+
+    // Many pointer moves form one history entry, including at a nested level.
+    await history(true);
+    const fc = await nodeByLabel('mlp fc');
+    const initialPosition = fc.position;
+    const drag = inspect(main, 'mlp fc');
+    const box = await drag.boundingBox();
+    assert.ok(box && box.width > 0 && box.height > 0);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 100, box.y + box.height / 2 + 30, { steps: 18 });
+    await page.mouse.up();
+    await settle();
+    const movedPosition = (await graph()).nodes[fc.id].position;
+    assert.notDeepEqual(movedPosition, initialPosition);
+    assert.equal((await history()).undoCount, 1, 'A complete drag is one edit');
+    await undo.click();
+    assert.deepEqual((await graph()).nodes[fc.id].position, initialPosition);
+    await redo.click();
+    assert.deepEqual((await graph()).nodes[fc.id].position, movedPosition);
+    await undo.click();
+
+    // Display controls never mutate graph/template content or document history.
+    await main.getByRole('tab', { name: 'main', exact: true }).click();
+    await main.getByRole('button', { name: 'Open positional embedding', exact: true }).click();
+    await main.getByRole('button', { name: 'Open position table', exact: true }).click();
+    await inspect(main, 'embedding table').waitFor();
+    await history(true);
+    const beforeDisplay = await document();
+    assert.ok(await labels(main).count() > 0);
+    await dimensions.click();
+    assert.equal(await labels(main).count(), 0);
+    assert.equal(await main.locator('[aria-label="indices input"]').count(), 1, 'Hiding dimensions preserves named input ports');
+    assert.equal(await main.locator('[aria-label="weight input"]').count(), 1);
+    await gradients.click();
+    assert.equal(await dimensions.getAttribute('aria-pressed'), 'false');
+    assert.equal(await gradients.getAttribute('aria-pressed'), 'true');
+    assert.equal(await main.locator('.df-gradient-edge--flow').count(), 2);
+    assert.deepEqual(await document(), beforeDisplay);
+    assert.equal((await history()).canUndo, false);
+
+    await ribbon.getByRole('button', { name: 'Open to the side', exact: true }).click();
+    await side.waitFor();
+    await settle();
+    assert.equal(await dimensions.getAttribute('aria-pressed'), 'true', 'A side pane owns its dimensions visibility');
+    assert.equal(await gradients.getAttribute('aria-pressed'), 'false', 'Gradient visibility is independent for each pane');
+    assert.ok(await labels(side).count() > 0);
+    assert.equal(await labels(main).count(), 0);
+    await gradients.click();
+    await dimensions.click();
+    assert.equal(await labels(side).count(), 0);
+    assert.equal(await side.locator('.df-gradient-edge--flow').count(), 2, 'Hiding shape labels does not hide gradient paths');
+    await dimensions.click();
+    await main.getByRole('tab', { selected: true }).click();
+    assert.equal(await dimensions.getAttribute('aria-pressed'), 'false');
+    assert.equal(await gradients.getAttribute('aria-pressed'), 'true');
+    assert.deepEqual(await document(), beforeDisplay);
+    assert.equal((await history()).canUndo, false);
+
+    // Undo a nested parameter change made in the side pane and confirm both
+    // visible instances of the shared template update together.
+    await inspect(side, 'embedding table').click();
+    const trainable = side.getByRole('checkbox', { name: 'requires_grad', exact: true });
+    await trainable.uncheck();
+    await settle();
+    for (const pane of [main, side]) assert.equal(await pane.locator('.df-gradient-edge--flow').count(), 0);
+    assert.equal((await history()).undoCount, 1);
+    await undo.click();
+    await settle();
+    assert.equal(await trainable.isChecked(), true);
+    for (const pane of [main, side]) assert.equal(await pane.locator('.df-gradient-edge--flow').count(), 2, 'Undo refreshes gradient paths in both visible panes');
+    await redo.click();
+    assert.equal(await trainable.isChecked(), false);
+    await undo.click();
+    assert.deepEqual(await document(), beforeDisplay);
+    assert.equal(await labels(main).count(), 0, 'Undo preserves display preferences');
+    assert.ok(await labels(side).count() > 0);
+    await settle();
+    await page.screenshot({ path: `${directory}/02-pane-dimensions-gradients.png` });
+    assert.deepEqual(errors, []);
+    console.log('Editor controls passed: fresh-session history, focused inspector/ribbon select Ctrl/Cmd undo and redo, native text Undo, toolbar actions, nested operation variants, single-step dragging, shared-template parameter restoration across panes, and independent dimensions/gradients without graph or history changes.');
+} finally {
+    await browser.close();
+}
