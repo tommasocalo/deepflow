@@ -17,6 +17,10 @@
 .df-ribbon-command-list { display: flex; flex-direction: column; justify-content: center; width: 110px; gap: 1px; }
 .df-ribbon-command-list button { display: flex; align-items: center; gap: 5px; height: 17px; padding: 0 4px; border: 1px solid transparent; border-radius: 2px; font-size: 10px; font-weight: 600; text-align: left; }
 .df-ribbon-command-list button:hover:not(:disabled), .df-ribbon-command-list button[aria-expanded="true"] { background: #f4f4ef; border-color: #d4d4ce; }
+.df-ribbon-view-options { display: flex; flex-direction: column; justify-content: center; gap: 3px; margin-left: 3px; }
+.df-ribbon-view-options button { display: flex; align-items: center; gap: 5px; height: 22px; padding: 2px 5px; border: 1px solid transparent; border-radius: 2px; font-size: 10px; font-weight: 600; }
+.df-ribbon-view-options button:hover { border-color: #d4d4ce; background: #f4f4ef; }
+.df-ribbon-view-options button[aria-pressed="true"] { border-color: #111; background: #fff6cf; }
 .df-ribbon-pane-cue { display: inline-flex; align-items: center; gap: 3px; margin: auto 0 auto auto; padding: 0 2px; color: #666; font-size: 9px; font-weight: 600; white-space: nowrap; }
 .df-ribbon-dropdown, .df-ribbon-popover { position: absolute; top: calc(100% - 1px); z-index: 70; max-width: calc(100vw - 16px); max-height: min(740px, calc(100dvh - 190px)); background: #fff; border: 1px solid #111; border-radius: 0 0 3px 3px; box-shadow: 2px 2px 0 #111; }
 .df-ribbon-dropdown { overflow: hidden; }
@@ -74,10 +78,11 @@
     .df-ribbon-button { min-width: 36px; padding-left: 4px; padding-right: 4px; font-size: 9px; }
     .df-ribbon-command-list { width: 101px; }
     .df-ribbon-command-list button { font-size: 9px; gap: 4px; }
+    .df-ribbon-view-options button { font-size: 9px; padding-left: 3px; padding-right: 3px; }
     .df-ribbon-pane-cue { position: absolute; right: 8px; bottom: 4px; font-size: 8px; }
 }
 @media (max-width: 930px) {
-    .df-ribbon-family:nth-child(n+5) { display: none; }
+    .df-ribbon-family:nth-child(n+4) { display: none; }
     .df-ribbon-pane-cue { display: none; }
 }
 @media (max-width: 760px) {

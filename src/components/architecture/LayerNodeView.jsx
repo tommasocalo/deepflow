@@ -1,7 +1,8 @@
 import React, { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { AlertCircle, AlertTriangle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ChevronRight } from 'lucide-react';
 import { getEntry } from '../../domain/library/index.js';
+import { getStandardComponentForLayer } from '../../domain/components/index.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useValidation } from '../../hooks/useValidation.js';
 import { styleFor } from './categoryStyle.js';
@@ -21,6 +22,9 @@ const LayerNodeView = ({ id, data, selected }) => {
     const entry = getEntry(node.libraryKey);
     const toggleExpanded = useArchitectureStore((s) => s.toggleExpanded);
     const expandedNodeId = useArchitectureStore((s) => s.expandedNodeId);
+    const convertLayerToComponent = useArchitectureStore((s) => s.convertLayerToComponent);
+    const enterSupernode = useArchitectureStore((s) => s.enterSupernode);
+    const component = getStandardComponentForLayer(node);
     const validation = useValidation();
     const errors = validation.errors[id] ?? [];
     const warnings = validation.warnings[id] ?? [];
@@ -59,6 +63,17 @@ const LayerNodeView = ({ id, data, selected }) => {
         >
             <OperationIcon libraryKey={node.libraryKey} size={24} />
             <span className="df-block-name">{node.label || entry?.name || 'Untitled'}</span>
+            {component && <button
+                type="button"
+                className="nodrag df-container-open"
+                aria-label={`Open ${node.label}`}
+                title="Open definition"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    if (convertLayerToComponent(id)) enterSupernode(id);
+                }}
+            ><ChevronRight size={14} strokeWidth={3} /></button>}
             <PortShapeLabels node={node} shapes={validation.shapes} />
             {tone === 'error' && <AlertCircle size={12} strokeWidth={3} className="df-block-status df-block-icon--error" />}
             {tone === 'warning' && <AlertTriangle size={12} strokeWidth={3} className="df-block-status df-block-icon--warning" />}

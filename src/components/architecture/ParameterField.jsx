@@ -2,7 +2,7 @@ import { useId } from 'react';
 
 const NUMBER_LITERAL = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
-const ParameterField = ({ param, value, onChange, error, errors = [], label, ariaLabel, placeholder }) => {
+const ParameterField = ({ param, value, onChange, error, errors = [], label, ariaLabel, placeholder, compactBoolean = false }) => {
     const id = useId();
     const hasError = !!error || errors.length > 0;
     const errorId = `${id}-errors`;
@@ -12,6 +12,7 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
     const expression = booleanExpression || (numeric && typeof value === 'string' && value !== '' && !NUMBER_LITERAL.test(value));
     const booleanValue = value ?? param.default ?? false;
     const checked = booleanValue === true || booleanValue === 'true';
+    const inlineBoolean = compactBoolean && param.type === 'bool' && !booleanExpression;
     const textValue = Array.isArray(display) ? display.join(', ') : String(display);
     const className = `df-param-input nodrag${hasError ? ' is-invalid' : ''}${expression ? ' is-expression' : ''}`;
     const baseWidth = param.type === 'int' ? 7 : param.type === 'float' ? 8 : param.type === 'tuple' ? 9 : 12;
@@ -29,12 +30,15 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
     };
 
     return (
-        <div className={`df-param-row${hasError ? ' has-error' : ''}`}>
+        <div className={`df-param-row${hasError ? ' has-error' : ''}${inlineBoolean ? ' df-param-row--toggle' : ''}`}>
             <label htmlFor={id} title={param.description} className="df-param-label">
                 {label ?? param.name}
                 {param.required && <span className="df-param-required" title="Required">*</span>}
             </label>
-            {param.type === 'bool' && !booleanExpression ? (
+            {inlineBoolean ? (
+                <input {...common} className="df-param-checkbox nodrag" type="checkbox" checked={checked}
+                    onChange={(event) => onChange(event.target.checked)} />
+            ) : param.type === 'bool' && !booleanExpression ? (
                 <label className="df-param-bool" htmlFor={id}>
                     <input
                         {...common}

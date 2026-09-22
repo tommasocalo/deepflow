@@ -1,0 +1,8 @@
+.df-iteration-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 32px; padding: 4px 12px; border-bottom: 1px solid #111; background: #fff; font-size: 11px; }
+.df-iteration-counter { display: inline-flex; align-items: center; gap: 4px; }
+.df-iteration-counter input { box-sizing: border-box; width: 42px; height: 23px; padding: 2px 4px; border: 1px solid #111; border-radius: 2px; background: #fff; font: bold 11px/17px ui-monospace, monospace; text-align: center; }
+.df-iteration-counter button { display: grid; place-items: center; width: 21px; height: 23px; padding: 0; border: 1px solid transparent; border-radius: 2px; font: bold 17px/1 ui-monospace, monospace; }
+.df-iteration-counter button:hover:not(:disabled) { border-color: #111; background: #eee; }
+.df-iteration-counter button:disabled { opacity: .3; }
+.df-iteration-counter > span { font: 600 10px/1 ui-monospace, monospace; }
+.df-iteration-shared { padding-left: 10px; border-left: 1px solid #d4d4d4; color: #666; font-size: 10px; }

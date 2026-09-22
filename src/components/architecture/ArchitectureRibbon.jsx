@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Pencil, Variable, X } from 'lucide-react';
+import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Pencil, Ruler, Variable, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
@@ -40,6 +40,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const selectedNodeIds = useArchitectureStore((s) => s.selectedNodeIds);
     const showGradientFlow = useArchitectureStore((s) => s.showGradientFlow);
+    const showDimensions = useArchitectureStore((s) => s.showDimensions) !== false;
     const templates = useTemplatesStore((s) => s.templates);
     const openToSide = useOpenToSide();
     const [popup, setPopup] = useState(null);
@@ -181,7 +182,10 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             <RibbonGroup label="View">
                 <RibbonButton icon={Columns2} onClick={() => { closePopup(); openToSide?.(selectedComponent ? [...currentPath, selectedComponent.id] : currentPath); }} title="Open selected component or current level to the side" aria-label="Open to the side">To side</RibbonButton>
                 <RibbonButton icon={Maximize} onClick={onFitView} title={`Fit graph in ${targetLabel.toLowerCase()}`} aria-label="Fit active graph">Fit</RibbonButton>
-                <RibbonButton icon={GitBranch} aria-label="Show gradient flow" aria-pressed={!!showGradientFlow} onClick={() => architectureStore.getState().setShowGradientFlow(!showGradientFlow)} title="Show differentiable paths and stopped gradients">Gradients</RibbonButton>
+                <div className="df-ribbon-view-options">
+                    <button type="button" aria-label="Show dimensions" aria-pressed={showDimensions} onClick={() => architectureStore.getState().setShowDimensions(!showDimensions)} title="Show tensor dimensions at input and output ports"><Ruler size={14} />Dimensions</button>
+                    <button type="button" aria-label="Show gradient flow" aria-pressed={!!showGradientFlow} onClick={() => architectureStore.getState().setShowGradientFlow(!showGradientFlow)} title="Show differentiable paths and stopped gradients"><GitBranch size={14} />Gradients</button>
+                </div>
             </RibbonGroup>
             {split && <span className="df-ribbon-pane-cue" aria-live="polite"><ArrowUpRight size={11} />{targetLabel}</span>}
         </div>

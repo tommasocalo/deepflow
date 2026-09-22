@@ -44,6 +44,11 @@ const SequentialRepeatNodeView = ({ id, data, selected }) => {
             className={['df-repeat', `df-repeat--${tone}`, selected ? 'is-selected' : '', expandedNodeId === id ? 'is-active' : ''].join(' ')}
             style={{ '--repeat-stack-depth': `${ghosts * 5}px` }}
             onClick={onClick}
+            role="button" tabIndex={0} aria-label={`Inspect ${node.label}`} aria-expanded={expandedNodeId === id}
+            onKeyDown={(event) => {
+                sideMenuProps.onKeyDown?.(event);
+                if (!event.defaultPrevented && event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); toggleExpanded(id); }
+            }}
             onDoubleClick={(e) => { if (!isInteractive(e.target)) { e.stopPropagation(); enterSupernode(id); } }}
             title={template ? `${template.name} × ${count} — double-click to open` : 'Template missing'}
         >
@@ -57,7 +62,7 @@ const SequentialRepeatNodeView = ({ id, data, selected }) => {
                 <button
                     className="nodrag df-container-open"
                     aria-label={`Open ${node.label}`}
-                    title="Open template"
+                    title="Open definition"
                     disabled={!template}
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); enterSupernode(id); }}

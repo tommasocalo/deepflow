@@ -32,18 +32,23 @@ function ParallelRepeatNodeView({ id, data, selected }) {
     return (
         <div {...sideMenuProps} className={`df-parallel df-parallel--${tone}${selected ? ' is-selected' : ''}${expandedNodeId === id ? ' is-active' : ''}`}
             style={{ width }} onClick={(event) => { if (!isInteractive(event.target)) toggleExpanded(id); }}
+            role="button" tabIndex={0} aria-label={`Inspect ${node.label}`} aria-expanded={expandedNodeId === id}
+            onKeyDown={(event) => {
+                sideMenuProps.onKeyDown?.(event);
+                if (!event.defaultPrevented && event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); toggleExpanded(id); }
+            }}
             onDoubleClick={(event) => { if (!isInteractive(event.target)) open(event, 0); }}>
             <div className="df-parallel-header">
                 <GitFork size={14} strokeWidth={2.7} /><strong>{node.label}</strong>
                 <span className="df-parallel-mode">Parallel</span>
                 <span className="df-repeat-count">{typeof node.count === 'string' && node.count.startsWith('$') ? `${node.count} = ` : '× '}{count ?? '?'}</span>
-                <button className="nodrag df-container-open" aria-label={`Open ${node.label}`} disabled={!template} onClick={(event) => open(event, 0)}><ChevronRight size={14} /></button>
+                <button className="nodrag df-container-open" aria-label={`Open ${node.label}`} title="Open definition" disabled={!template} onClick={(event) => open(event, 0)}><ChevronRight size={14} strokeWidth={3} /></button>
             </div>
             <div className="df-parallel-branches" style={{ gridTemplateColumns: `repeat(${Math.min(12, shown) || 1}, 1fr)` }}>
-                {Array.from({ length: shown }, (_, index) => <button type="button" key={index} className="nodrag df-parallel-instance" aria-label={`Open ${node.label} instance ${index}`} title={`${template?.name ?? 'Template'} · ${node.iterationVariable || 'i'} = ${index}`} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => open(event, index)}><Boxes size={14} strokeWidth={2.4} /><b>{index}</b></button>)}
+                {Array.from({ length: shown }, (_, index) => <button type="button" key={index} className="nodrag df-parallel-instance" aria-label={`Open ${node.label} instance ${index + 1}`} title={`${template?.name ?? 'Template'} · instance ${index + 1} · formula index ${node.iterationVariable || 'i'} = ${index}`} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => open(event, index)}><Boxes size={14} strokeWidth={2.4} /><b>{index + 1}</b></button>)}
                 {!count && <span className="df-parallel-invalid">Set a valid count</span>}
             </div>
-            <div className="df-parallel-footer">{count > shown ? `${shown} of ${count} shown · open a branch to choose any index` : 'Shared body · independent instances'}<span>Tensor collection ↓</span></div>
+            <div className="df-parallel-footer">{count > shown ? `${shown} of ${count} shown · open a branch to inspect more` : 'Shared structure · separate weights'}<span>Tensor collection ↓</span></div>
             <button aria-label={`Delete ${node.label}`} onClick={(event) => { event.stopPropagation(); removeNode(id); }} className="nodrag df-block-delete"><X size={10} strokeWidth={3} /></button>
             <PortShapeLabels node={node} shapes={report.shapes} hideInput={ports.length > 1} />
             <NodeInputPorts node={node} shapes={report.shapes} />

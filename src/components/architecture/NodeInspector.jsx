@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { AlertCircle, AlertTriangle, Boxes, ChevronDown, ChevronRight, Copy, Repeat, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Boxes, ChevronDown, Copy, Repeat, X } from 'lucide-react';
 import { PYTORCH_BLOCKS, getEntry } from '../../domain/library/index.js';
 import { createVariantPatch, getNodeFamily } from '../../domain/library/nodeFamilies.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
@@ -7,7 +7,7 @@ import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
 import { resolveRepeatCount } from '../../domain/expressions.js';
-import { getStandardComponentForLayer, STANDARD_COMPONENTS } from '../../domain/components/index.js';
+import { STANDARD_COMPONENTS } from '../../domain/components/index.js';
 import ParameterField from './ParameterField.jsx';
 import OperationIcon from './OperationIcon.jsx';
 import { useInspectorPlacement } from './useInspectorPlacement.js';
@@ -30,6 +30,7 @@ const FIELD_LABELS = {
     start_dim: 'Start dim', end_dim: 'End dim', dim: 'Axis', iterationVariable: 'Index',
     split_size_or_sections: 'Sections', padding_idx: 'Padding index',
     requires_grad: 'Trainable', keepdim: 'Keep axis', enabled: 'Enabled',
+    bias: 'Bias',
 };
 
 // A few width bands keep numeric settings small without resizing for every keystroke.
@@ -57,6 +58,7 @@ function InspectorField({ param, value, label, ...props }) {
                 value={value}
                 label={label ?? FIELD_LABELS[param.name] ?? param.name.replaceAll('_', ' ')}
                 ariaLabel={param.name}
+                compactBoolean={param.name === 'bias'}
                 {...props}
             />
         </div>
@@ -79,12 +81,13 @@ function ParamGroup({ params, values, fieldErrors, onPatch, collapsed = false })
             errors={(fieldErrors[p.name] ?? []).map((message) => compactParameterError(p.name, message))}
         />
     ))}</div>;
-    return collapsed ? (
+    const inlineBias = params.length === 1 && params[0].name === 'bias';
+    return collapsed && !inlineBias ? (
         <details ref={detailsRef} className="df-inspector-group df-inspector-options">
             <summary>Options</summary>
             {fields}
         </details>
-    ) : fields;
+    ) : inlineBias && collapsed ? <section className="df-inspector-group">{fields}</section> : fields;
 }
 
 function Issues({ errors, warnings }) {
@@ -101,9 +104,6 @@ function LayerBody({ id, node, fieldErrors }) {
     const entry = getEntry(node.libraryKey);
     const patchNode = useArchitectureStore((s) => s.patchNode);
     const patchLayerParameters = useArchitectureStore((s) => s.patchLayerParameters);
-    const convertLayerToComponent = useArchitectureStore((s) => s.convertLayerToComponent);
-    const enterSupernode = useArchitectureStore((s) => s.enterSupernode);
-    const component = getStandardComponentForLayer(node);
     const params = entry?.parameters ?? [];
     const primary = params.filter((p) => p.required || SHAPE_PRIORITY.includes(p.name));
     const options = params.filter((p) => !p.required && !SHAPE_PRIORITY.includes(p.name));
@@ -119,7 +119,6 @@ function LayerBody({ id, node, fieldErrors }) {
     const onPatch = (patch) => patchLayerParameters(id, patch);
     return (
         <>
-            {component && <div className="df-inspector-actions"><button type="button" onClick={() => { if (convertLayerToComponent(id)) enterSupernode(id); }}><Boxes size={12} /> Open operations</button></div>}
             {moduleOptions.length > 1 && (
                 <label className="df-inspector-module">
                     <span>Type</span>
@@ -150,7 +149,7 @@ function Bindings({ freeParams, values, onChange, hint }) {
                     <InspectorField
                         key={p.name}
                         param={p}
-                        label={`$${p.name}`}
+                        label={p.name === 'bias' ? 'Bias' : `$${p.name}`}
                         value={values[p.name]}
                         placeholder={p.default != null ? String(p.default) : 'Default'}
                         onChange={(v) => onChange(p.name, v)}
@@ -165,7 +164,6 @@ function Bindings({ freeParams, values, onChange, hint }) {
 function SupernodeBody({ id, node }) {
     const template = useTemplatesStore((s) => s.templates[node.templateId]);
     const patchNode = useArchitectureStore((s) => s.patchNode);
-    const enterSupernode = useArchitectureStore((s) => s.enterSupernode);
     const convertInstanceToRepeat = useArchitectureStore((s) => s.convertInstanceToRepeat);
     const cloneComponent = useArchitectureStore((s) => s.cloneComponent);
     const values = node.parameterValues ?? {};
@@ -173,7 +171,6 @@ function SupernodeBody({ id, node }) {
         <>
             {!template && <p className="df-inspector-note">Template missing — re-create or delete this node.</p>}
             <div className="df-inspector-actions">
-                <button type="button" disabled={!template} onClick={() => enterSupernode(id)}><ChevronRight size={12} strokeWidth={3} /> Open template</button>
                 <button type="button" disabled={!template} onClick={() => convertInstanceToRepeat(id, 2)} title="Repeat this template N times"><Repeat size={12} strokeWidth={3} /> Repeat</button>
                 <button type="button" disabled={!template} onClick={() => cloneComponent(id)} title="Copy this definition and its nested components for this instance"><Copy size={12} /> Make copy</button>
             </div>
@@ -190,7 +187,6 @@ function RepeatBody({ id, node }) {
     const template = useTemplatesStore((s) => s.templates[node.templateId]);
     const patchRepeatNode = useArchitectureStore((s) => s.patchRepeatNode);
     const patchRepeatBinding = useArchitectureStore((s) => s.patchRepeatBinding);
-    const enterSupernode = useArchitectureStore((s) => s.enterSupernode);
     const convertRepeatToInstance = useArchitectureStore((s) => s.convertRepeatToInstance);
     const context = useValidationContext();
     const { count, error } = resolveRepeatCount(node.count, context?.scope);
@@ -200,7 +196,6 @@ function RepeatBody({ id, node }) {
         <>
             {!template && <p className="df-inspector-note">Template missing — re-create or delete this node.</p>}
             <div className="df-inspector-actions">
-                <button type="button" disabled={!template} onClick={() => enterSupernode(id)}><ChevronRight size={12} strokeWidth={3} /> Open template</button>
                 <button type="button" disabled={!template} onClick={() => convertRepeatToInstance(id)} title="Back to a single instance"><Boxes size={12} strokeWidth={3} /> Single</button>
             </div>
             <section className="df-inspector-group">
@@ -216,26 +211,30 @@ function RepeatBody({ id, node }) {
                 <div className="df-inspector-fields">
                     <InspectorField
                         param={{ name: 'count', type: 'int', description: 'Number of instances, or a template parameter such as $H; each instance has its own weights' }}
-                        label="Count"
+                        label={mode === 'parallel' ? 'Instances' : 'Steps'}
                         value={node.count}
                         onChange={(v) => patchRepeatNode(id, { count: v })}
                         errors={error ? [error] : []}
                     />
-                    <InspectorField
-                        param={{ name: 'iterationVariable', type: 'string', description: 'Name bound to the iteration index in formulas' }}
-                        label="Index name"
-                        value={iterVar}
-                        onChange={(v) => patchRepeatNode(id, { iterationVariable: (v || 'i').trim() || 'i' })}
-                    />
                 </div>
-                <p className="df-inspector-note"><code>{iterVar} = 0…{count ? count - 1 : '?'}</code> in parameter formulas.</p>
             </section>
             <Bindings
                 freeParams={template?.freeParameters ?? []}
                 values={node.bindings ?? {}}
                 onChange={(name, v) => patchRepeatBinding(id, name, v)}
-                hint={`Formulas may use ${iterVar}, e.g. 64 * 2 ** ${iterVar}.`}
             />
+            <details className="df-inspector-group df-inspector-options">
+                <summary>Parameter formulas</summary>
+                <div className="df-inspector-fields">
+                    <InspectorField
+                        param={{ name: 'iterationVariable', type: 'string', description: 'Zero-based index available in parameter formulas; instance 1 uses index 0' }}
+                        label="Index variable"
+                        value={iterVar}
+                        onChange={(v) => patchRepeatNode(id, { iterationVariable: (v || 'i').trim() || 'i' })}
+                    />
+                </div>
+                <p className="df-inspector-note"><code>{iterVar} = 0…{count ? count - 1 : '?'}</code>. For example, <code>64 * 2 ** {iterVar}</code>.</p>
+            </details>
         </>
     );
 }

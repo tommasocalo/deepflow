@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { chromium } from 'playwright';
+
+const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/repeat-controls';
+await mkdir(directory, { recursive: true });
+const browser = await chromium.launch();
+try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
+    await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).waitFor();
+    await page.evaluate(() => {
+        const store = window.__deepflow.architectureStore;
+        store.getState().goToLevel(0);
+        store.getState().resetCurrentGraph();
+        const state = store.getState();
+        const input = Object.values(state.graph.nodes).find((node) => node.libraryKey === 'deepflow.io.Input');
+        const output = Object.values(state.graph.nodes).find((node) => node.libraryKey === 'deepflow.io.Output');
+        state.patchLayerParameters(input.id, { shape: '(16, 12)' });
+        state.moveNode(input.id, { x: 400, y: 0 });
+        state.moveNode(output.id, { x: 400, y: 400 });
+        const id = state.addLayerByLibraryKey('torch.nn.Linear', { x: 400, y: 200 });
+        state.patchNode(id, { label: 'Q projection' });
+        state.patchLayerParameters(id, { in_features: 12, out_features: 12, bias: true });
+        state.connect({ source: input.id, target: id });
+        state.connect({ source: id, target: output.id });
+    });
+    await page.getByRole('button', { name: 'Fit active graph', exact: true }).click();
+    await page.getByRole('button', { name: 'Inspect Q projection', exact: true }).click();
+    const panel = page.getByRole('complementary', { name: 'Q projection inspector', exact: true });
+    assert.equal(await panel.locator('.df-inspector-options').count(), 0);
+    assert.equal(await panel.getByRole('checkbox', { name: 'bias', exact: true }).isChecked(), true);
+    assert.equal(await panel.locator('[data-parameter="bias"]').innerText(), 'Bias');
+    assert.match((await page.locator('.df-port-shape').allTextContents()).join(' '), /B × 16 × 12/);
+    await page.screenshot({ path: `${directory}/07-inline-bias.png` });
+    const before = await page.evaluate(() => window.__deepflow.architectureStore.getState().graph);
+    const node = Object.values(before.nodes).find((candidate) => candidate.label === 'Q projection');
+    await page.getByRole('button', { name: 'Open Q projection', exact: true }).click();
+    await page.getByRole('button', { name: 'Inspect weight', exact: true }).waitFor();
+    const after = await page.evaluate(() => window.__deepflow.architectureStore.getState().graph);
+    assert.equal(after.nodes[node.id].kind, 'supernode');
+    assert.deepEqual(after.nodes[node.id].position, node.position);
+    assert.deepEqual(after.edges, before.edges);
+    assert.match((await page.locator('.df-port-shape').allTextContents()).join(' '), /B × 16 × 12/);
+    await page.getByRole('button', { name: 'Fit active graph', exact: true }).click();
+    await page.waitForTimeout(350);
+    await page.screenshot({ path: `${directory}/08-opened-native-linear.png` });
+    assert.deepEqual(errors, []);
+    console.log('Native layer chevron browser check passed: compact Bias, preserved node identity and cables, editable definition with matching dimensions.');
+} finally { await browser.close(); }

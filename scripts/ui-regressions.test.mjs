@@ -54,6 +54,9 @@ try {
             contents: `
                 export { default as ParameterField } from './src/components/architecture/ParameterField.jsx';
                 export { default as LayerNodeView } from './src/components/architecture/LayerNodeView.jsx';
+                export { default as SuperNodeInstanceView } from './src/components/architecture/SuperNodeInstanceView.jsx';
+                export { default as RepeatNodeView } from './src/components/architecture/RepeatNodeView.jsx';
+                export { default as RepeatIterationBar } from './src/components/architecture/RepeatIterationBar.jsx';
                 export { default as BlockPalette } from './src/components/architecture/BlockPalette.jsx';
                 export { default as ArchitectureRibbon } from './src/components/architecture/ArchitectureRibbon.jsx';
                 export { default as ArchitectureCanvas } from './src/components/architecture/ArchitectureCanvas.jsx';
@@ -62,7 +65,7 @@ try {
                 export { default as LevelTabs } from './src/components/architecture/LevelTabs.jsx';
                 export { useArchitectureStore } from './src/stores/architectureStore.js';
                 export { useTemplatesStore } from './src/stores/templatesStore.js';
-                export { createLayerNode, createSuperNodeInstance, createTemplate, createEdge, emptyGraph } from './src/domain/architecture/index.js';
+                export { createLayerNode, createSuperNodeInstance, createRepeatNode, createTemplate, createEdge, emptyGraph } from './src/domain/architecture/index.js';
                 export { getEntry } from './src/domain/library/index.js';
             `,
             resolveDir: projectRoot,
@@ -80,7 +83,7 @@ try {
 } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
 }
-const { ParameterField, LayerNodeView, BlockPalette, ArchitectureRibbon, ArchitectureCanvas, ArchitectureEdge, NodeInspector, LevelTabs, useArchitectureStore, useTemplatesStore, createLayerNode, createSuperNodeInstance, createTemplate, createEdge, emptyGraph, getEntry } = app;
+const { ParameterField, LayerNodeView, SuperNodeInstanceView, RepeatNodeView, RepeatIterationBar, BlockPalette, ArchitectureRibbon, ArchitectureCanvas, ArchitectureEdge, NodeInspector, LevelTabs, useArchitectureStore, useTemplatesStore, createLayerNode, createSuperNodeInstance, createRepeatNode, createTemplate, createEdge, emptyGraph, getEntry } = app;
 let container;
 let root;
 
@@ -163,12 +166,12 @@ function PaletteHarness({ section = 'components' }) {
     });
 }
 
-const nodeTypes = { layer: LayerNodeView };
+const nodeTypes = { layer: LayerNodeView, supernode: SuperNodeInstanceView, repeat: RepeatNodeView };
 function GraphHarness() {
     const graph = useArchitectureStore((state) => state.graph);
     return h(ReactFlowProvider, null, h(ReactFlow, {
         width: 1000, height: 700,
-        nodes: Object.values(graph.nodes).map((node) => ({ id: node.id, type: 'layer', position: node.position, data: { node }, width: 240, height: 44 })),
+        nodes: Object.values(graph.nodes).map((node) => ({ id: node.id, type: node.kind, position: node.position, data: { node }, width: 240, height: 44 })),
         edges: [], nodeTypes,
     }), h(NodeInspector));
 }
@@ -288,6 +291,81 @@ test('component menu inserts editable standard components and keeps less common 
     assert.deepEqual(useArchitectureStore.getState().selectedNodeIds, [nodes[0].id]);
     assert.equal(useArchitectureStore.getState().expandedNodeId, null);
     assert.ok(Number.isFinite(nodes[0].position.x) && Number.isFinite(nodes[0].position.y));
+});
+
+test('native component chevron preserves identity, cables and bias when opening its definition', async () => {
+    const entry = getEntry('torch.nn.Linear');
+    const node = createLayerNode({ id: 'projection', libraryKey: entry.key, entry, label: 'Q projection', position: { x: 120, y: 150 }, parameters: { in_features: 12, out_features: 6, bias: true } });
+    const input = createLayerNode({ id: 'input', libraryKey: 'deepflow.io.Input', entry: getEntry('deepflow.io.Input'), position: { x: 120, y: 0 }, parameters: { shape: '(12,)' } });
+    const edge = createEdge({ id: 'input-projection', source: input.id, target: node.id });
+    useArchitectureStore.setState({ graph: { nodes: { input, projection: node }, edges: [edge] } });
+    await render(h(GraphHarness));
+    assert.ok(byAria('Open Q projection'));
+    await click(byAria('Inspect Q projection'));
+    assert.equal(container.querySelector('.df-inspector-options'), null, 'A lone Bias toggle needs no Options section');
+    const bias = byAria('bias');
+    assert.equal(bias.type, 'checkbox');
+    assert.equal(bias.checked, true);
+    assert.equal(bias.closest('.df-param-row').textContent, 'Bias', 'The checkbox itself communicates the boolean state');
+    await click(bias);
+    assert.equal(useArchitectureStore.getState().graph.nodes.projection.parameters.bias, false);
+    assert.doesNotMatch(container.querySelector('.df-inspector').textContent, /Open operations|Open template/);
+
+    await click(byAria('Open Q projection'));
+    const state = useArchitectureStore.getState();
+    assert.deepEqual(state.currentPath, ['projection']);
+    assert.equal(state.graph.nodes.projection.kind, 'supernode');
+    assert.equal(state.graph.nodes.projection.label, 'Q projection');
+    assert.deepEqual(state.graph.nodes.projection.position, node.position);
+    assert.deepEqual(state.graph.edges, [edge]);
+    assert.equal(state.graph.nodes.projection.parameterValues.bias, false);
+    assert.equal(useTemplatesStore.getState().templates[state.graph.nodes.projection.templateId].standardKey, 'linear');
+    assert.ok(byAria('Open Q projection'), 'The composed node uses the same open affordance');
+});
+
+test('nodes without an equivalent editable decomposition do not offer a misleading open chevron', async () => {
+    const entry = getEntry('torch.nn.LSTM');
+    const node = createLayerNode({ id: 'recurrent', libraryKey: entry.key, entry, position: { x: 0, y: 0 }, parameters: { input_size: 12, hidden_size: 24 } });
+    useArchitectureStore.setState({ graph: { nodes: { recurrent: node }, edges: [] } });
+    await render(h(GraphHarness));
+    assert.equal(byAria('Open LSTM'), null);
+    await click(byAria('Inspect LSTM'));
+    assert.ok(byAria('LSTM inspector'));
+    assert.equal(useArchitectureStore.getState().graph.nodes.recurrent.kind, 'layer');
+});
+
+test('repeat inspection numbers instances from one while retaining zero-based formula indexes', async () => {
+    const template = createTemplate({ id: 'body', name: 'Shared body', graph: emptyGraph() });
+    const repeat = createRepeatNode({ id: 'heads', templateId: template.id, label: 'Attention heads', mode: 'parallel', count: 3, position: { x: 0, y: 0 } });
+    useTemplatesStore.setState({ templates: { body: template } });
+    useArchitectureStore.setState({ graph: { nodes: { heads: repeat }, edges: [] }, expandedNodeId: 'heads', inspectedIterations: {} });
+    await render(h(GraphHarness));
+    const labels = [...container.querySelectorAll('.df-parallel-instance b')].map((element) => element.textContent);
+    assert.deepEqual(labels, ['1', '2', '3']);
+    const inspector = container.querySelector('.df-inspector');
+    assert.equal(byAria('count').closest('.df-param-row').querySelector('label').textContent, 'Instances');
+    assert.ok(byAria('iterationVariable').closest('details'));
+    assert.equal(byAria('iterationVariable').closest('details').open, false);
+    assert.doesNotMatch(inspector.textContent, /Open template|Index name/);
+    await selectValue(byAria('Repeat mode'), 'sequential');
+    assert.equal(byAria('count').closest('.df-param-row').querySelector('label').textContent, 'Steps');
+    await selectValue(byAria('Repeat mode'), 'parallel');
+    await click(byAria('Open Attention heads instance 2'));
+    assert.equal(useArchitectureStore.getState().inspectedIterations['["heads"]'], 1);
+    await render(h(RepeatIterationBar));
+    const number = byAria('Inspected instance number');
+    assert.equal(number.value, '2');
+    assert.equal(number.min, '1');
+    assert.equal(number.max, '3');
+    assert.doesNotMatch(container.textContent, /index starts/);
+    assert.match(container.textContent, /Editing shared structure/);
+    await click(byAria('Next instance'));
+    assert.equal(number.value, '3');
+    assert.equal(useArchitectureStore.getState().inspectedIterations['["heads"]'], 2);
+    assert.equal(byAria('Next instance').disabled, true);
+    await setText(number, '1');
+    assert.equal(useArchitectureStore.getState().inspectedIterations['["heads"]'], 0);
+    assert.equal(byAria('Previous instance').disabled, true);
 });
 
 test('template library searches reusable components and hides recursive insertions', async () => {

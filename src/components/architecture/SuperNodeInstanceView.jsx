@@ -59,7 +59,7 @@ const SuperNodeInstanceView = ({ id, data, selected }) => {
             <button
                 className="nodrag df-container-open"
                 aria-label={`Open ${node.label}`}
-                title="Open"
+                title="Open definition"
                 disabled={!template}
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); enterSupernode(id); }}

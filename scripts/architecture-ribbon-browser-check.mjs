@@ -25,7 +25,7 @@ try {
     assert.equal(await ribbon.count(), 1);
     assert.equal(await page.locator('.df-library, .df-ribbon-context, .df-insert-menu').count(), 0);
     for (const name of ['Linear', 'Embedding', 'Attention', 'Norm']) assert.ok(await ribbon.getByRole('button', { name: `Add ${name}`, exact: true }).isVisible());
-    for (const width of [1440, 1024]) {
+    for (const width of [1440, 1024, 820]) {
         await page.setViewportSize({ width, height: 900 });
         await settle();
         assert.equal(await ribbon.evaluate((element) => element.scrollWidth <= element.clientWidth), true, `${width}px ribbon fits without overflow`);
