@@ -48,11 +48,14 @@ function inspectorWidth(node) {
     return Math.max(contentWidth, variantWidth);
 }
 
-function InspectorField({ param, value, label, ...props }) {
-    const text = Array.isArray(value) ? value.join(', ') : String(value ?? '');
-    const wide = param.name === 'shape' || (text.length > 13 && param.type !== 'enum' && param.type !== 'bool');
+function InspectorField({ param, value, label, inline = false, ...props }) {
+    const display = value ?? props.placeholder ?? param.default ?? (param.required ? 'Required' : 'Default');
+    const text = Array.isArray(display) ? display.join(', ') : String(display);
+    const wide = text.length > 13;
+    const width = text.length <= 4 ? 5 : text.length <= 8 ? 9 : 14;
     return (
-        <div className={`df-inspector-field${wide ? ' is-wide' : ''}`} data-parameter={param.name}>
+        <div className={`df-inspector-field${wide ? ' is-wide' : ''}${inline ? ' is-inline' : ''}`} data-parameter={param.name}
+            style={{ '--inspector-control-width': `calc(${width}ch + 12px)` }}>
             <ParameterField
                 param={{ ...param, description: `${param.name}${param.description ? ` — ${param.description}` : ''}` }}
                 value={value}
@@ -198,6 +201,7 @@ function RepeatBody({ id, node }) {
                     <InspectorField
                         param={{ name: 'count', type: 'int', description: 'Number of instances, or a template parameter such as $H; each instance has its own weights' }}
                         label={mode === 'parallel' ? 'Instances' : 'Steps'}
+                        inline
                         value={node.count}
                         onChange={(v) => patchRepeatNode(id, { count: v })}
                         errors={error ? [error] : []}
@@ -215,6 +219,7 @@ function RepeatBody({ id, node }) {
                     <InspectorField
                         param={{ name: 'iterationVariable', type: 'string', description: 'Zero-based index available in parameter formulas; instance 1 uses index 0' }}
                         label="Index variable"
+                        inline
                         value={iterVar}
                         onChange={(v) => patchRepeatNode(id, { iterationVariable: (v || 'i').trim() || 'i' })}
                     />
