@@ -5,4 +5,3 @@
 .df-iteration-counter button:hover:not(:disabled) { border-color: #111; background: #eee; }
 .df-iteration-counter button:disabled { opacity: .3; }
 .df-iteration-counter > span { font: 600 10px/1 ui-monospace, monospace; }
-.df-iteration-shared { padding-left: 10px; border-left: 1px solid #d4d4d4; color: #666; font-size: 10px; }

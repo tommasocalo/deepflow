@@ -1,3 +1,4 @@
+import { useComponentTemplate } from '../../hooks/useComponentTemplate.js';
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Boxes, ChevronRight, GitFork, X } from 'lucide-react';
@@ -24,12 +25,13 @@ function ParallelRepeatNodeView({ id, data, selected }) {
     const context = useValidationContext();
     const report = useValidation();
     const ports = inputPortsFor(node, templates);
-    const template = templates[node.templateId];
+    const template = useComponentTemplate(node);
     const { count } = template && context?.graph
         ? resolveComponentContext(node, template, context.graph, report.shapes, context.scope)
         : resolveRepeatCount(node.count, context?.scope);
     const sideMenuProps = useOpenToSideNode([...currentPath, id], { disabled: !template });
     const tone = report.errors[id]?.length ? 'error' : 'ok';
+    const localCount = Object.entries(node.structureOverrides ?? {}).filter(([index, override]) => override?.enabled && Number(index) < count).length;
     const instances = count > 3 ? [0, 1, count - 1] : Array.from({ length: count || 0 }, (_, index) => index);
     // The drawing represents the collection; its footprint is independent of
     // instance count. Open the definition to inspect any individual instance.
@@ -62,7 +64,7 @@ function ParallelRepeatNodeView({ id, data, selected }) {
                 </span>)}
                 {!count && <span className="df-parallel-invalid">Set a valid count</span>}
             </div>
-            <div className="df-parallel-footer"><span>Parallel · shared structure</span><span>Collection ↓</span></div>
+            <div className="df-parallel-footer"><span>{localCount ? `Parallel · ${localCount} local` : 'Parallel · shared structure'}</span><span>Collection ↓</span></div>
             <button aria-label={`Delete ${node.label}`} onClick={(event) => { event.stopPropagation(); removeNode(id); }} className="nodrag df-block-delete"><X size={10} strokeWidth={3} /></button>
             <PortShapeLabels node={node} shapes={report.shapes} hideInput={ports.length > 1} />
             <NodeInputPorts node={node} shapes={report.shapes} />

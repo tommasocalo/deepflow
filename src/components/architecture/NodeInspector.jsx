@@ -1,3 +1,4 @@
+import { useComponentTemplate } from '../../hooks/useComponentTemplate.js';
 import React, { useEffect, useRef } from 'react';
 import { AlertCircle, AlertTriangle, Boxes, ChevronDown, Repeat, X } from 'lucide-react';
 import { PYTORCH_BLOCKS, getEntry } from '../../domain/library/index.js';
@@ -158,7 +159,7 @@ function Bindings({ freeParams, values, onChange, hint }) {
 }
 
 function SupernodeBody({ id, node }) {
-    const template = useTemplatesStore((s) => s.templates[node.templateId]);
+    const template = useComponentTemplate(node);
     const patchNode = useArchitectureStore((s) => s.patchNode);
     const values = node.parameterValues ?? {};
     return (
@@ -174,7 +175,7 @@ function SupernodeBody({ id, node }) {
 }
 
 function RepeatBody({ id, node }) {
-    const template = useTemplatesStore((s) => s.templates[node.templateId]);
+    const template = useComponentTemplate(node);
     const patchRepeatNode = useArchitectureStore((s) => s.patchRepeatNode);
     const patchRepeatBinding = useArchitectureStore((s) => s.patchRepeatBinding);
     const context = useValidationContext();
@@ -231,6 +232,7 @@ function RepeatBody({ id, node }) {
 export default function NodeInspector() {
     const rootGraph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
+    const inspectedIterations = useArchitectureStore((s) => s.inspectedIterations);
     const templates = useTemplatesStore((s) => s.templates);
     const expandedNodeId = useArchitectureStore((s) => s.expandedNodeId);
     const clearExpanded = useArchitectureStore((s) => s.clearExpanded);
@@ -239,8 +241,9 @@ export default function NodeInspector() {
     const validation = useValidation();
     const panelRef = useInspectorPlacement(expandedNodeId);
 
-    const graph = resolveGraphLevel(rootGraph, currentPath, templates).graph;
+    const graph = resolveGraphLevel(rootGraph, currentPath, templates, inspectedIterations).graph;
     const node = expandedNodeId ? graph?.nodes?.[expandedNodeId] : null;
+    const componentTemplate = useComponentTemplate(node);
     if (!node) return null;
 
     const id = node.id;
@@ -250,7 +253,6 @@ export default function NodeInspector() {
         : node.kind === 'repeat' ? [{ name: 'count' }] : [];
     const { fields: fieldErrors, remaining: nodeErrors } = partitionParameterErrors(issueParameters, errors);
     const ContainerIcon = node.kind === 'repeat' ? Repeat : Boxes;
-    const componentTemplate = templates[node.templateId];
     const standard = STANDARD_COMPONENTS.find((component) => component.key === (componentTemplate?.standardKey ?? componentTemplate?.componentStyleKey));
     const operation = node.kind === 'layer' && isOperationKey(node.libraryKey) && getEntry(node.libraryKey)?.category !== 'Parameters';
     const rename = (label) => (node.kind === 'repeat' ? patchRepeatNode(id, { label }) : patchNode(id, { label }));

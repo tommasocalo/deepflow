@@ -1,11 +1,11 @@
+import { useComponentTemplate } from '../../hooks/useComponentTemplate.js';
 import { cloneElement, createContext, useContext, useState } from 'react';
 import { Plus, Unlink, X } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { getEntry } from '../../domain/library/index.js';
-import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
-import { resolveComponentContext } from '../../domain/componentContext.js';
+import { resolveLevelContext, useValidationContext } from '../../hooks/useValidation.js';
 import { resolveDimensionTuple } from '../../domain/expressions.js';
 import { availableParameters, formatParameterValue, parameterFrames, parameterOrigin, parameterReferences, resolvedFieldValue } from '../../domain/parameterBindings.js';
 import './parameter-binding.css';
@@ -16,12 +16,13 @@ export function ParameterBindingsProvider({ node, children }) {
     const graph = useArchitectureStore((s) => s.graph);
     const path = useArchitectureStore((s) => s.currentPath);
     const templates = useTemplatesStore((s) => s.templates);
+    const inspectedIterations = useArchitectureStore((s) => s.inspectedIterations);
     const context = useValidationContext();
-    const report = useValidation();
-    const level = resolveGraphLevel(graph, path, templates);
-    const template = templates[node.templateId];
-    const component = template ? resolveComponentContext(node, template, context.graph, report.shapes, context.scope) : null;
-    const frames = parameterFrames(graph, path, templates);
+    const level = resolveGraphLevel(graph, path, templates, inspectedIterations);
+    const template = useComponentTemplate(node);
+    const child = template ? resolveLevelContext(graph, [...path, node.id], templates, inspectedIterations) : null;
+    const component = child ? { scope: child.scope, inputs: child.externalInputs, count: child.repeat?.count ?? 1, index: child.repeat?.index ?? 0 } : null;
+    const frames = parameterFrames(graph, path, templates, inspectedIterations);
     const parameters = availableParameters(frames);
     for (const frame of frames) {
         const name = frame.instance.iterationVariable || 'i';

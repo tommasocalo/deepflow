@@ -29,10 +29,11 @@ export default function BlockPalette({ onAdd, onClose, section = 'operations', o
     const searchRef = useRef(null);
     const templates = useTemplatesStore((s) => s.templates);
     const currentPath = useArchitectureStore((s) => s.currentPath);
+    const inspectedIterations = useArchitectureStore((s) => s.inspectedIterations);
     const rootGraph = useArchitectureStore((s) => s.graph);
-    const editingTemplateId = resolveGraphLevel(rootGraph, currentPath, templates).templateId;
+    const editingTemplateId = resolveGraphLevel(rootGraph, currentPath, templates, inspectedIterations).templateId;
     const templateEntries = Object.values(templates)
-        .filter((template) => !template.standardKey)
+        .filter((template) => !template.standardKey && !template.structureVariant)
         .filter((template) => !editingTemplateId || !containsTemplate(template.id, editingTemplateId, templates))
         .map((template) => ({ key: template.id, name: template.name, category: 'Template', description: template.description || 'Reusable graph template' }));
     const categorized = new Set(GROUPS.flatMap((group) => group.keys));

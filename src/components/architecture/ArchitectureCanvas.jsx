@@ -73,6 +73,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     const storeId = useMemo(() => architectureStore.getState().getMutationContext().storeId, [architectureStore]);
     const rootGraph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
+    const inspectedIterations = useArchitectureStore((s) => s.inspectedIterations);
     const selectedNodeIds = useArchitectureStore((s) => s.selectedNodeIds);
     const templates = useTemplatesStore((s) => s.templates);
     const moveNodes = useArchitectureStore((s) => s.moveNodes);
@@ -104,8 +105,8 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     // Resolve the visible graph from the path. Templates is included in deps
     // so edits inside a drilled-in template re-render the canvas.
     const viewGraph = useMemo(
-        () => resolveGraphLevel(rootGraph, currentPath, templates).graph,
-        [rootGraph, currentPath, templates],
+        () => resolveGraphLevel(rootGraph, currentPath, templates, inspectedIterations).graph,
+        [rootGraph, currentPath, templates, inspectedIterations],
     );
 
     const levelKey = JSON.stringify(currentPath);

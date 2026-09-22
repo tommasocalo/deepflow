@@ -151,16 +151,17 @@ function TemplateParameters({ template, embedded, initiallyOpen, onOpenConsumer 
 export default function TemplateInspector({ embedded = false, templateId, initiallyOpen = false }) {
     const graph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
+    const inspectedIterations = useArchitectureStore((s) => s.inspectedIterations);
     const selectedNodeIds = useArchitectureStore((s) => s.selectedNodeIds);
     const openLevel = useArchitectureStore((s) => s.openLevel);
     const selectOnly = useArchitectureStore((s) => s.selectOnly);
     const setExpanded = useArchitectureStore((s) => s.setExpanded);
     const templates = useTemplatesStore((s) => s.templates);
-    const level = resolveGraphLevel(graph, currentPath, templates);
+    const level = resolveGraphLevel(graph, currentPath, templates, inspectedIterations);
     const template = templates[templateId ?? level.templateId];
 
     if (!template) return null;
-    const selected = selectedNodeIds.map((id) => level.graph.nodes[id]).find((node) => node?.templateId === template.id);
+    const selected = selectedNodeIds.map((id) => level.graph.nodes[id]).find((node) => node && resolveGraphLevel(graph, [...currentPath, node.id], templates, inspectedIterations).templateId === template.id);
     const path = level.templateId === template.id ? currentPath : selected ? [...currentPath, selected.id] : null;
     const openConsumer = path ? (id) => { openLevel(path); selectOnly(id); setExpanded(id); } : null;
     return <TemplateParameters key={template.id} template={template} embedded={embedded} initiallyOpen={initiallyOpen} onOpenConsumer={openConsumer} />;

@@ -95,14 +95,14 @@ export default function ArchitectureWorkspace() {
     const openToSide = useCallback((path) => {
         const sourceStore = activePane === 'side' && sideStore ? sideStore : mainStore;
         const inspection = sourceStore.getState().inspectedIterations;
-        const destination = sideStore ?? createArchitecturePaneStore({ path });
-        if (sideStore) destination.getState().openLevel(path);
+        const destination = sideStore ?? createArchitecturePaneStore();
         // Start with the same inspected instances, including outer repeats;
         // subsequent index changes remain local to each pane.
         for (let depth = 1; depth <= path.length; depth++) {
             const prefix = path.slice(0, depth);
             destination.getState().setInspectedIteration(prefix, inspection[JSON.stringify(prefix)] ?? 0);
         }
+        destination.getState().openLevel(path);
         if (!sideStore) setSideStore(destination);
         setActivePane('side');
         setSideFocusRequest((value) => value + 1);

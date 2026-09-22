@@ -1,0 +1,32 @@
+[
+  {
+    "name": "01-selected-transformer-shared-1440",
+    "viewport": 1440,
+    "width": 1440,
+    "content": 1440
+  },
+  {
+    "name": "02-local-transformer-1440",
+    "viewport": 1440,
+    "width": 1440,
+    "content": 1440
+  },
+  {
+    "name": "02-local-transformer-1024",
+    "viewport": 1024,
+    "width": 1024,
+    "content": 1024
+  },
+  {
+    "name": "02-local-transformer-820",
+    "viewport": 820,
+    "width": 820,
+    "content": 820
+  },
+  {
+    "name": "03-independent-pane-scopes-1440",
+    "viewport": 1440,
+    "width": 1440,
+    "content": 1440
+  }
+]

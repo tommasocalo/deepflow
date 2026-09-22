@@ -444,7 +444,7 @@ test('repeat inspection numbers instances from one while retaining zero-based fo
     assert.equal(number.min, '1');
     assert.equal(number.max, '3');
     assert.doesNotMatch(container.textContent, /index starts/);
-    assert.match(container.textContent, /Editing shared structure/);
+    assert.doesNotMatch(container.textContent, /Editing shared structure/, 'Scope is controlled by the ribbon switch');
     await click(byAria('Next instance'));
     assert.equal(number.value, '3');
     assert.equal(useArchitectureStore.getState().inspectedIterations['["heads"]'], 2);

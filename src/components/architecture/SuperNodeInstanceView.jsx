@@ -1,3 +1,4 @@
+import { useComponentTemplate } from '../../hooks/useComponentTemplate.js';
 import React, { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Boxes, ChevronRight, X } from 'lucide-react';
@@ -17,7 +18,7 @@ import OperationIcon from './OperationIcon.jsx';
 /** A supernode instance: hatched container, label, "open" affordance. */
 const SuperNodeInstanceView = ({ id, data, selected }) => {
     const node = data.node;
-    const template = useTemplatesStore((s) => s.templates[node.templateId]);
+    const template = useComponentTemplate(node);
     const standard = STANDARD_COMPONENTS.find((component) => component.key === (template?.standardKey ?? template?.componentStyleKey));
     const accent = standard ? styleFor(getEntry(standard.libraryKey)?.category).accent : undefined;
     const removeNode = useArchitectureStore((s) => s.removeNode);

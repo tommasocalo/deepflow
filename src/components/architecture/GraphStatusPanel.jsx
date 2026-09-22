@@ -29,13 +29,14 @@ export default function GraphStatusPanel() {
     const archGraph = useArchitectureStore((s) => s.graph);
     const templates = useTemplatesStore((s) => s.templates);
     const currentPath = useArchitectureStore((s) => s.currentPath);
+    const inspectedIterations = useArchitectureStore((s) => s.inspectedIterations);
     const [open, setOpen] = useState(false);
     const [hoverNodeId, setHoverNodeId] = useState(null);
     const ref = useRef(null);
     const triggerRef = useRef(null);
     const issuesId = useId();
     const { setCenter, getZoom } = useReactFlow();
-    const viewGraph = resolveGraphLevel(archGraph, currentPath, templates).graph;
+    const viewGraph = resolveGraphLevel(archGraph, currentPath, templates, inspectedIterations).graph;
     const groups = groupGraphIssues(validation, viewGraph, templates);
     const errorCount = groups.reduce((count, group) => count + group.errors.length, 0);
     const warningCount = groups.reduce((count, group) => count + group.warnings.length, 0);

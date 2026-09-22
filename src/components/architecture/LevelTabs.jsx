@@ -59,9 +59,9 @@ export default function LevelTabs() {
     const cards = useMemo(() => {
         const views = [{ key: '[]', path: [], label: 'main', kind: 'root', title: 'Top level' }];
         for (const path of openPaths ?? []) {
-            const level = resolveGraphLevel(rootGraph, path, templates);
+            const level = resolveGraphLevel(rootGraph, path, templates, inspectedIterations);
             if (level.isRoot) continue;
-            const parent = resolveGraphLevel(rootGraph, path.slice(0, -1), templates);
+            const parent = resolveGraphLevel(rootGraph, path.slice(0, -1), templates, inspectedIterations);
             const node = parent.graph.nodes[path.at(-1)];
             const count = node.kind === 'repeat'
                 ? resolveLevelContext(rootGraph, path, templates, inspectedIterations).repeat?.count || '?'

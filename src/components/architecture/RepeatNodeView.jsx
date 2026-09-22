@@ -1,3 +1,4 @@
+import { useComponentTemplate } from '../../hooks/useComponentTemplate.js';
 import React, { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { ChevronRight, Repeat, X } from 'lucide-react';
@@ -18,7 +19,7 @@ import { inputPortsFor } from './nodeInputPorts.js';
  */
 const SequentialRepeatNodeView = ({ id, data, selected }) => {
     const node = data.node;
-    const template = useTemplatesStore((s) => s.templates[node.templateId]);
+    const template = useComponentTemplate(node);
     const removeNode = useArchitectureStore((s) => s.removeNode);
     const enterSupernode = useArchitectureStore((s) => s.enterSupernode);
     const toggleExpanded = useArchitectureStore((s) => s.toggleExpanded);

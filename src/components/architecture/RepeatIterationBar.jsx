@@ -17,7 +17,6 @@ export default function RepeatIterationBar() {
                 <span>/ {repeat.count}</span>
                 <button type="button" aria-label="Next instance" disabled={repeat.index >= repeat.count - 1} onClick={() => select(repeat.index + 1)}>›</button>
             </div>
-            <span className="df-iteration-shared" title="Edits to this graph apply to every instance. Each instance has its own learned weights.">Editing shared structure</span>
         </div>
     );
 }
