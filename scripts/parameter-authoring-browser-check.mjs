@@ -1,0 +1,132 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { chromium } from 'playwright';
+
+const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/parameter-authoring';
+await mkdir(directory, { recursive: true });
+const browser = await chromium.launch();
+try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
+    page.setDefaultTimeout(8000);
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
+    const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const fit = async () => { await page.getByRole('button', { name: 'Fit active graph', exact: true }).click(); await page.waitForTimeout(300); };
+    const history = (clear = false) => page.evaluate((reset) => {
+        const state = window.__deepflow.architectureHistory.getState();
+        if (reset) state.clear();
+        return window.__deepflow.architectureHistory.getState().undoCount;
+    }, clear);
+    const documentState = () => page.evaluate(() => ({ graph: window.__deepflow.architectureStore.getState().graph, templates: window.__deepflow.templatesStore.getState().templates }));
+    const inspect = async (label) => { await page.getByRole('button', { name: `Inspect ${label}`, exact: true }).click(); await settle(); };
+    const assertContained = async () => {
+        const layout = await page.locator('.df-inspector').evaluate((element) => {
+            const box = element.getBoundingClientRect();
+            const body = element.querySelector('.df-inspector-body');
+            return { left: box.left, right: box.right, width: box.width, viewport: window.innerWidth, body: body.scrollWidth, bodyWidth: body.clientWidth };
+        });
+        assert.ok(layout.left >= 0 && layout.right <= layout.viewport, `Inspector stays in viewport: ${JSON.stringify(layout)}`);
+        assert.ok(layout.body <= layout.bodyWidth + 1, `Inspector has no horizontal overflow: ${JSON.stringify(layout)}`);
+    };
+    await page.getByRole('button', { name: 'Examples', exact: true }).click();
+    await page.getByRole('group', { name: 'Example architectures' }).getByRole('button', { name: /^Multi-head attention/ }).click();
+    await fit();
+    await inspect('Attention heads');
+    assert.match(await page.locator('.df-repeat-auto').innerText(), /Instances\s+12\s+Auto · from input collections/);
+    assert.match(await page.locator('.df-derived-parameter[data-parameter="d_head"]').innerText(), /Head width\s+64\s+From Q/);
+    assert.equal(await page.getByRole('textbox', { name: 'd_head', exact: true }).count(), 0, 'Derived head width is not an editable duplicate');
+    await assertContained();
+    await page.screenshot({ path: `${directory}/01-inferred-head-settings.png` });
+
+    await history(true);
+    const beforeSequential = await documentState();
+    await page.getByRole('button', { name: 'Repeat selection sequentially', exact: true }).click();
+    assert.equal(await page.getByRole('textbox', { name: 'count', exact: true }).inputValue(), '12', 'Switching an automatic parallel repeat to sequential preserves the resolved number of steps');
+    const sequentialState = await page.evaluate(() => {
+        const state = window.__deepflow.architectureStore.getState();
+        const node = Object.values(state.getViewGraph().nodes).find((candidate) => candidate.label === 'Attention heads');
+        return { mode: node.mode, count: node.count };
+    });
+    assert.deepEqual(sequentialState, { mode: 'sequential', count: 12 });
+    assert.equal(await history(), 1, 'Changing repeat mode and materializing its count form one edit');
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    assert.deepEqual(await documentState(), beforeSequential, 'Undo restores both parallel mode and automatic count');
+    assert.match(await page.locator('.df-repeat-auto').innerText(), /Instances\s+12\s+Auto · from input collections/);
+    const dismiss = page.getByRole('button', { name: 'Dismiss message', exact: true });
+    if (await dismiss.count()) await dismiss.click();
+
+    await page.getByRole('button', { name: 'Open Attention heads', exact: true }).click();
+    await fit();
+    await inspect('attention dropout');
+    const p = page.getByRole('textbox', { name: 'p', exact: true });
+    assert.equal(await p.inputValue(), '$dropout');
+    assert.match(await page.locator('.df-parameter-source').innerText(), /0.1\s+← Multi-head attention · dropout/);
+    assert.equal(await page.locator('.df-parameter-source').evaluate((element) => element.clientWidth > element.closest('.df-inspector-body').clientWidth * .8), true, 'Provenance uses the full inspector row without widening the numeric input');
+    await assertContained();
+    await page.screenshot({ path: `${directory}/02-dropout-origin.png` });
+    await page.getByRole('button', { name: '← Multi-head attention · dropout', exact: true }).click();
+    await page.getByRole('complementary', { name: 'Multi-head attention inspector', exact: true }).waitFor();
+    assert.match(await page.locator('.df-derived-parameter[data-parameter="D"]').innerText(), /Width\s+768/);
+    await page.getByRole('button', { name: 'Parameter options for H', exact: true }).click();
+    await page.getByRole('group', { name: 'H parameter options', exact: true }).getByRole('button', { name: 'split Q · chunks', exact: true }).click();
+    await page.getByRole('complementary', { name: 'split Q inspector', exact: true }).waitFor();
+    assert.equal(await page.getByRole('textbox', { name: 'chunks', exact: true }).inputValue(), '$H');
+
+    await page.getByRole('button', { name: 'Open Attention heads', exact: true }).click();
+    await fit();
+    await inspect('attention dropout');
+    await page.getByRole('button', { name: 'Parameter options for p', exact: true }).click();
+    await page.getByRole('button', { name: 'Use local value 0.1', exact: true }).click();
+    assert.equal(await p.inputValue(), '0.1');
+    assert.equal(await page.locator('.df-parameter-source').count(), 0, 'Detaching a reference preserves its resolved numeric value');
+    await history(true);
+    const beforeExpose = await documentState();
+    await page.getByRole('button', { name: 'Parameter options for p', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Exposed name for p', exact: true }).fill('head_dropout');
+    await assertContained();
+    await page.screenshot({ path: `${directory}/03-expose-field.png` });
+    await page.getByRole('button', { name: 'Expose in component', exact: true }).click();
+    assert.equal(await p.inputValue(), '$head_dropout');
+    assert.equal(await history(), 1, 'Exposing a field adds its parameter and reference in one history entry');
+    assert.match(await page.locator('.df-parameter-source').innerText(), /0.1\s+← Attention heads · head_dropout/);
+    const exposedState = await documentState();
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    assert.deepEqual(await documentState(), beforeExpose, 'Undo removes both interface parameter and field reference together');
+    await page.getByRole('button', { name: 'Redo', exact: true }).click();
+    assert.deepEqual(await documentState(), exposedState);
+
+    await page.getByRole('button', { name: '← Attention heads · head_dropout', exact: true }).click();
+    await page.getByRole('complementary', { name: 'Attention heads inspector', exact: true }).waitFor();
+    const exposed = page.getByRole('textbox', { name: 'head_dropout', exact: true });
+    assert.equal(await exposed.getAttribute('placeholder'), '0.1');
+    await exposed.fill('0.25');
+    await page.getByRole('button', { name: 'Parameter options for head_dropout', exact: true }).click();
+    await page.getByRole('button', { name: 'attention dropout · p', exact: true }).click();
+    await page.getByRole('complementary', { name: 'attention dropout inspector', exact: true }).waitFor();
+    assert.match(await page.locator('.df-parameter-source').innerText(), /0.25\s+← Attention heads · head_dropout/);
+    await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit template parameters', exact: true }).click();
+    const parameters = page.getByRole('dialog', { name: /template parameters$/ });
+    assert.match(await parameters.locator('.df-template-derived').innerText(), /From inputs\s+d_head\s+Q · last dimension/);
+    assert.equal(await parameters.getByRole('combobox', { name: 'd_head type', exact: true }).count(), 0, 'Derived dimensions have no editable template type');
+    assert.equal(await parameters.getByRole('textbox', { name: 'd_head default value', exact: true }).count(), 0, 'Derived dimensions have no editable default');
+    const section = parameters.getByRole('region', { name: 'Parameter head_dropout', exact: true });
+    assert.equal(await section.getByRole('button', { name: 'Remove parameter head_dropout', exact: true }).isDisabled(), true);
+    await section.locator('summary').click();
+    await page.screenshot({ path: `${directory}/04-exposed-parameter-consumer.png` });
+    await section.getByRole('button', { name: 'attention dropout · p', exact: true }).click();
+    await parameters.getByRole('button', { name: 'Close template parameters', exact: true }).click();
+    await page.getByRole('complementary', { name: 'attention dropout inspector', exact: true }).waitFor();
+
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await fit();
+    await page.getByRole('button', { name: 'Parameter options for p', exact: true }).click();
+    await assertContained();
+    await page.screenshot({ path: `${directory}/05-compact-1024.png` });
+    await page.getByRole('combobox', { name: 'Link p to parameter', exact: true }).selectOption('dropout');
+    assert.equal(await p.inputValue(), '$dropout');
+    assert.match(await page.locator('.df-parameter-source').innerText(), /0.1\s+← Multi-head attention · dropout/);
+    assert.deepEqual(errors, []);
+    console.log('Parameter authoring browser checks passed: inferred dimensions/count, automatic-to-sequential count preservation and Undo, read-only derived definitions, origin/consumer navigation, detach/link, expose with atomic Undo/Redo, external override, and compact 1440/1024 layouts.');
+} finally { await browser.close(); }
