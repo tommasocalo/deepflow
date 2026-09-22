@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Pencil, Redo2, Ruler, Undo2, Variable, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
-import { effectiveTemplateId } from '../../domain/architecture/instanceStructure.js';
+import { effectiveTemplateId, inspectedInstanceIndex } from '../../domain/architecture/instanceStructure.js';
 import { resolveComponentContext } from '../../domain/componentContext.js';
 import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
 import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
@@ -68,12 +68,8 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const level = resolveGraphLevel(graph, currentPath, templates, inspectedIterations);
     const selection = selectedNodeIds.map((id) => level.graph.nodes[id]).filter(Boolean);
     const selectedComponent = selection.length === 1 && ['supernode', 'repeat'].includes(selection[0].kind) ? selection[0] : null;
-    const scopePath = selectedComponent ? [...currentPath, selectedComponent.id] : currentPath;
-    const structureScope = architectureStore.getState().getStructureScope(scopePath);
-    const scopeLabel = structureScope.available
-        ? `${structureScope.label}${structureScope.index === null ? '' : ` · ${structureScope.index + 1}`}`
-        : 'Select a component';
-    const templateId = selectedComponent ? effectiveTemplateId(selectedComponent, structureScope.index ?? 0) : level.templateId;
+    const selectedIteration = selectedComponent ? inspectedInstanceIndex(selectedComponent, [...currentPath, selectedComponent.id], inspectedIterations) : 0;
+    const templateId = selectedComponent ? effectiveTemplateId(selectedComponent, selectedIteration) : level.templateId;
     const template = templates[templateId];
     const selectedRepeatMode = selectedComponent?.kind === 'repeat' ? selectedComponent.mode ?? 'sequential' : null;
     const quickEntries = pins.map((key) => PINNABLE_ENTRIES.find((entry) => entry.key === key)).filter(Boolean);
@@ -216,19 +212,6 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 <div className="df-ribbon-view-options">
                     <button type="button" aria-label="Show dimensions" aria-pressed={showDimensions} onClick={() => architectureStore.getState().setShowDimensions(!showDimensions)} title="Show tensor dimensions at input and output ports"><Ruler size={14} />Dimensions</button>
                     <button type="button" aria-label="Show gradient flow" aria-pressed={!!showGradientFlow} onClick={() => architectureStore.getState().setShowGradientFlow(!showGradientFlow)} title="Show differentiable paths and stopped gradients"><GitBranch size={14} />Gradients</button>
-                </div>
-            </RibbonGroup>
-            <RibbonGroup label="Edit scope" className="df-ribbon-scope">
-                <div className="df-ribbon-scope-control">
-                    <span className="df-ribbon-scope-target" title={scopeLabel}>{scopeLabel}</span>
-                    <div className="df-ribbon-scope-switch" role="group" aria-label="Structure edit scope">
-                        <button type="button" disabled={!structureScope.available} aria-pressed={structureScope.available && !structureScope.local}
-                            onClick={() => { closePopup(); architectureStore.getState().setStructureScope('shared', scopePath); }}
-                            title="Edit the structure shared by all linked instances. A saved local structure is kept.">Shared</button>
-                        <button type="button" disabled={!structureScope.available} aria-pressed={structureScope.available && structureScope.local}
-                            onClick={() => { closePopup(); architectureStore.getState().setStructureScope('local', scopePath); }}
-                            title={structureScope.hasSavedLocal ? 'Resume the saved structure for this instance only.' : 'Edit a separate structure for this instance only.'}>This instance</button>
-                    </div>
                 </div>
             </RibbonGroup>
             <RibbonGroup label="History" className="df-ribbon-history">

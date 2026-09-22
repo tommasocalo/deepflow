@@ -13,10 +13,10 @@ try {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
     const ribbon = page.getByRole('region', { name: /Architecture ribbon/ });
-    const scope = ribbon.getByRole('group', { name: 'Structure edit scope', exact: true });
+    const main = page.locator('[data-graph-pane="main"]');
+    const scope = main.getByRole('group', { name: 'Structure edit scope', exact: true });
     const shared = scope.getByRole('button', { name: 'Shared', exact: true });
     const local = scope.getByRole('button', { name: 'This instance', exact: true });
-    const main = page.locator('[data-graph-pane="main"]');
     const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const fit = async () => { await ribbon.getByRole('button', { name: 'Fit active graph', exact: true }).click(); await page.waitForTimeout(300); };
     const graph = () => page.evaluate(() => window.__deepflow.architectureStore.getState().getViewGraph());
@@ -33,19 +33,21 @@ try {
     };
 
     await ribbon.waitFor();
-    assert.equal(await shared.isDisabled(), true, 'The root graph has no instance scope');
-    assert.equal(await local.isDisabled(), true);
+    assert.equal(await page.getByRole('group', { name: 'Structure edit scope', exact: true }).count(), 0, 'The root graph has no instance switch');
+    assert.equal(await ribbon.locator('.df-ribbon-scope').count(), 0);
     const groupOrder = await ribbon.locator('.df-ribbon-group > h2').allTextContents();
-    assert.equal(groupOrder.indexOf('Edit scope'), groupOrder.indexOf('View') + 1);
-    assert.equal(groupOrder.indexOf('History'), groupOrder.indexOf('Edit scope') + 1);
+    assert.equal(groupOrder.indexOf('Edit scope'), -1);
+    assert.equal(groupOrder.indexOf('History'), groupOrder.indexOf('View') + 1);
     await fit();
     await main.getByRole('button', { name: 'Inspect Transformer blocks', exact: true }).click();
+    assert.equal(await scope.count(), 0, 'Selecting a repeat does not add a switch outside its body');
+    await ribbon.getByRole('button', { name: 'Edit definition', exact: true }).click();
+    await fit();
     await checked(shared, true);
-    assert.match(await ribbon.locator('.df-ribbon-scope-target').innerText(), /Transformer blocks · 1/);
-    await screenshot('01-selected-transformer-shared-1440');
+    assert.equal(await scope.locator('..').getByText('Sequence step', { exact: true }).count(), 1, 'Switch is beside the repeat controls');
+    await screenshot('01-open-transformer-shared-1440');
     await local.click();
     await checked(local, true);
-    await ribbon.getByRole('button', { name: 'Edit definition', exact: true }).click();
     await fit();
     assert.equal((await currentScope()).local, true);
     assert.equal(await page.getByText('Editing shared structure', { exact: true }).count(), 0);
@@ -65,7 +67,7 @@ try {
     assert.deepEqual(await graph(), edited, 'Reactivating This instance restores the exact edited graph');
     await main.getByRole('button', { name: 'Next instance', exact: true }).click();
     await checked(shared, true);
-    assert.match(await ribbon.locator('.df-ribbon-scope-target').innerText(), /Transformer blocks · 2/);
+    assert.equal(await main.getByRole('spinbutton', { name: 'Inspected instance number', exact: true }).inputValue(), '2');
     assert.equal((await graph()).nodes[added.id], undefined, 'A sibling repeat instance keeps the shared graph');
     await main.getByRole('button', { name: 'Previous instance', exact: true }).click();
     await checked(local, true);
@@ -89,17 +91,43 @@ try {
     const side = page.locator('[data-graph-pane="side"]');
     await side.waitFor();
     await checked(local, true);
+    const sideScope = side.getByRole('group', { name: 'Structure edit scope', exact: true });
+    await checked(sideScope.getByRole('button', { name: 'This instance', exact: true }), true);
     await side.getByRole('button', { name: 'Next instance', exact: true }).click();
-    await checked(shared, true);
+    await checked(sideScope.getByRole('button', { name: 'Shared', exact: true }), true);
+    await checked(local, true);
     assert.equal(await main.getByRole('spinbutton', { name: 'Inspected instance number', exact: true }).inputValue(), '1');
     assert.equal(await side.getByRole('spinbutton', { name: 'Inspected instance number', exact: true }).inputValue(), '2');
     await main.getByRole('tab', { selected: true }).click();
     await checked(local, true);
     assert.equal(await ribbon.getAttribute('data-active-pane'), 'main');
     await screenshot('03-independent-pane-scopes-1440');
+    await side.getByRole('button', { name: 'Close side view', exact: true }).click();
+    await page.evaluate(() => {
+        const state = window.__deepflow.architectureStore.getState();
+        state.openLevel([]);
+        const embedding = Object.values(state.getViewGraph().nodes).find((node) => node.label === 'token embedding');
+        state.enterSupernode(embedding.id);
+    });
+    assert.equal(await scope.count(), 0, 'An ordinary component has no instance switch');
+    await page.evaluate(() => {
+        const state = window.__deepflow.architectureStore.getState();
+        state.openLevel([]);
+        for (const label of ['Transformer blocks', 'causal self-attention', 'Attention heads']) {
+            const current = window.__deepflow.architectureStore.getState();
+            const node = Object.values(current.getViewGraph().nodes).find((candidate) => candidate.label === label);
+            current.enterSupernode(node.id);
+        }
+    });
+    await fit();
+    assert.equal(await scope.locator('..').getByText('Parallel instance', { exact: true }).count(), 1);
+    await checked(shared, true);
+    await local.click();
+    await checked(local, true);
+    await screenshot('04-parallel-instance-local-1440');
     assert.deepEqual(errors, []);
     await writeFile(`${directory}/measurements.json`, `${JSON.stringify(measurements, null, 2)}\n`);
-    console.log(`Structure scope checks passed: ribbon placement, selected/current targeting, per-instance isolation, non-destructive switching, Undo/Redo, pane focus, and 1440/1024/820 layout. Screenshots: ${directory}`);
+    console.log(`Structure scope checks passed: repeat-only inline placement, per-instance isolation, non-destructive switching, Undo/Redo, independent pane controls, and 1440/1024/820 layout. Screenshots: ${directory}`);
 } finally {
     await browser.close();
 }

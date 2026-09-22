@@ -5,8 +5,11 @@ import './repeat-iteration.css';
 export default function RepeatIterationBar() {
     const context = useValidationContext();
     const setInspectedIteration = useArchitectureStore((s) => s.setInspectedIteration);
+    const getStructureScope = useArchitectureStore((s) => s.getStructureScope);
+    const setStructureScope = useArchitectureStore((s) => s.setStructureScope);
     const repeat = context?.repeat;
     if (!repeat) return null;
+    const scope = getStructureScope(repeat.path);
     const select = (index) => setInspectedIteration(repeat.path, Math.max(0, Math.min(repeat.count - 1, index)));
     return (
         <div className="df-iteration-bar">
@@ -16,6 +19,12 @@ export default function RepeatIterationBar() {
                 <input aria-label="Inspected instance number" type="number" min="1" max={Math.max(1, repeat.count)} value={repeat.index + 1} onChange={(event) => select(Number(event.target.value) - 1)} />
                 <span>/ {repeat.count}</span>
                 <button type="button" aria-label="Next instance" disabled={repeat.index >= repeat.count - 1} onClick={() => select(repeat.index + 1)}>›</button>
+            </div>
+            <div className="df-iteration-scope" role="group" aria-label="Structure edit scope">
+                <button type="button" aria-pressed={!scope.local} onClick={() => setStructureScope('shared', repeat.path)}
+                    title="Edit the structure shared by all linked instances. Your saved local structure is kept.">Shared</button>
+                <button type="button" aria-pressed={scope.local} onClick={() => setStructureScope('local', repeat.path)}
+                    title={scope.hasSavedLocal ? `Resume the saved structure for instance ${repeat.index + 1}.` : `Edit the structure of instance ${repeat.index + 1} only.`}>This instance</button>
             </div>
         </div>
     );

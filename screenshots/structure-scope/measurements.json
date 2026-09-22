@@ -1,6 +1,6 @@
 [
   {
-    "name": "01-selected-transformer-shared-1440",
+    "name": "01-open-transformer-shared-1440",
     "viewport": 1440,
     "width": 1440,
     "content": 1440
@@ -25,6 +25,12 @@
   },
   {
     "name": "03-independent-pane-scopes-1440",
+    "viewport": 1440,
+    "width": 1440,
+    "content": 1440
+  },
+  {
+    "name": "04-parallel-instance-local-1440",
     "viewport": 1440,
     "width": 1440,
     "content": 1440

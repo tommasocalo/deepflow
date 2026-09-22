@@ -20,18 +20,6 @@
 .df-ribbon-component .df-ribbon-command-list { gap: 3px; }
 .df-ribbon-component .df-ribbon-command-list button, .df-ribbon-history .df-ribbon-command-list button { height: 22px; }
 .df-ribbon-history .df-ribbon-command-list { width: 59px; gap: 3px; }
-.df-ribbon-scope-control { display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 143px; height: 50px; }
-.df-ribbon-scope-target { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; font-size: 9px; font-weight: 600; line-height: 12px; text-align: center; }
-.df-ribbon-scope-switch { display: flex; border: 1px solid #111; border-radius: 2px; overflow: hidden; }
-.df-ribbon-scope-switch button { flex: 1 0 auto; min-width: 0; padding: 4px 5px; background: #fff; color: #555; font-size: 10px; font-weight: 600; line-height: 14px; white-space: nowrap; }
-.df-ribbon-scope-switch button + button { border-left: 1px solid #111; }
-.df-ribbon-scope-switch button[aria-pressed="true"] { color: #111; background: #fff0af; box-shadow: inset 0 -2px 0 #111; }
-.df-ribbon-scope-switch button:hover:not(:disabled) { background: #f4f4ef; color: #111; }
-.df-ribbon-scope-switch button[aria-pressed="true"]:hover { background: #ffe994; }
-.df-ribbon-scope-switch:has(button:disabled) { border-color: #d4d4ce; }
-.df-ribbon-scope-switch button:disabled { color: #aaa; cursor: default; }
-.df-ribbon-scope-switch button:disabled + button { border-color: #d4d4ce; }
-.df-ribbon-scope-switch button:focus-visible { outline-offset: -2px; }
 .df-ribbon-view-options { display: flex; flex-direction: column; justify-content: center; gap: 3px; margin-left: 3px; }
 .df-ribbon-view-options button { display: flex; align-items: center; gap: 5px; height: 22px; padding: 2px 5px; border: 1px solid transparent; border-radius: 2px; font-size: 10px; font-weight: 600; }
 .df-ribbon-view-options button:hover { border-color: #d4d4ce; background: #f4f4ef; }
@@ -90,19 +78,14 @@
     .df-ribbon-group { padding-right: 6px; }
     .df-ribbon-actions { gap: 1px; }
     .df-ribbon-family { width: 46px; }
-    .df-ribbon-family:nth-child(n+3) { display: none; }
     .df-ribbon-button { min-width: 36px; padding-left: 4px; padding-right: 4px; font-size: 9px; }
     .df-ribbon-command-list { width: 101px; }
     .df-ribbon-command-list button { font-size: 9px; gap: 4px; }
     .df-ribbon-view-options button { font-size: 9px; padding-left: 3px; padding-right: 3px; }
-    .df-ribbon-scope-control { width: 131px; }
-    .df-ribbon-scope-switch button { padding-left: 4px; padding-right: 4px; font-size: 9px; }
     .df-ribbon-pane-cue { position: absolute; right: 8px; bottom: 4px; font-size: 8px; }
 }
 @media (max-width: 930px) {
-    .df-ribbon-family { display: none; }
-    .df-ribbon-component .df-ribbon-command-list { width: 92px; }
-    .df-ribbon-view-options button { justify-content: center; width: 24px; gap: 0; padding: 2px; font-size: 0; }
+    .df-ribbon-family:nth-child(n+2) { display: none; }
     .df-ribbon-pane-cue { display: none; }
 }
 @media (max-width: 760px) {

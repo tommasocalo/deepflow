@@ -5,3 +5,10 @@
 .df-iteration-counter button:hover:not(:disabled) { border-color: #111; background: #eee; }
 .df-iteration-counter button:disabled { opacity: .3; }
 .df-iteration-counter > span { font: 600 10px/1 ui-monospace, monospace; }
+.df-iteration-scope { display: inline-flex; flex-shrink: 0; overflow: hidden; border: 1px solid #111; border-radius: 2px; }
+.df-iteration-scope button { padding: 3px 7px; color: #555; background: #fff; font-size: 10px; font-weight: 600; line-height: 15px; white-space: nowrap; }
+.df-iteration-scope button + button { border-left: 1px solid #111; }
+.df-iteration-scope button[aria-pressed="true"] { color: #111; background: #fff0af; box-shadow: inset 0 -2px 0 #111; }
+.df-iteration-scope button:hover { color: #111; background: #f4f4ef; }
+.df-iteration-scope button[aria-pressed="true"]:hover { background: #ffe994; }
+.df-iteration-scope button:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
