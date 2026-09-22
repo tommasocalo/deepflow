@@ -12,6 +12,7 @@ try {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
     const ribbon = page.getByRole('region', { name: /Architecture ribbon/ });
+    const group = ribbon.getByRole('button', { name: 'Group selection into component', exact: true });
     const main = page.locator('[data-graph-pane="main"]');
     const side = page.locator('[data-graph-pane="side"]');
     const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -32,6 +33,12 @@ try {
         await page.screenshot({ path: `${directory}/ribbon-${width}.png` });
     }
     await page.setViewportSize({ width: 1440, height: 960 });
+    await page.evaluate(() => {
+        const state = window.__deepflow.architectureStore.getState();
+        const input = Object.values(state.graph.nodes).find((node) => node.libraryKey === 'deepflow.io.Input');
+        state.selectOnly(input.id);
+    });
+    assert.equal(await group.isDisabled(), true, 'A single input cannot be grouped');
     await ribbon.getByRole('button', { name: 'Insert operations', exact: true }).click();
     const operations = page.getByRole('menu', { name: 'Insert operations', exact: true });
     assert.equal(await operations.getByRole('menuitem', { name: /template/ }).count(), 0, 'Operations has no duplicate template route');
@@ -51,15 +58,30 @@ try {
     await page.evaluate(() => window.__deepflow.architectureHistory.getState().clear());
     await ribbon.getByRole('button', { name: 'Repeat selection sequentially', exact: true }).click();
     assert.equal((await selected()).kind, 'repeat', 'One operation can become a repeat directly');
+    assert.equal(await group.isDisabled(), true, 'A single repeat cannot be grouped');
     assert.equal(await page.evaluate(() => window.__deepflow.architectureHistory.getState().undoCount), 1, 'Automatic grouping and repetition form one undo step');
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     assert.deepEqual(await page.evaluate(() => ({ graph: window.__deepflow.architectureStore.getState().graph, templates: window.__deepflow.templatesStore.getState().templates })), beforeAutomaticGroup, 'One Undo restores the original operation without leaving an unused template');
     await main.locator(`.react-flow__node[data-id="${scale.id}"]`).getByRole('button', { name: `Inspect ${scale.label}`, exact: true }).click();
-    assert.equal(await ribbon.getByRole('button', { name: 'Group selection into component', exact: true }).isEnabled(), true, 'Grouping is available for one selected operation');
-    await ribbon.getByRole('button', { name: 'Group selection into component', exact: true }).click();
+    assert.equal(await group.isDisabled(), true, 'A single operation cannot be grouped');
+    await page.screenshot({ path: `${directory}/group-single-disabled.png` });
+    await ribbon.getByRole('button', { name: 'Insert operations', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Search operations', exact: true }).fill('Scale');
+    await page.getByRole('textbox', { name: 'Search operations', exact: true }).press('Enter');
+    const secondScale = await selected();
+    await page.evaluate(({ source, target }) => {
+        const state = window.__deepflow.architectureStore.getState();
+        state.connect({ source, target });
+        state.setNodeSelected(source, true);
+    }, { source: scale.id, target: secondScale.id });
+    await settle();
+    assert.equal(await group.isEnabled(), true, 'Two selected connected operations can be grouped');
+    await page.screenshot({ path: `${directory}/group-multiple-enabled.png` });
+    await group.click();
     await page.getByRole('textbox', { name: 'Component name', exact: true }).fill('Ribbon component');
     await page.getByRole('button', { name: 'Create component', exact: true }).click();
     assert.equal((await selected()).kind, 'supernode');
+    assert.equal(await group.isDisabled(), true, 'A single component cannot be grouped again');
     const grouped = await selected();
     const parallel = ribbon.getByRole('button', { name: 'Repeat selection in parallel', exact: true });
     const sequential = ribbon.getByRole('button', { name: 'Repeat selection sequentially', exact: true });
