@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/palette-grid';
+const directory = process.env.SCREENSHOT_DIR ?? '/tmp/deepflow-palette-grid';
 await mkdir(directory, { recursive: true });
 const browser = await chromium.launch();
 try {
@@ -11,6 +11,8 @@ try {
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
+    const ribbon = page.getByRole('region', { name: /Architecture ribbon/ });
+    const library = page.getByRole('dialog', { name: 'Block library', exact: true });
     const add = (name) => page.getByRole('button', { name: `Add ${name}`, exact: true });
     const settle = async () => {
         await page.evaluate(() => document.fonts.ready);
@@ -29,31 +31,38 @@ try {
     await add('Normalization').waitFor();
     await settle();
     for (const family of ['Linear', 'Attention', 'Normalization', 'Activation', 'Convolution', 'Pooling', 'Recurrent']) {
-        assert.ok(await add(family).isVisible(), `${family} is available without expanding a category`);
+        assert.ok(await add(family).isVisible(), `${family} is available directly from the ribbon`);
     }
+    assert.equal(await page.locator('.df-library').count(), 0, 'The graph starts without a floating palette');
+    await page.screenshot({ path: `${directory}/02-ribbon-overview.png` });
+    await ribbon.getByRole('button', { name: 'Search all blocks' }).click();
     assert.equal(await page.locator('.df-library-category').count(), 0);
-    assert.ok(await page.locator('.df-library-grid').evaluateAll((grids) => grids.every((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length === 4)));
-    assert.ok(await page.locator('.df-library-icon').evaluateAll((icons) => icons.filter((el) => el.tagName === 'IMG').every((el) => el.complete && el.naturalWidth > 0)));
-    assert.ok(await page.locator('.df-library-name').evaluateAll((labels) => labels.every((el) => el.scrollWidth <= el.clientWidth)));
-    await page.screenshot({ path: `${directory}/02-grid-overview.png` });
-    await page.locator('.df-library').screenshot({ path: `${directory}/03-grid-detail.png` });
+    assert.ok(await library.locator('.df-library-grid').evaluateAll((grids) => grids.every((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length === 5)));
+    assert.ok(await library.locator('.df-library-icon').evaluateAll((icons) => icons.filter((element) => element.tagName === 'IMG').every((element) => element.complete && element.naturalWidth > 0)));
+    assert.ok(await library.locator('.df-library-name').evaluateAll((labels) => labels.every((element) => element.scrollWidth <= element.clientWidth)));
+    await library.screenshot({ path: `${directory}/03-library-detail.png` });
 
-    // The complete default catalog and reusable template also fit a laptop viewport.
+    // The transient catalog stays within laptop bounds and can scroll to every entry.
     await page.setViewportSize({ width: 1050, height: 760 });
     await settle();
-    assert.ok(await page.locator('.df-library-scroll').evaluate((el) => el.scrollHeight <= el.clientHeight + 1));
+    const libraryBounds = await library.boundingBox();
+    assert.ok(libraryBounds.y + libraryBounds.height <= 760);
+    await library.locator('.df-library-tile').last().scrollIntoViewIfNeeded();
+    assert.ok(await library.locator('.df-library-tile').last().isVisible());
     await page.screenshot({ path: `${directory}/06-laptop.png` });
     await page.setViewportSize({ width: 1440, height: 960 });
 
     // Search by a variant, then choose that variant on the actual node.
     const search = page.getByRole('textbox', { name: 'Search blocks', exact: true });
     await search.fill('group norm');
-    assert.equal(await page.locator('.df-library-tile').count(), 1);
+    assert.equal(await library.locator('.df-library-tile').count(), 1);
     await search.press('ArrowDown');
-    assert.ok(await add('Normalization').evaluate((el) => el === document.activeElement));
+    const result = library.getByRole('button', { name: 'Add Normalization', exact: true });
+    assert.ok(await result.evaluate((element) => element === document.activeElement));
     const before = await nodeCount();
     await page.keyboard.press('Enter');
     assert.equal(await nodeCount(), before + 1);
+    assert.equal(await library.count(), 0, 'Insertion dismisses the library');
     await openSelected();
     const variant = page.getByRole('combobox', { name: 'Operation type', exact: true });
     const name = page.getByRole('textbox', { name: 'Block name', exact: true });
@@ -65,7 +74,6 @@ try {
     await page.getByLabel('num_groups', { exact: true }).press('Tab');
     await page.getByLabel('num_channels', { exact: true }).fill('64');
     await page.getByLabel('num_channels', { exact: true }).press('Tab');
-    await search.fill('');
     await page.mouse.move(350, 80);
     await settle();
     await page.screenshot({ path: `${directory}/04-normalization-settings.png` });
@@ -80,12 +88,11 @@ try {
         await openSelected();
         await variant.selectOption(key);
         assert.equal((await selected()).libraryKey, key);
-        // Selected variant names must fit alongside the native select arrow.
-        assert.ok(await variant.evaluate((el) => {
-            const style = getComputedStyle(el);
+        assert.ok(await variant.evaluate((element) => {
+            const style = getComputedStyle(element);
             const context = document.createElement('canvas').getContext('2d');
             context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-            return context.measureText(el.selectedOptions[0].text).width + 24 <= el.clientWidth;
+            return context.measureText(element.selectedOptions[0].text).width + 24 <= element.clientWidth;
         }), `${family} variant name fits the compact inspector`);
         if (family === 'Pooling') {
             await page.mouse.move(350, 80);
@@ -95,7 +102,9 @@ try {
     }
 
     // The full encoder block remains distinct from the attention family.
-    await add('Transformer').click();
+    await ribbon.getByRole('button', { name: 'Search all blocks' }).click();
+    await search.fill('Transformer');
+    await library.getByRole('button', { name: 'Add Transformer', exact: true }).click();
     await openSelected();
     assert.equal((await selected()).libraryKey, 'torch.nn.TransformerEncoderLayer');
     assert.equal(await variant.count(), 0);
@@ -108,18 +117,21 @@ try {
     assert.equal(await page.locator('.df-inspector').count(), 0, 'Dropping only places the node');
     assert.ok(await page.evaluate(() => Object.values(window.__deepflow.architectureStore.getState().graph.nodes).some((node) => node.libraryKey === 'torch.nn.Conv2d')));
 
-    // Only usable templates are shown at each level.
+    // Only usable templates are offered at each level.
+    await ribbon.getByRole('button', { name: 'Browse templates' }).click();
     const template = page.getByRole('button', { name: 'Add Transformer block template', exact: true });
     await template.click();
     assert.equal((await selected()).kind, 'supernode');
     assert.equal(await page.locator('.df-inspector').count(), 0);
     await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).click();
-    assert.equal(await template.count(), 0, 'A template cannot contain itself, so its palette entry is hidden');
-    assert.equal(await page.locator('.df-library section[aria-label="Templates"]').count(), 0);
+    await ribbon.getByRole('button', { name: 'Browse templates' }).click();
+    assert.equal(await template.count(), 0, 'A template cannot contain itself, so its library entry is hidden');
+    await library.getByRole('button', { name: 'Close block library' }).click();
     await page.getByRole('tab', { name: 'main', exact: true }).click();
+    await ribbon.getByRole('button', { name: 'Browse templates' }).click();
     assert.ok(await template.isEnabled());
     assert.deepEqual(errors, []);
-    console.log('Palette checks passed: complete four-column catalog, laptop fit, search/keyboard, all new variants, readable settings, drag/drop and reusable templates.');
+    console.log('Library checks passed: direct family tiles, five-column popup catalog, laptop bounds/scrolling, search/keyboard, variants, readable settings, drag/drop and recursion-safe templates.');
 } finally {
     await browser.close();
 }

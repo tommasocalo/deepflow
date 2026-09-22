@@ -14,6 +14,7 @@ try {
     const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const main = page.locator('[data-graph-pane="main"]');
     const side = page.locator('[data-graph-pane="side"]');
+    const ribbon = page.getByRole('region', { name: /Architecture ribbon/ });
     const root = () => page.evaluate(() => window.__deepflow.architectureStore.getState().graph);
     const template = () => page.evaluate(() => {
         const repeat = Object.values(window.__deepflow.architectureStore.getState().graph.nodes).find((node) => node.kind === 'repeat');
@@ -57,12 +58,13 @@ try {
     assert.equal(await main.locator('.df-inspector').count(), 1);
     assert.deepEqual((await root()).nodes[repeat.id].position, repeat.position);
 
-    // Palette shortcuts and deletion affect only the pane being used.
+    // Shared ribbon shortcuts and deletion affect only the pane being used.
     await page.keyboard.press('Control+k');
-    assert.equal(await side.getByRole('textbox', { name: 'Search blocks' }).evaluate((element) => element === document.activeElement), true);
-    assert.equal(await main.getByRole('button', { name: 'Open block library' }).count(), 1);
+    assert.equal(await page.getByRole('textbox', { name: 'Search blocks' }).evaluate((element) => element === document.activeElement), true);
+    assert.equal(await ribbon.getAttribute('data-active-pane'), 'side');
+    assert.equal(await ribbon.count(), 1);
     const beforeAdd = await template();
-    await side.getByRole('button', { name: 'Add Linear', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Block library', exact: true }).getByRole('button', { name: 'Add Linear', exact: true }).click();
     const added = Object.values((await template()).nodes).find((node) => !beforeAdd.nodes[node.id]);
     assert.ok(added);
     await side.locator(`.react-flow__node[data-id="${added.id}"]`).click();
@@ -70,7 +72,6 @@ try {
     await settle();
     assert.equal((await template()).nodes[added.id], undefined);
     assert.ok((await root()).nodes[repeat.id], 'Inactive main selection is not deleted');
-    await side.getByRole('button', { name: 'Collapse block library' }).click();
 
     // Cards can open the same level in both views; data remains shared.
     await main.getByRole('tab', { name: 'main', exact: true }).click({ button: 'right' });
@@ -86,13 +87,14 @@ try {
     await settle();
 
     // A cross-pane drop activates its destination and rejects recursive templates.
-    await main.getByRole('button', { name: 'Open block library' }).click();
+    await main.getByRole('tab', { name: 'main', exact: true }).click();
+    await ribbon.getByRole('button', { name: 'Browse templates', exact: true }).click();
     const countBeforeDrop = Object.keys((await template()).nodes).length;
     const canvas = side.locator('.react-flow__pane');
-    await main.getByRole('button', { name: 'Add Transformer block template', exact: true }).dragTo(canvas, { targetPosition: { x: 140, y: 160 } });
+    await page.getByRole('button', { name: 'Add Transformer block template', exact: true }).dragTo(canvas, { targetPosition: { x: 140, y: 160 } });
     await settle();
     assert.equal(Object.keys((await template()).nodes).length, countBeforeDrop, 'A template cannot be dropped inside itself from the other pane');
-    await main.getByRole('button', { name: 'Add Linear', exact: true }).dragTo(canvas, { targetPosition: { x: 140, y: 160 } });
+    await ribbon.getByRole('button', { name: 'Add Linear', exact: true }).dragTo(canvas, { targetPosition: { x: 140, y: 160 } });
     await settle();
     assert.equal(Object.keys((await template()).nodes).length, countBeforeDrop + 1);
     assert.equal(await focusedPane(), 'side');
@@ -101,7 +103,6 @@ try {
     await settle();
     assert.equal(Object.keys((await template()).nodes).length, countBeforeDrop);
     assert.ok((await root()).nodes[repeat.id]);
-    await main.getByRole('button', { name: 'Collapse block library' }).click();
     await main.getByRole('button', { name: 'Close inspector' }).click();
 
     const divider = page.getByRole('separator', { name: 'Resize graph panes' });

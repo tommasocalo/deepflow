@@ -7,7 +7,7 @@ import './template-inspector.css';
 
 const PARAM_TYPES = ['int', 'float', 'string', 'bool', 'tuple', 'enum'];
 
-function TemplateParameters({ template, embedded }) {
+function TemplateParameters({ template, embedded, initiallyOpen }) {
     const patchTemplate = useTemplatesStore((s) => s.patchTemplate);
     const addFreeParameter = useTemplatesStore((s) => s.addFreeParameter);
     const patchFreeParameter = useTemplatesStore((s) => s.patchFreeParameter);
@@ -34,7 +34,7 @@ function TemplateParameters({ template, embedded }) {
     };
 
     return (
-        <details className={`df-template-inspector nodrag nopan nowheel ${embedded ? 'is-embedded' : 'is-floating'}`}>
+        <details open={initiallyOpen || undefined} className={`df-template-inspector nodrag nopan nowheel ${embedded ? 'is-embedded' : 'is-floating'}`}>
             <summary className="df-template-summary">
                 <Variable size={15} aria-hidden="true" />
                 <span>Template parameters</span>
@@ -47,6 +47,7 @@ function TemplateParameters({ template, embedded }) {
                 <label className="df-template-field">
                     <span>Template name</span>
                     <input
+                        autoFocus={initiallyOpen}
                         value={template.name}
                         onChange={(event) => patchTemplate(template.id, { name: event.target.value })}
                     />
@@ -136,13 +137,13 @@ function TemplateParameters({ template, embedded }) {
 }
 
 /** Parameters of the shared template currently open in the canvas. */
-export default function TemplateInspector({ embedded = false }) {
+export default function TemplateInspector({ embedded = false, templateId, initiallyOpen = false }) {
     const graph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const templates = useTemplatesStore((s) => s.templates);
     const level = resolveGraphLevel(graph, currentPath, templates);
-    const template = templates[level.templateId];
+    const template = templates[templateId ?? level.templateId];
 
-    if (level.isRoot || !template) return null;
-    return <TemplateParameters key={template.id} template={template} embedded={embedded} />;
+    if (!template) return null;
+    return <TemplateParameters key={template.id} template={template} embedded={embedded} initiallyOpen={initiallyOpen} />;
 }

@@ -55,6 +55,7 @@ try {
                 export { default as ParameterField } from './src/components/architecture/ParameterField.jsx';
                 export { default as LayerNodeView } from './src/components/architecture/LayerNodeView.jsx';
                 export { default as BlockPalette } from './src/components/architecture/BlockPalette.jsx';
+                export { default as ArchitectureRibbon } from './src/components/architecture/ArchitectureRibbon.jsx';
                 export { default as ArchitectureCanvas } from './src/components/architecture/ArchitectureCanvas.jsx';
                 export { default as ArchitectureEdge } from './src/components/architecture/ArchitectureEdge.jsx';
                 export { default as NodeInspector } from './src/components/architecture/NodeInspector.jsx';
@@ -79,7 +80,7 @@ try {
 } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
 }
-const { ParameterField, LayerNodeView, BlockPalette, ArchitectureCanvas, ArchitectureEdge, NodeInspector, LevelTabs, useArchitectureStore, useTemplatesStore, createLayerNode, createSuperNodeInstance, createTemplate, createEdge, emptyGraph, getEntry } = app;
+const { ParameterField, LayerNodeView, BlockPalette, ArchitectureRibbon, ArchitectureCanvas, ArchitectureEdge, NodeInspector, LevelTabs, useArchitectureStore, useTemplatesStore, createLayerNode, createSuperNodeInstance, createTemplate, createEdge, emptyGraph, getEntry } = app;
 let container;
 let root;
 
@@ -146,16 +147,20 @@ function ParameterHarness({ initial = null, type = 'float', onValue }) {
     });
 }
 
-function PaletteHarness() {
-    return h(ReactFlowProvider, null,
-        h('div', {
-            'data-architecture-canvas': true,
-            style: { position: 'relative' },
-            ref(element) {
-                if (element) element.getBoundingClientRect = () => ({ left: 0, top: 100, width: 1300, height: 600, x: 0, y: 100, right: 1300, bottom: 700 });
-            },
-        }, h(BlockPalette)),
-    );
+function PaletteHarness({ initialSection = 'blocks' }) {
+    // The library now delegates insertion to its host. Canvas coordinates and
+    // routing to the focused pane are covered by the ribbon browser check.
+    return h(BlockPalette, {
+        initialSection,
+        onClose() {},
+        onAdd(entry, isTemplate) {
+            const state = useArchitectureStore.getState();
+            const position = { x: 250, y: 200 };
+            const id = isTemplate ? state.addSuperNodeInstance(entry.key, position, entry.name) : state.addLayerByLibraryKey(entry.key, position);
+            if (id) { state.selectOnly(id); state.clearExpanded(); }
+            return id;
+        },
+    });
 }
 
 const nodeTypes = { layer: LayerNodeView };
@@ -262,14 +267,14 @@ test('family tiles add the family default once without opening settings', async 
     assert.ok(Number.isFinite(nodes[0].position.x) && Number.isFinite(nodes[0].position.y));
 });
 
-test('template tiles are immediately available and remain discoverable through global search', async () => {
+test('template library searches reusable components and hides recursive insertions', async () => {
     const template = createTemplate({ id: 'decoder-template', name: 'Decoder block', graph: emptyGraph() });
     useTemplatesStore.setState({ templates: { [template.id]: template } });
-    await render(h(PaletteHarness));
+    await render(h(PaletteHarness, { initialSection: 'templates' }));
     assert.ok(byAria('Add Decoder block template')?.matches('.df-library-tile'));
     assert.equal(graphNodes().length, 0);
     await typeText(byAria('Search blocks'), 'decoder block');
-    assert.ok(byAria('Add Decoder block template'), 'Global search includes templates without switching modes');
+    assert.ok(byAria('Add Decoder block template'), 'Search filters the opened template library');
     await click(byAria('Add Decoder block template'));
     assert.equal(graphNodes().length, 1);
     assert.equal(graphNodes()[0].kind, 'supernode');
@@ -277,7 +282,7 @@ test('template tiles are immediately available and remain discoverable through g
     assert.equal(useArchitectureStore.getState().expandedNodeId, null);
     await act(() => useArchitectureStore.getState().enterSupernode(graphNodes()[0].id));
     assert.equal(byAria('Add Decoder block template'), null, 'An unavailable recursive template is hidden');
-    assert.equal(container.querySelector('section[aria-label="Templates"]'), null, 'Empty template section is hidden too');
+    assert.equal(container.querySelector('section[aria-label="Reusable components"]'), null, 'Empty template section is hidden too');
     await act(() => byAria('Search blocks').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
     assert.equal(Object.keys(useTemplatesStore.getState().templates[template.id].graph.nodes).length, 0);
 });
@@ -314,10 +319,9 @@ test('normalization inspector switches variants, preserves a custom name and sho
     assert.equal(useArchitectureStore.getState().expandedNodeId, normalization.id);
 });
 
-test('collapsed library reopens and focuses search with the keyboard shortcut', async () => {
-    await render(h(PaletteHarness));
-    await click(byAria('Collapse block library'));
-    assert.ok(byAria('Open block library'));
+test('ribbon keyboard shortcut opens library search and Escape restores trigger focus', async () => {
+    await render(h(ArchitectureRibbon, { paneId: 'main', onInsert() { assert.fail('Opening a library must not insert a block'); }, onFitView() {} }));
+    assert.ok(byAria('Search all blocks'));
     assert.equal(byAria('Search blocks'), null);
     await act(() => window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true })));
     await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
@@ -325,6 +329,10 @@ test('collapsed library reopens and focuses search with the keyboard shortcut', 
     assert.ok(search);
     assert.equal(document.activeElement, search);
     assert.equal(graphNodes().length, 0);
+    await act(() => search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    assert.equal(byAria('Search blocks'), null);
+    assert.equal(document.activeElement, byAria('Search all blocks'));
+    assert.equal(byAria('Search all blocks').getAttribute('aria-expanded'), 'false');
 });
 
 test('inspector shows accessible field errors once and reveals invalid options', async () => {
