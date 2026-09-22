@@ -384,7 +384,7 @@ test('structure toggles return to a single component without replacing its bindi
     await render(h('div', null, h(ArchitectureRibbon, { paneId: 'main', onInsert() {}, onFitView() {} }), h(GraphHarness)));
     const sequential = byAria('Repeat selection sequentially');
     const parallel = byAria('Repeat selection in parallel');
-    assert.equal(byAria('Group selection into component').disabled, false, 'One selected component can be grouped');
+    assert.equal(byAria('Group selection into component').disabled, true, 'One selected component cannot be grouped alone');
     assert.equal(sequential.getAttribute('aria-pressed'), 'false');
     assert.equal(parallel.getAttribute('aria-pressed'), 'false');
     assert.equal([...container.querySelectorAll('.df-inspector button')].find((button) => button.textContent.trim() === 'Repeat'), undefined, 'The inspector has no duplicate repeat action');

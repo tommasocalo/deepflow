@@ -123,6 +123,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     }
     function confirmGroup(event) {
         event.preventDefault();
+        if (selection.length < 2) return;
         if (!groupNodes(groupName)) return;
         setNotice(`${groupName.trim() || 'Component'} created`);
         closePopup(true);
@@ -180,7 +181,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 <RibbonButton icon={Copy} aria-label="Browse templates" aria-expanded={popup === 'templates'} aria-haspopup="menu" onClick={(event) => togglePopup('templates', event)} title="Insert a saved project template">Templates <ChevronDown size={10} /></RibbonButton>
             </RibbonGroup>
             <RibbonGroup label="Structure">
-                <RibbonButton icon={Group} disabled={!selection.length} aria-label="Group selection into component" aria-expanded={popup === 'group'} onClick={(event) => { setGroupName('Component'); togglePopup('group', event); }} title={selection.length ? 'Group selected blocks into a reusable component' : 'Select blocks to create a component'}>Group</RibbonButton>
+                <RibbonButton icon={Group} disabled={selection.length < 2} aria-label="Group selection into component" aria-expanded={popup === 'group' && selection.length > 1} onClick={(event) => { setGroupName('Component'); togglePopup('group', event); }} title={selection.length > 1 ? 'Group selected blocks into a reusable component' : 'Select at least two blocks to group'}>Group</RibbonButton>
                 <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection sequentially" aria-pressed={selectedRepeatMode === 'sequential'} onClick={() => repeatSelection('sequential')} title={selectedRepeatMode === 'sequential' ? 'Return to a single instance' : 'Repeat in sequence; each output feeds the next'}><RepeatIcon /><span>Sequential</span></button>
                 <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection in parallel" aria-pressed={selectedRepeatMode === 'parallel'} onClick={() => repeatSelection('parallel')} title={selectedRepeatMode === 'parallel' ? 'Return to a single instance' : 'Repeat in parallel; combine outputs with Concat, Add or Stack'}><RepeatIcon parallel /><span>Parallel</span></button>
             </RibbonGroup>
@@ -211,7 +212,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 onChange={(event) => savePins(event.target.checked ? [...pins, entry.key] : pins.filter((key) => key !== entry.key))} /><OperationIcon libraryKey={entry.libraryKey ?? entry.key} size={19} /><span>{entry.name}</span></label>)}</div>
             <button type="button" className="df-ribbon-restore-pins" onClick={() => savePins(DEFAULT_PINS)}>Restore defaults</button>
         </div>}
-        {popup === 'group' && <div className="df-ribbon-popover df-ribbon-popover-group" style={popoverStyle} role="dialog" aria-label="Create component">
+        {popup === 'group' && selection.length > 1 && <div className="df-ribbon-popover df-ribbon-popover-group" style={popoverStyle} role="dialog" aria-label="Create component">
             <header><strong>Group {selection.length} {selection.length === 1 ? 'block' : 'blocks'}</strong><button type="button" onClick={() => closePopup(true)} aria-label="Close group editor"><X size={14} /></button></header>
             <form onSubmit={confirmGroup}><label>Component name<input autoFocus value={groupName} onChange={(event) => setGroupName(event.target.value)} /></label><p>The selection becomes a reusable template.</p>{error && <p role="alert" className="df-ribbon-error">{error}</p>}<button className="df-ribbon-primary" type="submit">Create component</button></form>
         </div>}
