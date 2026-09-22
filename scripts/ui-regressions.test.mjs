@@ -312,6 +312,20 @@ test('repeated parameter names have unique stable label associations', async () 
     assert.equal(inputs[1].value, '');
 });
 
+test('optional null bindings display None while missing references remain unresolved', async () => {
+    const gather = createLayerNode({ id: 'gather', libraryKey: 'deepflow.op.Gather', entry: getEntry('deepflow.op.Gather'), label: 'lookup', position: { x: 0, y: 0 }, parameters: { padding_idx: '$padding_idx' } });
+    const template = createTemplate({ id: 'table-body', name: 'Table', graph: { nodes: { gather }, edges: [] }, freeParameters: [{ name: 'padding_idx', type: 'int', nullable: true, default: null }] });
+    const instance = createSuperNodeInstance({ id: 'table', templateId: template.id, label: 'Table', position: { x: 0, y: 0 } });
+    useTemplatesStore.setState({ templates: { [template.id]: template } });
+    useArchitectureStore.setState({ graph: { nodes: { table: instance }, edges: [] }, currentPath: ['table'], openPaths: [['table']], expandedNodeId: 'gather' });
+    await render(h(GraphHarness));
+    assert.match(container.querySelector('.df-parameter-source').textContent, /LinkedNone/);
+    assert.ok(byAria('Unlink padding_idx'));
+    await act(() => useArchitectureStore.getState().patchLayerParameters('gather', { padding_idx: '$missing' }));
+    assert.match(container.querySelector('.df-parameter-source').textContent, /Unresolved/);
+    assert.equal(byAria('Unlink padding_idx'), null);
+});
+
 test('compact nodes open the inspector and editing keeps node geometry unchanged', async () => {
     const entry = getEntry('torch.nn.Linear');
     const node = createLayerNode({ id: 'linear', libraryKey: entry.key, entry, position: { x: 10, y: 10 } });

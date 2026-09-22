@@ -52,16 +52,19 @@ export default function ParameterBinding({ param, value, onChange, children }) {
     const references = parameterReferences(raw).filter((name) => suggestions.some((parameter) => parameter.name === name) || String(raw).includes(`$${name}`));
     const resolved = param.type === 'tuple' ? resolveDimensionTuple(raw, scope) : resolvedFieldValue(raw, scope);
     const origins = [...new Set(references.map((name) => parameterOrigin(name, frames)?.label).filter(Boolean))];
-    const canDetach = param.type === 'tuple' ? Array.isArray(resolved) && resolved.every((part) => typeof part === 'number' && Number.isFinite(part))
+    const directReference = typeof raw === 'string' ? raw.trim().match(/^\$?([A-Za-z_][\w]*)$/)?.[1] : null;
+    const optionalNull = (param.nullable || (!param.required && param.default === null)) && directReference && Object.hasOwn(scope, directReference) && scope[directReference] === null;
+    const resolvedLabel = optionalNull ? 'None' : formatParameterValue(resolved);
+    const canDetach = optionalNull || (param.type === 'tuple' ? Array.isArray(resolved) && resolved.every((part) => typeof part === 'number' && Number.isFinite(part))
         : param.type === 'bool' ? typeof resolved === 'boolean' || ['true', 'false'].includes(resolved)
-            : typeof resolved === 'number' && Number.isFinite(resolved);
+            : typeof resolved === 'number' && Number.isFinite(resolved));
     return <div className="df-field-binding">
         {cloneElement(children, { suggestions })}
         {(references.length > 0 || String(raw).includes('$')) && <div className={`df-parameter-source${canDetach ? '' : ' is-unresolved'}`}>
             <span className="df-parameter-link-state">{canDetach ? 'Linked' : 'Unresolved'}</span>
-            {canDetach && <strong>{formatParameterValue(resolved)}</strong>}
+            {canDetach && <strong>{resolvedLabel}</strong>}
             {origins.length > 0 && <span className="df-parameter-origin" title={origins.join(' · ')}>from {origins.join(' · ')}</span>}
-            {canDetach && <button type="button" className="df-parameter-unlink" aria-label={`Unlink ${param.name}`} title={`Replace reference with ${formatParameterValue(resolved)}`} onClick={() => onChange(resolved)}><Unlink size={11} /></button>}
+            {canDetach && <button type="button" className="df-parameter-unlink" aria-label={`Unlink ${param.name}`} title={`Replace reference with ${resolvedLabel}`} onClick={() => onChange(resolved)}><Unlink size={11} /></button>}
         </div>}
     </div>;
 }

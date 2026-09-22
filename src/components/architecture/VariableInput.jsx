@@ -69,7 +69,7 @@ export default function VariableInput({ suggestions = [], multiline = false, onC
             role="option" aria-selected={index === active} className="df-variable-option"
             onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
             onClick={(event) => { event.stopPropagation(); choose(option); }}>
-            <span className="df-variable-option-main"><strong>${option.name.replace(/^\$/, '')}</strong><span>{formatVariableValue(option.value)}</span></span>
+            <span className="df-variable-option-main"><strong>${option.name.replace(/^\$/, '')}</strong><span>{option.value === null && option.nullable ? 'None' : formatVariableValue(option.value)}</span></span>
             {option.owner && <span className="df-variable-option-owner">{option.owner}</span>}
         </span>)}
     </span>;
