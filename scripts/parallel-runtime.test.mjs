@@ -31,7 +31,7 @@ function attentionFixture(D = 8, H = 2) {
         ] },
         mha: { id: 'mha', name: 'Multi-head attention', graph: buildMultiHeadAttentionGraph({ headTemplateId: 'head' }), freeParameters: [
             { name: 'D', type: 'int', default: 8 }, { name: 'H', type: 'int', default: 2 },
-            { name: 'd_head', type: 'int', default: 'D / H' }, { name: 'dropout', type: 'float', default: 0 },
+            { name: 'd_head', type: 'int', default: 'D / H' }, { name: 'dropout', type: 'float', default: 0 }, { name: 'bias', type: 'bool', default: true },
         ] },
     };
     const root = graph([

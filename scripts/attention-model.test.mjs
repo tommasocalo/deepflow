@@ -55,7 +55,7 @@ test('MHA combines full-width projections, equal splits and a collection-count p
     for (const edge of incoming) assert.deepEqual(graph.nodes[edge.source].parameters, { chunks: '$H', dim: -1 });
     const projections = nodesOf(graph).filter((node) => node.libraryKey === 'torch.nn.Linear');
     assert.equal(projections.length, 4);
-    for (const node of projections) assert.deepEqual(node.parameters, { in_features: '$D', out_features: '$D', bias: true });
+    for (const node of projections) assert.deepEqual(node.parameters, { in_features: '$D', out_features: '$D', bias: '$bias' });
     const concat = byLabel(graph, 'concatenate heads');
     assert.equal(concat.parameters.dim, -1);
     assert.ok(graph.edges.some((edge) => edge.source === repeat.id && edge.target === concat.id));

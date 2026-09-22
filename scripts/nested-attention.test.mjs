@@ -35,7 +35,7 @@ function nestedFixture() {
         ] },
         mha: { id: 'mha', name: 'MHA', graph: mha, freeParameters: [
             { name: 'D', type: 'int', default: 768 }, { name: 'H', type: 'int', default: 12 },
-            { name: 'd_head', type: 'int', default: 'D / H' }, { name: 'dropout', type: 'float', default: 0 },
+            { name: 'd_head', type: 'int', default: 'D / H' }, { name: 'dropout', type: 'float', default: 0 }, { name: 'bias', type: 'bool', default: true },
         ] },
         transformer: { id: 'transformer', name: 'Transformer', graph: transformer, freeParameters: [
             { name: 'd_model', type: 'int', default: 768 }, { name: 'n_heads', type: 'int', default: 12 },

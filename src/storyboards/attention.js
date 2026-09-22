@@ -51,7 +51,7 @@ export function buildMultiHeadAttentionGraph({ headTemplateId, headInputIds = AT
     const input = layer('deepflow.template.Input', 560, 0, {}, 'attention input', ATTENTION_INPUT_ID);
     const projectionNode = (x, y, label) => linearTemplateId
         ? createSuperNodeInstance({ templateId: linearTemplateId, position: { x, y }, label, parameterValues: { in_features: '$D', out_features: '$D', bias: '$bias' } })
-        : layer('torch.nn.Linear', x, y, { in_features: '$D', out_features: '$D' }, label);
+        : layer('torch.nn.Linear', x, y, { in_features: '$D', out_features: '$D', bias: '$bias' }, label);
     const q = projectionNode(180, 150, 'Q projection');
     const k = projectionNode(560, 150, 'K projection');
     const v = projectionNode(940, 150, 'V projection');

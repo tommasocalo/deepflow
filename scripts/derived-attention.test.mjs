@@ -85,6 +85,8 @@ test('Auto instances follows input collections and retains manual parallel count
         assert.equal(gradients.children.mha[0].children[repeat.id][0].scope.d_head, 24 / count);
         assert.equal((generateArchitectureModule(root, { templates }).match(/torch\.matmul/g) ?? []).length, count * 2);
     }
+    root.nodes.mha.parameterValues.bias = false;
+    assert.equal((generateArchitectureModule(root, { templates }).match(/bias=False/g) ?? []).length, 4, 'Exposed bias reaches every native projection too');
     const repeat = Object.values(templates.mha.graph.nodes).find((node) => node.kind === 'repeat');
     repeat.mode = 'sequential';
     assert.match(JSON.stringify(validate(root, { templates }).errors), /only for parallel/);
