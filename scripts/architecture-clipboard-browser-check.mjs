@@ -53,7 +53,7 @@ try {
     assert.deepEqual(await graph(), second);
 
     // Native field copy/paste must never copy or paste selected graph nodes.
-    await page.evaluate(() => { const state = window.__deepflow.architectureStore.getState(); state.selectOnly('a'); state.setExpanded('a'); });
+    await page.evaluate(() => { const state = window.__deepflow.architectureStore.getState(); state.selectOnly('box'); state.setExpanded('box'); });
     const name = page.getByRole('textbox', { name: 'Block name', exact: true });
     await name.fill('Native clipboard');
     await name.selectText();
