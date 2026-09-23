@@ -52,7 +52,8 @@ test('fresh installation initializes GPT-2 once across repeated mount effects an
     const seed = makeSeeder();
     assert.equal(seed(), true);
     const nodes = Object.values(architectureStore.getState().graph.nodes);
-    assert.ok(nodes.some((node) => node.kind === 'repeat' && node.count === 12));
+    assert.ok(nodes.some((node) => node.kind === 'repeat' && node.count === '$n_layers'));
+    assert.equal(architectureStore.getState().graph.parameters.find((parameter) => parameter.name === 'n_layers').default, 12);
     assert.ok(Object.keys(templatesStore.getState().templates).length > 0);
     assert.ok(Object.values(trainingStore.getState().graph.nodes).some((node) => node.kind === 'optimizer'));
     assert.equal(saved.get('deepflow:seeded'), '1');

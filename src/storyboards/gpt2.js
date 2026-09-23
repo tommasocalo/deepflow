@@ -77,15 +77,21 @@ export function gpt2Storyboard({ architectureStore, templatesStore, trainingStor
     const inputId  = Object.values(root.nodes).find((n) => n.libraryKey === 'deepflow.io.Input').id;
     const outputId = Object.values(root.nodes).find((n) => n.libraryKey === 'deepflow.io.Output').id;
 
+    // Model-wide sizes: change one and every layer that uses it follows.
+    for (const [name, value, description] of [
+        ['vocab_size', 50257, 'Vocabulary size'], ['context', 1024, 'Maximum sequence length'],
+        ['d_model', 768, 'Model width'], ['n_heads', 12, 'Attention heads'], ['n_layers', 12, 'Transformer blocks'],
+    ]) arch.addGlobalParameter({ name, type: 'int', default: value, description });
+
     arch.moveNode(inputId, { x: X, y: 0 });
     arch.patchNode(inputId, { label: 'tokens' });
     arch.patchLayerParameters(inputId, { shape: '(1024,)', dtype: 'int64' });
 
     const wte = arch.addStandardComponent('embedding', { x: X, y: ROW_GAP });
-    arch.patchNode(wte, { label: 'token embedding', parameterValues: { num_embeddings: 50257, embedding_dim: 768 } });
+    arch.patchNode(wte, { label: 'token embedding', parameterValues: { num_embeddings: '$vocab_size', embedding_dim: '$d_model' } });
 
     const wpe = arch.addStandardComponent('learned-position', { x: X_BRANCH, y: ROW_GAP });
-    arch.patchNode(wpe, { label: 'positional embedding', parameterValues: { max_len: 1024, embedding_dim: 768 } });
+    arch.patchNode(wpe, { label: 'positional embedding', parameterValues: { max_len: '$context', embedding_dim: '$d_model' } });
 
     const add  = arch.addLayerByLibraryKey('deepflow.op.Add',   { x: X, y: ROW_GAP * 2 });
     const drop = arch.addLayerByLibraryKey('torch.nn.Dropout',  { x: X, y: ROW_GAP * 3 });
@@ -102,14 +108,14 @@ export function gpt2Storyboard({ architectureStore, templatesStore, trainingStor
     tpl.addFreeParameter(tplId, { name: 'd_model', type: 'int', description: 'Model width', default: 768 });
     tpl.addFreeParameter(tplId, { name: 'n_heads', type: 'int', description: 'Attention heads', default: 12 });
 
-    const blocks = arch.addRepeatNode(tplId, { x: X, y: ROW_GAP * 4 }, { count: 12, label: 'Transformer blocks' });
+    const blocks = arch.addRepeatNode(tplId, { x: X, y: ROW_GAP * 4 }, { count: '$n_layers', label: 'Transformer blocks', bindings: { d_model: '$d_model', n_heads: '$n_heads' } });
 
     // The repeated stack extends 15px below its face.
     const lnf = arch.addStandardComponent('layernorm', { x: X, y: ROW_GAP * 5 + 15 });
-    arch.patchNode(lnf, { label: 'ln_f', parameterValues: { normalized_shape: 768 } });
+    arch.patchNode(lnf, { label: 'ln_f', parameterValues: { normalized_shape: '$d_model' } });
 
     const head = arch.addStandardComponent('linear', { x: X, y: ROW_GAP * 6 + 15 });
-    arch.patchNode(head, { label: 'lm_head', parameterValues: { in_features: 768, out_features: 50257, bias: false } });
+    arch.patchNode(head, { label: 'lm_head', parameterValues: { in_features: '$d_model', out_features: '$vocab_size', bias: false } });
 
     arch.moveNode(outputId, { x: X, y: ROW_GAP * 7 + 15 });
     arch.patchNode(outputId, { label: 'logits' });

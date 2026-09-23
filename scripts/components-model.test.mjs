@@ -191,4 +191,14 @@ test('new GPT-2 uses learned positions and inspectable standard definitions thro
     }
     const report = validate(graph, { templates: templates.getState().templates });
     assert.equal(report.ok, true, JSON.stringify(report.errors));
+    const head = nodesOf(graph).find((node) => node.label === 'lm_head');
+    assert.deepEqual(report.shapes[head.id], [null, 1024, 50257]);
+    // Scaling the whole model is a change to its global parameters.
+    architecture.getState().patchGlobalParameter('d_model', { default: 1024 });
+    architecture.getState().patchGlobalParameter('n_heads', { default: 16 });
+    architecture.getState().patchGlobalParameter('n_layers', { default: 24 });
+    const scaled = validate(architecture.getState().graph, { templates: templates.getState().templates });
+    assert.equal(scaled.ok, true, JSON.stringify(scaled.errors));
+    const blocks = nodesOf(architecture.getState().graph).find((node) => node.kind === 'repeat');
+    assert.deepEqual(scaled.shapes[blocks.id], [null, 1024, 1024]);
 });
