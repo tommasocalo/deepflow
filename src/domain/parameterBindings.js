@@ -67,6 +67,64 @@ export function globalParameterUses(rootGraph, templates, name) {
     return uses;
 }
 
+const escapeName = (name) => name.replace(/[$]/g, '\\$&');
+
+/**
+ * Put a parameter's value where it was referenced: a direct `$name` becomes
+ * the value itself, and a formula gets it in parentheses (`4 * d_model` →
+ * `4 * (768)`). Longer names that merely start with `name` are left alone.
+ */
+export function inlineParameter(value, name, replacement) {
+    if (Array.isArray(value)) return value.map((part) => inlineParameter(part, name, replacement));
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    if (trimmed === `$${name}` || trimmed === name) return replacement;
+    if (!parameterReferences(value).includes(name)) return value;
+    const literal = Array.isArray(replacement) ? `(${replacement.join(', ')})`
+        : typeof replacement === 'number' || typeof replacement === 'boolean' ? String(replacement)
+            : `(${replacement ?? 'None'})`;
+    return value.replace(new RegExp(`(?<![\\w$])\\$?${escapeName(name)}(?![\\w])`, 'g'), literal);
+}
+
+function inlineInNode(node, name, replacement) {
+    const inline = (values) => values && Object.fromEntries(Object.entries(values).map(([field, value]) => [field, inlineParameter(value, name, replacement)]));
+    if (node.kind === 'layer') return { ...node, parameters: inline(node.parameters) };
+    if (node.kind === 'repeat') return { ...node, count: inlineParameter(node.count, name, replacement), bindings: inline(node.bindings) };
+    return { ...node, parameterValues: inline(node.parameterValues) };
+}
+
+/** Rewrite every field of a graph and the other parameters' defaults. */
+function inlineEverywhere(graph, parameters, name, replacement) {
+    return {
+        graph: { ...graph, nodes: Object.fromEntries(Object.entries(graph.nodes ?? {}).map(([id, node]) => [id, inlineInNode(node, name, replacement)])) },
+        parameters: parameters.filter((parameter) => parameter.name !== name)
+            .map((parameter) => parameter.derived ? parameter : { ...parameter, default: inlineParameter(parameter.default, name, replacement) }),
+    };
+}
+
+/** Removing a used component parameter keeps its fields working with its default value. */
+export function removeTemplateParameter(template, name) {
+    const parameter = template?.freeParameters?.find((candidate) => candidate.name === name);
+    if (!parameter) return null;
+    const { graph, parameters } = inlineEverywhere(template.graph, template.freeParameters, name, parameter.default ?? null);
+    return { ...template, graph, freeParameters: parameters };
+}
+
+/** Removing a global writes its value into the root graph and every template that can see it. */
+export function removeGlobalParameter(rootGraph, templates, name) {
+    const parameter = rootGraph?.parameters?.find((candidate) => candidate.name === name);
+    if (!parameter) return null;
+    const value = parameter.default ?? null;
+    const root = inlineEverywhere(rootGraph, rootGraph.parameters, name, value);
+    const nextTemplates = Object.fromEntries(Object.entries(templates ?? {}).map(([id, template]) => {
+        if ((template.freeParameters ?? []).some((candidate) => candidate.name === name)) return [id, template];
+        if (!globalParameterUses({ nodes: {}, edges: [] }, { [id]: template }, name).length) return [id, template];
+        const inlined = inlineEverywhere(template.graph, template.freeParameters ?? [], name, value);
+        return [id, { ...template, graph: inlined.graph, freeParameters: inlined.parameters }];
+    }));
+    return { graph: { ...root.graph, parameters: root.parameters }, templates: nextTemplates };
+}
+
 export function resolvedFieldValue(value, scope, depth = 0) {
     if (depth > 16) return null;
     if (Array.isArray(value)) return value.map((part) => resolvedFieldValue(part, scope, depth + 1));

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { withArchitectureHistory } from './architectureHistory.js';
-import { exposeTemplateField, toggleTemplateFieldExposure } from '../domain/parameterBindings.js';
+import { exposeTemplateField, removeTemplateParameter, toggleTemplateFieldExposure } from '../domain/parameterBindings.js';
 import {
     addEdge,
     addNode,
@@ -200,14 +200,11 @@ export const useTemplatesStore = create(
                     };
                 }),
 
+            // Fields that used the parameter keep working with its default value.
             removeFreeParameter: (templateId, name) =>
                 set((state) => {
-                    const tpl = state.templates[templateId];
-                    if (!tpl) return state;
-                    const free = (tpl.freeParameters ?? []).filter((p) => p.name !== name);
-                    return {
-                        templates: { ...state.templates, [templateId]: { ...tpl, freeParameters: free } },
-                    };
+                    const template = removeTemplateParameter(state.templates[templateId], name);
+                    return template ? { templates: { ...state.templates, [templateId]: template } } : state;
                 }),
         }, HISTORY_ACTIONS),
         { name: STORAGE_KEY },

@@ -37,8 +37,9 @@ function ParameterRow({ parameter, uses, suggestions, onChange, onRemove }) {
                 title={uses.length ? 'Show where it is used' : 'Not used yet: type it as $name in a field'}>
                 {uses.length ? `${uses.length} ${uses.length === 1 ? 'use' : 'uses'}` : 'unused'}
             </button>
-            <button type="button" className="df-params-remove" disabled={uses.length > 0} onClick={onRemove}
-                aria-label={`Remove parameter ${parameter.name}`} title={uses.length ? 'Used by fields: change them before removing it' : `Remove ${parameter.name}`}>
+            <button type="button" className="df-params-remove" onClick={onRemove}
+                aria-label={`Remove parameter ${parameter.name}`}
+                title={uses.length ? `Remove ${parameter.name}: the ${uses.length} ${uses.length === 1 ? 'field that uses it keeps' : 'fields that use it keep'} its value${value !== '' ? ` (${value})` : ''}` : `Remove ${parameter.name}`}>
                 <Trash2 size={12} aria-hidden="true" />
             </button>
         </div>

@@ -72,3 +72,27 @@ test('global parameters are one undoable edit each and live in the saved graph',
     history.getState().undo();
     assert.equal(architecture.getState().graph.parameters.length, 1);
 });
+
+test('removing a used parameter writes its value into the fields that used it', async () => {
+    const { inlineParameter, removeTemplateParameter, removeGlobalParameter } = await import('../src/domain/parameterBindings.js');
+    assert.equal(inlineParameter('$d_model', 'd_model', 768), 768);
+    assert.equal(inlineParameter('4 * d_model', 'd_model', 768), '4 * 768');
+    assert.equal(inlineParameter('d_model_2 + $d_model', 'd_model', 768), 'd_model_2 + 768', 'Longer names are left alone');
+    assert.deepEqual(inlineParameter(['$d_model', 'D / H'], 'd_model', 768), [768, 'D / H']);
+    assert.equal(inlineParameter('x * $w', 'w', 'D / H'), 'x * (D / H)', 'A formula value keeps its grouping');
+
+    const { root, templates } = model();
+    const withDefault = { ...templates.body, freeParameters: [{ name: 'width', type: 'int', default: 48 }, { name: 'wide', type: 'int', default: '2 * width' }],
+        graph: { ...templates.body.graph, nodes: { ...templates.body.graph.nodes, proj: { ...templates.body.graph.nodes.proj, parameters: { in_features: '$width', out_features: '$wide' } } } } };
+    const removed = removeTemplateParameter(withDefault, 'width');
+    assert.deepEqual(removed.freeParameters, [{ name: 'wide', type: 'int', default: '2 * 48' }]);
+    assert.equal(removed.graph.nodes.proj.parameters.in_features, 48);
+
+    const result = removeGlobalParameter(root, templates, 'd_model');
+    assert.deepEqual(result.graph.parameters, [{ name: 'd_ff', type: 'int', default: '4 * 64' }]);
+    assert.equal(result.graph.nodes.embed.parameters.out_features, 64);
+    assert.deepEqual(result.templates.body.graph.nodes.proj.parameters, { in_features: 64, out_features: 64 });
+    assert.equal(validate(result.graph, { templates: result.templates }).ok, true);
+    const shadowed = model({ shadow: true });
+    assert.equal(removeGlobalParameter(shadowed.root, shadowed.templates, 'd_model').templates.body, shadowed.templates.body, 'A component with its own d_model is untouched');
+});

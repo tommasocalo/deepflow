@@ -29,6 +29,7 @@ import { copyGraphSelection, pasteGraphSelection } from '../domain/architecture/
 import { changeStructureScope, effectiveTemplateId, structureOverrideKey } from '../domain/architecture/instanceStructure.js';
 import { instanceAsRepeat, repeatAsSingle, singleConversionIssue } from '../domain/architecture/repeatStructure.js';
 import { componentBindingsForLayer, ensureStandardTemplate, getStandardComponentForLayer, STANDARD_COMPONENTS } from '../domain/components/index.js';
+import { removeGlobalParameter as removeGlobalFromModel } from '../domain/parameterBindings.js';
 import { useTemplatesStore } from './templatesStore.js';
 import { architectureDocumentReplaced, configureArchitectureHistory, isRestoringArchitectureHistory, withArchitectureHistory } from './architectureHistory.js';
 
@@ -398,12 +399,14 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
             if (!parameters.some((parameter) => parameter.name === name)) return;
             set({ graph: { ...state.graph, parameters: parameters.map((parameter) => parameter.name === name ? { ...parameter, ...patch } : parameter) } });
         },
+        // Every field that used the global gets its value, then the global goes.
         removeGlobalParameter: (name) => {
             if (!isActive()) return;
             const state = get();
-            const parameters = state.graph.parameters ?? [];
-            if (!parameters.some((parameter) => parameter.name === name)) return;
-            set({ graph: { ...state.graph, parameters: parameters.filter((parameter) => parameter.name !== name) } });
+            const result = removeGlobalFromModel(state.graph, useTemplatesStore.getState().templates, name);
+            if (!result) return;
+            useTemplatesStore.setState({ templates: result.templates });
+            set({ graph: result.graph });
         },
 
         setEdgeGradientOp: (edgeId, gradientOp, gradientOpLambda) =>
