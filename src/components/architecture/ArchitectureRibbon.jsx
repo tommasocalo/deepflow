@@ -215,10 +215,8 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 </div>
             </RibbonGroup>
             <RibbonGroup label="History" className="df-ribbon-history">
-                <div className="df-ribbon-command-list">
-                    <button type="button" aria-label="Undo" aria-keyshortcuts="Meta+z Control+z" disabled={!canUndo} onClick={undo} title={canUndo ? `Undo ${undoLabel} (⌘Z / Ctrl+Z)` : 'Undo (⌘Z / Ctrl+Z)'}><Undo2 size={14} />Undo</button>
-                    <button type="button" aria-label="Redo" aria-keyshortcuts="Meta+Shift+z Control+Shift+z Control+y" disabled={!canRedo} onClick={redo} title={canRedo ? `Redo ${redoLabel} (⌘⇧Z / Ctrl+Shift+Z)` : 'Redo (⌘⇧Z / Ctrl+Shift+Z)'}><Redo2 size={14} />Redo</button>
-                </div>
+                <RibbonButton icon={Undo2} aria-label="Undo" aria-keyshortcuts="Meta+z Control+z" disabled={!canUndo} onClick={undo} title={canUndo ? `Undo ${undoLabel} (⌘Z / Ctrl+Z)` : 'Undo (⌘Z / Ctrl+Z)'}>Undo</RibbonButton>
+                <RibbonButton icon={Redo2} aria-label="Redo" aria-keyshortcuts="Meta+Shift+z Control+Shift+z Control+y" disabled={!canRedo} onClick={redo} title={canRedo ? `Redo ${redoLabel} (⌘⇧Z / Ctrl+Shift+Z)` : 'Redo (⌘⇧Z / Ctrl+Shift+Z)'}>Redo</RibbonButton>
             </RibbonGroup>
             {split && <span className="df-ribbon-pane-cue" aria-live="polite"><ArrowUpRight size={11} />{targetLabel}</span>}
         </div>
