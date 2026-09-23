@@ -1,17 +1,32 @@
-.df-iteration-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 32px; padding: 4px 12px; border-bottom: 1px solid #111; background: #fff; font-size: 11px; }
+/* Navigator, instance strip, then the change scope, kept together. */
+.df-iteration-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-height: 34px; padding: 4px 12px; border-bottom: 1px solid #111; background: #fff; font-size: 11px; }
 .df-iteration-bar.is-local { background: #fffbe6; box-shadow: inset 3px 0 0 #111; }
-.df-iteration-counter { display: inline-flex; align-items: center; gap: 4px; }
-.df-iteration-counter > strong { margin-right: 2px; font-size: 11px; }
-.df-iteration-counter input { box-sizing: border-box; width: 42px; height: 23px; padding: 2px 4px; border: 1px solid #111; border-radius: 2px; background: #fff; font: bold 11px/17px ui-monospace, monospace; text-align: center; }
-.df-iteration-counter button { display: grid; place-items: center; width: 21px; height: 23px; padding: 0; border: 1px solid transparent; border-radius: 2px; font: bold 17px/1 ui-monospace, monospace; }
-.df-iteration-counter button:hover:not(:disabled) { border-color: #111; background: #eee; }
-.df-iteration-counter button:disabled { opacity: .3; }
-.df-iteration-counter > span { font: 600 10px/1 ui-monospace, monospace; }
-.df-iteration-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px; border: 1px solid transparent; border-radius: 2px; font-size: 10px; font-weight: 600; color: #333; white-space: nowrap; }
-.df-iteration-toggle:hover { border-color: #d4d4ce; background: #f4f4ef; color: #111; }
+.df-iteration-counter { display: inline-flex; align-items: center; border: 1px solid #111; border-radius: 2px; background: #fff; }
+.df-iteration-counter > button { display: grid; place-items: center; width: 22px; height: 24px; padding: 0; font: bold 16px/1 ui-monospace, monospace; }
+.df-iteration-counter > button:first-child { border-right: 1px solid #111; }
+.df-iteration-counter > button:last-child { border-left: 1px solid #111; }
+.df-iteration-counter > button:hover:not(:disabled) { background: #fff6cf; }
+.df-iteration-counter > button:disabled { color: #bbb; cursor: default; }
+.df-iteration-title { display: inline-flex; align-items: center; gap: 4px; padding: 0 7px; font-weight: 700; white-space: nowrap; }
+.df-iteration-title input { box-sizing: content-box; width: 3ch; height: 18px; padding: 0 2px; border: 0; border-bottom: 1px solid #111; background: transparent; font: 700 11px/18px ui-monospace, monospace; text-align: center; -moz-appearance: textfield; }
+.df-iteration-title input::-webkit-inner-spin-button, .df-iteration-title input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.df-iteration-title input:focus { outline: 1px solid #111; outline-offset: 1px; }
+.df-iteration-title > span { font: 600 10px/1 ui-monospace, monospace; color: #555; }
+.df-iteration-strip { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.df-iteration-slot { display: inline-flex; align-items: center; gap: 3px; }
+.df-iteration-strip button { width: 10px; height: 10px; padding: 0; border: 1px solid #111; border-radius: 1px; background: #fff; cursor: pointer; }
+.df-iteration-strip button:hover { background: #e7e5e4; }
+.df-iteration-strip button.is-own { background: #fde68a; }
+.df-iteration-strip button.is-current { background: #111; }
+.df-iteration-strip button.is-current.is-own { background: #fde68a; box-shadow: inset 0 0 0 2px #111; }
+.df-iteration-strip button:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.df-iteration-gap { font: 700 10px/1 ui-monospace, monospace; color: #777; }
+.df-iteration-toggle { display: inline-flex; align-items: center; gap: 7px; position: relative; margin-left: 4px; padding: 3px 6px; border: 1px solid transparent; border-radius: 2px; font-size: 10px; font-weight: 700; color: #111; white-space: nowrap; }
+.df-iteration-toggle::before { content: ''; position: absolute; left: -10px; top: 3px; bottom: 3px; border-left: 1px solid #d4d4ce; }
+.df-iteration-toggle:hover { border-color: #d4d4ce; background: #f4f4ef; }
 .df-iteration-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
 .df-iteration-switch { position: relative; width: 26px; height: 14px; border: 1px solid #111; border-radius: 2px; background: #fff; flex-shrink: 0; }
 .df-iteration-switch::after { content: ''; position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 1px; background: #111; transition: transform 120ms ease; }
-.df-iteration-toggle[aria-checked="true"] { color: #111; }
-.df-iteration-toggle[aria-checked="true"] .df-iteration-switch { background: #fde68a; }
-.df-iteration-toggle[aria-checked="true"] .df-iteration-switch::after { transform: translateX(12px); }
+.df-iteration-toggle[aria-checked="true"] .df-iteration-switch { background: #111; }
+.df-iteration-toggle[aria-checked="true"] .df-iteration-switch::after { background: #fff; transform: translateX(12px); }
+.df-iteration-toggle[aria-checked="false"] { color: #555; }
