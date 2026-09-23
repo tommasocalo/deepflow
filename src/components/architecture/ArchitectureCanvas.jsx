@@ -100,6 +100,8 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     const [dragBatcher] = useState(createDragBatcher);
     const [interactionMode, setInteractionMode] = useState('select');  // 'select' | 'pan'
     const [selectedEdgeIds, setSelectedEdgeIds] = useState([]);
+    // Where a connection was clicked, in flow coordinates: its detail opens there.
+    const [edgeAnchor, setEdgeAnchor] = useState(null);
     const [spacePressed, setSpacePressed] = useState(false);
 
     // Resolve the visible graph from the path. Templates is included in deps
@@ -395,10 +397,12 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                     onDragOver={onDragOver}
                     onDrop={onDrop}
                     onMoveEnd={handleMoveEnd}
+                    onEdgeClick={(event) => setEdgeAnchor(screenToFlowPosition({ x: event.clientX, y: event.clientY }))}
                     onPaneClick={() => {
                         clearSelection();
                         clearExpanded();
                         setSelectedEdgeIds([]);
+                        setEdgeAnchor(null);
                     }}
                     selectionOnDrag={interactionMode === 'select'}
                     panOnDrag={interactionMode === 'pan'}
@@ -434,7 +438,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                     </Controls>
                 </ReactFlow>
                 {overlay}
-                {showGradientFlow && <GradientFlowControls graph={viewGraph} report={gradientReport} edge={selectedEdgeIds.length === 1 ? viewGraph.edges.find((edge) => edge.id === selectedEdgeIds[0]) : null} onClose={() => setSelectedEdgeIds([])} />}
+                {showGradientFlow && <GradientFlowControls graph={viewGraph} report={gradientReport} anchor={edgeAnchor} edge={selectedEdgeIds.length === 1 ? viewGraph.edges.find((edge) => edge.id === selectedEdgeIds[0]) : null} onClose={() => { setSelectedEdgeIds([]); setEdgeAnchor(null); }} />}
                 {keyboardActive && spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
                 {clipboardNotice && !spacePressed && <div className="df-space-hint" role="status">{clipboardNotice}</div>}
             </div>
