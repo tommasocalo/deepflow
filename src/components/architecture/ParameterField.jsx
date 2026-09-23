@@ -39,7 +39,7 @@ function ShapeField({ value, onChange, common, className, name, suggestions }) {
         <div className="df-shape-axes">{dimensions.map((dimension, index) => <span className="df-shape-dimension" key={index}>
             {index > 0 && <span className="df-shape-times" aria-hidden="true">×</span>}
             <span className="df-shape-cell">
-                <VariableInput {...common} suggestions={suggestions} id={index === 0 ? common.id : `${common.id}-${index}`}
+                <VariableInput {...common} style={{ '--parameter-width': `${Math.min(18, Math.max(4, String(dimension ?? '').length + 1))}ch` }} suggestions={suggestions} id={index === 0 ? common.id : `${common.id}-${index}`}
                     aria-label={`${name} dimension ${index + 1}`} className={`${className}${typeof dimension === 'string' && dimension !== '' && !NUMBER_LITERAL.test(dimension) ? ' is-expression' : ''}`}
                     type="text" spellCheck={false} autoComplete="off" value={dimension ?? ''} placeholder="Size"
                     title={`Dimension ${index + 1}. Accepts a number, parameter reference, or expression.`}
@@ -77,9 +77,11 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
     const inlineBoolean = compactBoolean && param.type === 'bool' && !booleanExpression;
     const textValue = Array.isArray(display) ? display.join(', ') : String(display);
     const className = `df-param-input nodrag${hasError ? ' is-invalid' : ''}${expression ? ' is-expression' : ''}`;
-    const baseWidth = param.type === 'int' ? 7 : param.type === 'float' ? 8 : param.type === 'tuple' ? 9 : 12;
+    // Boxes fit what they hold: a number stays narrow, a variable or formula grows.
+    const shownText = textValue || String(placeholder ?? param.default ?? '');
+    const widthCh = Math.min(28, Math.max(4, shownText.length + 1));
     const common = {
-        style: { '--parameter-width': `${baseWidth}ch` },
+        style: { '--parameter-width': `${widthCh}ch` },
         id,
         'aria-invalid': hasError,
         'aria-describedby': visibleErrors.length ? errorId : undefined,
@@ -101,12 +103,9 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
             <div className="df-param-label-line"><label htmlFor={id} title={param.description} className="df-param-label">
                 {label ?? param.name}
                 {param.required && <span className="df-param-required" title="Required">*</span>}
-            </label>{labelAction}</div>
-            {(param.name === 'shape' || param.editor === 'dimensions') && param.type === 'tuple' ? (
+            </label>{inlineBoolean && labelAction}</div>
+            {inlineBoolean ? null : <span className="df-param-control">{(param.name === 'shape' || param.editor === 'dimensions') && param.type === 'tuple' ? (
                 <ShapeField value={value ?? param.default} onChange={onChange} common={common} className={className} name={ariaLabel ?? param.name} suggestions={suggestions} />
-            ) : inlineBoolean ? (
-                <input {...common} className="df-param-checkbox nodrag" type="checkbox" checked={checked}
-                    onChange={(event) => onChange(event.target.checked)} />
             ) : param.type === 'bool' && !booleanExpression ? (
                 <label className="df-param-bool" htmlFor={id}>
                     <input
@@ -150,7 +149,9 @@ const ParameterField = ({ param, value, onChange, error, errors = [], label, ari
                         if (Number.isFinite(number) && value !== number) onChange(number);
                     }}
                 />
-            )}
+            )}{labelAction}</span>}
+            {inlineBoolean && <input {...common} className="df-param-checkbox nodrag" type="checkbox" checked={checked}
+                onChange={(event) => onChange(event.target.checked)} />}
             {visibleErrors.length > 0 && <div id={errorId} className="df-param-errors">{visibleErrors.map((message, index) => <span key={index}>{message}</span>)}</div>}
         </div>
     );

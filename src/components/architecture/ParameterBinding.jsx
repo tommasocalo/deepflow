@@ -40,9 +40,10 @@ export function DerivedParameter({ param }) {
     if (!binding) return null;
     const input = binding.template?.graph.nodes[param.derived.inputId];
     const label = param.name === 'd_head' ? 'Head width' : param.name === 'D' ? 'Width' : param.name.replaceAll('_', ' ');
-    return <div className="df-derived-parameter" data-parameter={param.name}>
-        <span>{label}</span><strong>{formatParameterValue(binding.component?.scope[param.name])}</strong>
-        <small>From {input?.label ?? 'input'} · {param.derived.axis === -1 ? 'last dimension' : `axis ${param.derived.axis}`}</small>
+    const source = `${input?.label ?? 'input'} · ${param.derived.axis === -1 ? 'last dimension' : `axis ${param.derived.axis}`}`;
+    return <div className="df-param-row df-derived-row" data-parameter={param.name}>
+        <div className="df-param-label-line"><span className="df-param-label">{label}</span></div>
+        <span className="df-param-control" title={`From ${source}`}><strong>{formatParameterValue(binding.component?.scope[param.name])}</strong><small>from {input?.label ?? 'input'}</small></span>
     </div>;
 }
 

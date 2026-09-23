@@ -471,8 +471,8 @@ test('repeat inspection numbers instances from one while retaining zero-based fo
     assert.deepEqual(labels, ['1', '2', '3']);
     const inspector = container.querySelector('.df-inspector');
     assert.equal(byAria('count').closest('.df-param-row').querySelector('label').textContent, 'Instances');
-    assert.ok(byAria('iterationVariable').closest('details'));
-    assert.equal(byAria('iterationVariable').closest('details').open, false);
+    assert.equal(byAria('iterationVariable'), null, 'The formula index is explained on the count instead of a separate setting');
+    assert.match(byAria('count').closest('.df-param-row').querySelector('label').title, /Formulas can use i/);
     assert.doesNotMatch(inspector.textContent, /Open template|Index name/);
     assert.equal(byAria('Repeat mode'), null, 'Structure controls live in the ribbon');
     assert.equal([...inspector.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Single'), undefined);

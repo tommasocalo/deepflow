@@ -11,7 +11,7 @@ function ConnectionDetail({ graph, edge, report, anchor, onClose }) {
     const route = `${graph.nodes[edge.source]?.label} → ${graph.nodes[edge.target]?.label}`;
     const status = report?.edges[edge.id]?.status ?? 'unknown';
     return <aside ref={panelRef} className="df-inspector df-panel-subtle df-connection-inspector nodrag nopan nowheel"
-        style={{ '--df-inspector-width': '248px' }} aria-label="Connection gradient settings" onKeyDown={(event) => event.stopPropagation()}>
+        aria-label="Connection gradient settings" onKeyDown={(event) => event.stopPropagation()}>
         <header className="df-inspector-header">
             <GitBranch size={18} strokeWidth={2.4} aria-hidden="true" />
             <strong className="df-inspector-title" title={route}>{route}</strong>

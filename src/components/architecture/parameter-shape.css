@@ -1,14 +1,13 @@
 /* A stable tensor shape strip: two ordinary axes fit beside one another;
    additional axes scroll without wrapping or resizing the inspector. */
-.df-inspector .df-inspector-field:has(.df-param-shape) { grid-column: 1 / -1; }
-.df-param-shape { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; }
-.df-shape-axes { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; overflow-x: auto; padding: 1px; scrollbar-width: thin; }
+.df-param-shape { display: flex; align-items: center; gap: 5px; width: auto; max-width: 100%; min-width: 0; }
+.df-shape-axes { display: flex; align-items: center; flex: 0 1 auto; min-width: 0; overflow-x: auto; padding: 1px; scrollbar-width: thin; }
 .df-shape-dimension { display: inline-flex; align-items: center; flex: 0 0 auto; gap: 5px; }
 .df-shape-times { flex-shrink: 0; padding-left: 5px; font-size: 10px; font-weight: 800; color: #57534e; }
-.df-shape-cell { display: inline-flex; align-items: center; flex: 0 0 126px; width: 126px; min-width: 126px; border: 1px solid #111; border-radius: 0; background: #fff; }
-.df-shape-cell .df-variable-field { flex: 1 1 auto; width: 0; min-width: 0; }
+.df-shape-cell { display: inline-flex; align-items: center; flex: 0 0 auto; border: 1px solid #111; border-radius: 0; background: #fff; }
+.df-shape-cell .df-variable-field { flex: 0 0 auto; }
 .df-param-shape .df-shape-cell .df-param-input,
-.df-inspector .df-inspector-field .df-param-shape .df-shape-cell .df-param-input { width: 100%; min-width: 0; max-width: 100%; height: 25px; padding: 3px 5px; border: 0; border-radius: 0; font: 600 10px/17px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: left; }
+.df-inspector .df-inspector-field .df-param-shape .df-shape-cell .df-param-input { width: calc(var(--parameter-width, 6ch) + 10px); min-width: 7ch; max-width: none; height: 25px; padding: 3px 5px; border: 0; border-radius: 0; font: 600 10px/17px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: left; }
 .df-param-shape .df-shape-cell:has(.is-invalid) { border-color: #dc2626; }
 .df-param-shape .df-shape-cell:focus-within { outline: 1px solid #111; }
 .df-param-shape .df-shape-cell .df-param-input:focus,

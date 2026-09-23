@@ -74,16 +74,11 @@ function shownParameters(params, values, scope) {
     ];
 }
 
-// Width follows the field schema, never the number of characters being typed.
-function inspectorWidth(node, template) {
-    const parameters = node.kind === 'layer' ? getEntry(node.libraryKey)?.parameters ?? [] : template?.freeParameters ?? [];
-    return parameters.some((parameter) => parameter.type === 'tuple' && (parameter.name === 'shape' || parameter.editor === 'dimensions')) ? 328 : 248;
-}
-
-function InspectorField({ param, value, label, fullRow = false, ...props }) {
-    const wide = ['tuple', 'string'].includes(param.type);
+function InspectorField({ param, value, label, ...props }) {
+    // Only a tensor shape needs its own line; everything else sits beside its label.
+    const wide = param.type === 'tuple' && (param.name === 'shape' || param.editor === 'dimensions');
     return (
-        <div className={`df-inspector-field${wide ? ' is-wide' : ''}${fullRow ? ' is-alone' : ''}`} data-parameter={param.name}>
+        <div className={`df-inspector-field${wide ? ' is-wide' : ''}`} data-parameter={param.name}>
             <ParameterBinding param={param} value={value}><ParameterField
                 param={{ ...param, description: `${param.name}${param.description ? ` — ${param.description}` : ''}` }}
                 value={value}
@@ -96,14 +91,13 @@ function InspectorField({ param, value, label, fullRow = false, ...props }) {
     );
 }
 
-function ParamGroup({ params, values, fieldErrors, onPatch, labels = {} }) {
-    if (!params.length) return null;
-    return <div className="df-inspector-fields">{params.map((p) => (
+function ParamGroup({ params, values, fieldErrors, onPatch, labels = {}, leading = null }) {
+    if (!params.length && !leading) return null;
+    return <div className="df-inspector-fields">{leading}{params.map((p) => (
         <InspectorField
             key={p.name}
             param={p}
             label={labels[p.name]}
-            fullRow={params.length === 1}
             value={values[p.name]}
             onChange={(v) => onPatch({ [p.name]: v })}
             errors={(fieldErrors[p.name] ?? []).map((message) => compactParameterError(p.name, message))}
@@ -138,47 +132,43 @@ function LayerBody({ id, node, fieldErrors }) {
         if (patch) patchNode(id, patch);
     };
     const onPatch = (patch) => patchLayerParameters(id, patch);
-    return (
-        <>
-            {moduleOptions.length > 1 && (
-                <label className="df-inspector-module">
-                    <span>Type</span>
-                    <span className="df-inspector-select">
-                        <select aria-label={family || isOperationKey(node.libraryKey) ? "Operation type" : "Module"} title={selectedModule?.name} value={node.libraryKey} onChange={(e) => switchModule(e.target.value)}>
-                            {moduleOptions.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
-                        </select>
-                        <ChevronDown size={11} strokeWidth={3} aria-hidden="true" />
-                    </span>
-                </label>
-            )}
-            {params.length ? (
-                <ParamGroup params={params} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch}
-                    labels={{ scale: distribution === 'uniform' ? 'Bound (±)' : distribution === 'normal' ? 'Standard deviation' : 'Scale' }} />
-            ) : <p className="df-inspector-note">No parameters.</p>}
-        </>
+    const typeRow = moduleOptions.length > 1 && (
+        <label className="df-param-row df-inspector-type">
+            <span className="df-param-label-line"><span className="df-param-label">Type</span></span>
+            <span className="df-param-control df-inspector-select">
+                <select aria-label={family || isOperationKey(node.libraryKey) ? "Operation type" : "Module"} title={selectedModule?.name} value={node.libraryKey} onChange={(e) => switchModule(e.target.value)}>
+                    {moduleOptions.map((o) => <option key={o.key} value={o.key}>{o.name}</option>)}
+                </select>
+                <ChevronDown size={11} strokeWidth={3} aria-hidden="true" />
+            </span>
+        </label>
     );
+    return params.length || typeRow ? (
+        <ParamGroup params={params} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch} leading={typeRow}
+            labels={{ scale: distribution === 'uniform' ? 'Bound (±)' : distribution === 'normal' ? 'Std dev' : 'Scale' }} />
+    ) : <p className="df-inspector-note">No parameters.</p>;
 }
 
-function Bindings({ freeParams, values, onChange, hint }) {
+function Bindings({ freeParams, values, onChange, hint, leading = null }) {
     const scope = useValidationContext()?.scope ?? {};
-    if (!freeParams.length) return <p className="df-inspector-note">No configurable parameters.</p>;
+    if (!freeParams.length && !leading) return <p className="df-inspector-note">No configurable parameters.</p>;
     const shown = shownParameters(freeParams.filter((p) => !p.derived && !p.hidden), values, scope);
     return (
         <section className="df-inspector-group">
             <div className="df-inspector-fields">
+                {leading}
                 {shown.map((p) => (
                     <InspectorField
                         key={p.name}
                         param={p}
-                        fullRow={shown.length === 1}
                         label={FIELD_LABELS[p.name] ?? p.name.replaceAll('_', ' ')}
                         value={values[p.name]}
                         placeholder={p.default != null ? String(p.default) : 'Default'}
                         onChange={(v) => onChange(p.name, v)}
                     />
                 ))}
+                {freeParams.filter((p) => p.derived).map((p) => <DerivedParameter key={p.name} param={p} />)}
             </div>
-            {freeParams.some((p) => p.derived) && <div className="df-derived-parameters">{freeParams.filter((p) => p.derived).map((p) => <DerivedParameter key={p.name} param={p} />)}</div>}
             {hint && <p className="df-inspector-note">{hint}</p>}
         </section>
     );
@@ -208,45 +198,36 @@ function RepeatBody({ id, node }) {
     const report = useValidation();
     const { count, error } = resolveComponentContext(node, template, context.graph, report.shapes, context.scope);
     const mode = node.mode ?? 'sequential';
-    const iterVar = node.iterationVariable || 'i';
+    const countLabel = mode === 'parallel' ? 'Instances' : 'Steps';
+    const countRow = node.count === 'auto' ? <>
+        <div className="df-param-row df-derived-row" data-parameter="count">
+            <div className="df-param-label-line"><span className="df-param-label">{countLabel}</span></div>
+            <span className="df-param-control" title="Counted from the collections this repeat receives">
+                <strong>{count ?? '?'}</strong><small>from inputs</small>
+                <button type="button" className="df-row-action" onClick={() => patchRepeatNode(id, { count: count ?? 2 })}>Set</button>
+            </span>
+        </div>
+        {error && <p className="df-param-errors df-row-note">{error}</p>}
+    </> : <>
+        <InspectorField
+            param={{ name: 'count', type: 'int', description: 'Number of instances, or a parameter such as $n_layers; each has its own weights. Formulas can use i: 0 for the first, 1 for the second…' }}
+            label={countLabel}
+            value={node.count}
+            onChange={(v) => patchRepeatNode(id, { count: v })}
+            errors={error ? [error] : []}
+        />
+        {mode === 'parallel' && <button type="button" className="df-row-action df-row-note" onClick={() => patchRepeatNode(id, { count: 'auto' })}>Count from inputs</button>}
+    </>;
     return (
         <>
             {!template && <p className="df-inspector-note">Template missing — re-create or delete this node.</p>}
-            <section className="df-inspector-group">
-                <p className="df-inspector-note">{mode === 'parallel' ? 'One input slice per instance. Output is a tensor collection: connect Concat, Add or Stack to combine it.' : 'Each block feeds the next. Output from the last block.'}</p>
-                {node.count === 'auto' ? <div className="df-repeat-auto">
-                    <div className="df-derived-parameter"><span>Instances</span><strong>{count ?? 'Unresolved'}</strong><small>Auto · from input collections</small></div>
-                    <button type="button" onClick={() => patchRepeatNode(id, { count: count ?? 2 })}>Set manually</button>
-                    {error && <p className="df-param-errors">{error}</p>}
-                </div> : <><div className="df-inspector-fields">
-                    <InspectorField
-                        param={{ name: 'count', type: 'int', description: 'Number of instances, or a template parameter such as $H; each instance has its own weights' }}
-                        label={mode === 'parallel' ? 'Instances' : 'Steps'}
-                        fullRow
-                        value={node.count}
-                        onChange={(v) => patchRepeatNode(id, { count: v })}
-                        errors={error ? [error] : []}
-                    />
-                </div>
-                {mode === 'parallel' && <button type="button" className="df-repeat-infer" onClick={() => patchRepeatNode(id, { count: 'auto' })}>Use input count</button>}</>}
-            </section>
+            <p className="df-inspector-note">{mode === 'parallel' ? 'Parallel · outputs form a collection' : 'Sequential · each step feeds the next'}</p>
             <Bindings
                 freeParams={template?.freeParameters ?? []}
                 values={node.bindings ?? {}}
                 onChange={(name, v) => patchRepeatBinding(id, name, v)}
+                leading={countRow}
             />
-            <details className="df-inspector-group df-inspector-options">
-                <summary>Parameter formulas</summary>
-                <div className="df-inspector-fields">
-                    <InspectorField
-                        param={{ name: 'iterationVariable', type: 'string', description: 'Position in a repeat, for formulas that vary by instance: instance 1 uses 0, instance 2 uses 1' }}
-                        label="Formula index"
-                        value={iterVar}
-                        onChange={(v) => patchRepeatNode(id, { iterationVariable: (v || 'i').trim() || 'i' })}
-                    />
-                </div>
-                <p className="df-inspector-note">Instance 1: <code>{iterVar} = 0</code>; instance 2: <code>{iterVar} = 1</code>. Use it only for values that change by instance, e.g. <code>64 * ({iterVar} + 1)</code>.</p>
-            </details>
         </>
     );
 }
@@ -284,12 +265,12 @@ export default function NodeInspector() {
     const rename = (label) => (node.kind === 'repeat' ? patchRepeatNode(id, { label }) : patchNode(id, { label }));
 
     return (
-        <aside ref={panelRef} className="df-inspector df-panel-subtle nodrag nopan nowheel" aria-label={`${node.label} inspector`} style={{ '--df-inspector-width': `${inspectorWidth(node, componentTemplate)}px` }} onKeyDown={(e) => e.stopPropagation()}>
+        <aside ref={panelRef} className="df-inspector df-panel-subtle nodrag nopan nowheel" aria-label={`${node.label} inspector`} onKeyDown={(e) => e.stopPropagation()}>
             <header className="df-inspector-header">
                 {node.kind === 'layer'
                     ? <OperationIcon libraryKey={node.libraryKey} size={24} />
                     : standard ? <OperationIcon libraryKey={standard.libraryKey} size={24} /> : <ContainerIcon size={22} strokeWidth={2.5} aria-hidden="true" />}
-                {operation ? <strong className="df-inspector-title" title={node.label}>Operation</strong> : <input aria-label="Block name" title="Block name" value={node.label} onChange={(e) => rename(e.target.value)} />}
+                {operation ? <strong className="df-inspector-title" title={node.label}>Operation</strong> : <input aria-label="Block name" title="Block name" size={Math.max(6, node.label.length + 1)} value={node.label} onChange={(e) => rename(e.target.value)} />}
                 <button type="button" className="df-inspector-close" onClick={clearExpanded} aria-label="Close inspector"><X size={13} strokeWidth={3} /></button>
             </header>
             <ParameterBindingsProvider key={node.id} node={node}><div className="df-inspector-body">
