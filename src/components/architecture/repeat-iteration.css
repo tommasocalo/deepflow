@@ -7,12 +7,11 @@
 .df-iteration-counter button:hover:not(:disabled) { border-color: #111; background: #eee; }
 .df-iteration-counter button:disabled { opacity: .3; }
 .df-iteration-counter > span { font: 600 10px/1 ui-monospace, monospace; }
-.df-iteration-scope { display: inline-flex; flex-shrink: 0; overflow: hidden; border: 1px solid #111; border-radius: 2px; }
-.df-iteration-scope button { padding: 3px 7px; color: #555; background: #fff; font-size: 10px; font-weight: 600; line-height: 15px; white-space: nowrap; }
-.df-iteration-scope button + button { border-left: 1px solid #111; }
-.df-iteration-scope button[aria-pressed="true"] { color: #111; background: #fff0af; box-shadow: inset 0 -2px 0 #111; }
-.df-iteration-scope button:hover { color: #111; background: #f4f4ef; }
-.df-iteration-scope button[aria-pressed="true"]:hover { background: #ffe994; }
-.df-iteration-scope button:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
-.df-iteration-effect { color: #555; font-size: 10px; }
-.df-iteration-bar.is-local .df-iteration-effect { color: #111; font-weight: 600; }
+.df-iteration-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px; border: 1px solid transparent; border-radius: 2px; font-size: 10px; font-weight: 600; color: #333; white-space: nowrap; }
+.df-iteration-toggle:hover { border-color: #d4d4ce; background: #f4f4ef; color: #111; }
+.df-iteration-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.df-iteration-switch { position: relative; width: 26px; height: 14px; border: 1px solid #111; border-radius: 2px; background: #fff; flex-shrink: 0; }
+.df-iteration-switch::after { content: ''; position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 1px; background: #111; transition: transform 120ms ease; }
+.df-iteration-toggle[aria-checked="true"] { color: #111; }
+.df-iteration-toggle[aria-checked="true"] .df-iteration-switch { background: #fde68a; }
+.df-iteration-toggle[aria-checked="true"] .df-iteration-switch::after { transform: translateX(12px); }
