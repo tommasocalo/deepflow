@@ -3,3 +3,4 @@
 .df-architecture-workspace .react-flow__edge.updating .react-flow__edgeupdater { cursor: grabbing; }
 .df-architecture-workspace .react-flow__handle.connectingfrom,
 .df-architecture-workspace .react-flow__handle.valid { background: #f472b6; }
+.df-architecture-workspace .df-connection-selection { stroke: #fde68a; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
