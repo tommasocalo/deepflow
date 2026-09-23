@@ -176,3 +176,9 @@
 .df-inspector .df-inspector-issue svg { margin-top: 0; }
 .df-inspector .df-inspector-issue.is-error,
 .df-inspector .df-inspector-issue.is-warning { border: 0; background: transparent; }
+/* Messages wrap inside the width the fields give the card; they never widen it. */
+.df-inspector .df-inspector-issues,
+.df-inspector .df-param-errors,
+.df-inspector .df-inspector-note,
+.df-inspector .df-gradient-reason,
+.df-inspector .df-connection-note { contain: inline-size; overflow-wrap: anywhere; }
