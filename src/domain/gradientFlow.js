@@ -1,5 +1,5 @@
 import { topologicalSort } from '../validation/topology.js';
-import { buildParameterScope, resolveLayerParameters, resolveRepeatCount } from './expressions.js';
+import { buildParameterScope, resolveLayerParameters, resolveRepeatCount, withGlobalParameters } from './expressions.js';
 import { getIncomingEdges, getTemplateInputIds, mapInputEdgesToPorts, orderOperationEdges } from './graphInputs.js';
 import { defaultParameterValues, getEntry } from './library/index.js';
 import { isShapeCollection } from './shapeCollections.js';
@@ -20,7 +20,8 @@ const trainableModule = (key) => /^torch\.nn\.(Linear|Embedding|Bilinear|Conv|Ba
 const unknownModule = (key) => /^(deepflow\.op\.|deepflow\.(io|template)\.|torch\.nn\.|deepflow\.nn\.)/.test(key) === false;
 
 /** Static autograd structure. This describes paths, never measured gradients. */
-export function analyzeGradientFlow(graph, { templates = {}, scope = {}, externalInputs = {}, externalShapes = {}, depth = 0, budget = { remaining: 20000 } } = {}) {
+export function analyzeGradientFlow(graph, { templates = {}, scope: outerScope = {}, externalInputs = {}, externalShapes = {}, depth = 0, budget = { remaining: 20000 } } = {}) {
+    const scope = withGlobalParameters(graph, outerScope);
     const report = { graph, scope, nodes: {}, edges: {}, children: {}, output: tensor(), inputDependencies: [] };
     const shapeReport = validate(graph, { templates, scope, externalInputs: externalShapes, depth });
     const allowed = new Set();

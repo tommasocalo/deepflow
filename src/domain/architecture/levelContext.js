@@ -1,6 +1,6 @@
 import { validate } from '../../validation/validator.js';
 import { createValidationCache } from '../../validation/cache.js';
-import { buildParameterScope, resolveRepeatCount } from '../expressions.js';
+import { buildParameterScope, resolveRepeatCount, withGlobalParameters } from '../expressions.js';
 import { getIncomingEdges, getTemplateInputIds, mapTemplateInputs } from '../graphInputs.js';
 import { isShapeCollection } from '../shapeCollections.js';
 import { effectiveTemplateId, inspectedInstanceIndex } from './instanceStructure.js';
@@ -35,10 +35,11 @@ export const cachedValidate = createValidationCache((graph, options) => {
  * shown with the shapes it really sees at the selected Repeat index.
  */
 export function resolveLevelContext(rootGraph, currentPath, templates, inspectedIterations = {}) {
-    const root = { graph: rootGraph, scope: {}, externalInputs: {}, levels: [] };
+    const rootScope = withGlobalParameters(rootGraph);
+    const root = { graph: rootGraph, scope: rootScope, externalInputs: {}, levels: [] };
     const levels = [];
     let graph = rootGraph;
-    let scope = {};
+    let scope = rootScope;
     let externalInputs = {};
     let repeat = null;
     const path = [];

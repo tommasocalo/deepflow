@@ -1,5 +1,5 @@
 import { topologicalSort } from '../validation/topology.js';
-import { buildParameterScope, resolveLayerParameters, resolveRepeatCount } from '../domain/expressions.js';
+import { buildParameterScope, resolveLayerParameters, resolveRepeatCount, withGlobalParameters } from '../domain/expressions.js';
 import { getIncomingEdges, mapTemplateInputs, orderOperationEdges } from '../domain/graphInputs.js';
 import { validate } from '../validation/validator.js';
 import { getEntry } from '../domain/library/index.js';
@@ -27,7 +27,7 @@ export function generateArchitectureModule(graph, { templates = {}, className = 
     const ctx = makeContext(templates);
     ctx.rootInputs = new Map(Object.values(graph.nodes).filter((node) => node.libraryKey === 'deepflow.io.Input').map((node, index) => [node.id, index ? `x${index + 1}` : 'x']));
     const forwardArgs = [...ctx.rootInputs.values()].join(', ') || 'x';
-    const plan = expandGraph(graph, {}, ctx);
+    const plan = expandGraph(graph, withGlobalParameters(graph), ctx);
 
     const initLines = [];
     const forwardLines = [];

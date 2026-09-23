@@ -43,6 +43,7 @@ const HISTORY_ACTIONS = {
     removeEdge: 'Delete connection', patchEdge: 'Change connection', setEdgeGradientOp: 'Change gradient flow',
     resetCurrentGraph: 'Reset graph', groupSelection: 'Group nodes',
     pasteSelection: 'Paste nodes', setStructureScope: 'Change structure scope',
+    addGlobalParameter: 'Add global parameter', patchGlobalParameter: 'Change global parameter', removeGlobalParameter: 'Delete global parameter',
 };
 
 const initialGraph = () => {
@@ -380,6 +381,30 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         },
 
         patchEdge: (edgeId, patch) => updateCurrentGraph((g) => patchEdge(g, edgeId, patch)),
+
+        // Global parameters belong to the root graph whatever level is open.
+        addGlobalParameter: (spec) => {
+            if (!isActive() || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(spec?.name ?? '')) return false;
+            const state = get();
+            const parameters = state.graph.parameters ?? [];
+            if (parameters.some((parameter) => parameter.name === spec.name)) return false;
+            set({ graph: { ...state.graph, parameters: [...parameters, { type: 'int', default: null, ...spec }] } });
+            return true;
+        },
+        patchGlobalParameter: (name, patch) => {
+            if (!isActive()) return;
+            const state = get();
+            const parameters = state.graph.parameters ?? [];
+            if (!parameters.some((parameter) => parameter.name === name)) return;
+            set({ graph: { ...state.graph, parameters: parameters.map((parameter) => parameter.name === name ? { ...parameter, ...patch } : parameter) } });
+        },
+        removeGlobalParameter: (name) => {
+            if (!isActive()) return;
+            const state = get();
+            const parameters = state.graph.parameters ?? [];
+            if (!parameters.some((parameter) => parameter.name === name)) return;
+            set({ graph: { ...state.graph, parameters: parameters.filter((parameter) => parameter.name !== name) } });
+        },
 
         setEdgeGradientOp: (edgeId, gradientOp, gradientOpLambda) =>
             updateCurrentGraph((g) =>

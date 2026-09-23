@@ -1,7 +1,7 @@
 import { topologicalSort } from './topology.js';
 import { validateLayerParameters } from './parameters.js';
 import { inferShape } from './shapes.js';
-import { buildParameterScope, resolveLayerParameters, resolveRepeatCount } from '../domain/expressions.js';
+import { buildParameterScope, resolveLayerParameters, resolveRepeatCount, withGlobalParameters } from '../domain/expressions.js';
 import { getIncomingEdges, getTemplateInputIds, getOperationInputIds, mapTemplateInputs, orderOperationEdges, validateInputPorts } from '../domain/graphInputs.js';
 import { isShapeCollection, shapeCollection } from '../domain/shapeCollections.js';
 import { effectiveTemplateId } from '../domain/architecture/instanceStructure.js';
@@ -17,7 +17,8 @@ const MAX_VALIDATED_NODES = 20000;
  * parallel repeats select item i from each incoming collection.
  */
 export function validate(graph, opts = {}) {
-    const { templates = {}, scope = {}, externalInputs = {}, depth = 0 } = opts;
+    const { templates = {}, externalInputs = {}, depth = 0 } = opts;
+    const scope = withGlobalParameters(graph, opts.scope ?? {});
     const budget = opts.budget ?? { remaining: MAX_VALIDATED_NODES };
     const { order: topo, cyclic, adjacency: adj } = topologicalSort(graph);
     const errors = {}, warnings = {}, shapes = {}, globalErrors = [];

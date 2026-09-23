@@ -1,12 +1,14 @@
 /* Component parameters: one compact row per variable, brutalist like the inspector. */
 .df-params { display: grid; min-width: 0; color: #111; font-size: 11px; line-height: 1.4; }
 .df-params-header { display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 10px; border-bottom: 1px solid #111; }
+.df-params-header > strong { flex: 1; min-width: 0; padding: 2px 4px; font: 700 12px/18px ui-sans-serif, system-ui, sans-serif; }
 .df-params-header input { flex: 1; min-width: 0; height: 24px; padding: 2px 4px; border: 1px solid transparent; border-radius: 2px; outline: none; background: transparent; font: 700 12px/18px ui-sans-serif, system-ui, sans-serif; }
 .df-params-header input:hover { border-color: #d4d4ce; }
 .df-params-header input:focus { border-color: #111; background: #fff; }
 .df-params-header button { display: grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; border-radius: 2px; }
 .df-params-header button:hover { background: #eee; }
 .df-params-note { margin: 0; padding: 5px 10px 2px; color: #666; font-size: 10px; }
+.df-params-note code, .df-params-empty code { color: #111; }
 .df-params-list { display: grid; margin: 0; padding: 2px 6px 4px; list-style: none; }
 .df-params-item + .df-params-item { border-top: 1px solid #ecece6; }
 .df-params .df-params-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 44px 20px; align-items: center; gap: 6px; min-height: 30px; max-width: none; padding: 2px 4px; border-radius: 0; background: transparent; }

@@ -5,7 +5,7 @@ import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { resolveLevelContext, useValidationContext } from '../../hooks/useValidation.js';
-import { asFreeParamRef } from '../../domain/expressions.js';
+import { asFreeParamRef, globalParameters } from '../../domain/expressions.js';
 import { exactParameterValue, isApproximateDisplay } from '../../domain/parameterDisplay.js';
 import { availableParameters, exposedFieldParameter, fieldAlias, formatParameterValue, parameterFrames, resolvedFieldValue } from '../../domain/parameterBindings.js';
 import './parameter-binding.css';
@@ -23,7 +23,10 @@ export function ParameterBindingsProvider({ node, children }) {
     const child = template ? resolveLevelContext(graph, [...path, node.id], templates, inspectedIterations) : null;
     const component = child ? { scope: child.scope, inputs: child.externalInputs, count: child.repeat?.count ?? 1, index: child.repeat?.index ?? 0 } : null;
     const frames = parameterFrames(graph, path, templates, inspectedIterations);
-    const parameters = availableParameters(frames);
+    // Globals first: a component parameter with the same name shadows them.
+    const visible = new Map(globalParameters(graph).map((parameter) => [parameter.name, { ...parameter, owner: 'Global' }]));
+    for (const parameter of availableParameters(frames)) visible.set(parameter.name, parameter);
+    const parameters = [...visible.values()];
     for (const frame of frames) {
         const name = frame.instance.iterationVariable || 'i';
         if (frame.instance.kind === 'repeat' && !parameters.some((parameter) => parameter.name === name)) parameters.push({ name, type: 'int', owner: 'Instance index' });

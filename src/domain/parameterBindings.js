@@ -56,6 +56,17 @@ export function parameterConsumers(template, name) {
     return uses;
 }
 
+/** Fields that can read a global: the root graph, and templates that do not
+ * declare a parameter of the same name (which would shadow it). */
+export function globalParameterUses(rootGraph, templates, name) {
+    const uses = parameterConsumers({ graph: rootGraph, freeParameters: rootGraph?.parameters ?? [] }, name).map((use) => ({ ...use, root: true }));
+    for (const template of Object.values(templates ?? {})) {
+        if ((template.freeParameters ?? []).some((parameter) => parameter.name === name)) continue;
+        for (const use of parameterConsumers(template, name)) uses.push({ ...use, template: template.name });
+    }
+    return uses;
+}
+
 export function resolvedFieldValue(value, scope, depth = 0) {
     if (depth > 16) return null;
     if (Array.isArray(value)) return value.map((part) => resolvedFieldValue(part, scope, depth + 1));

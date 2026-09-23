@@ -198,3 +198,14 @@ export function resolveRepeatCount(raw, scope = {}, inputShapes = []) {
     }
     return { count, error: null };
 }
+
+/** Model-wide parameters live on the root graph: every level can use them as $name. */
+export function globalParameters(graph) {
+    return Array.isArray(graph?.parameters) ? graph.parameters : [];
+}
+
+/** Scope of a graph including its global parameters. Template graphs have none. */
+export function withGlobalParameters(graph, scope = {}) {
+    const parameters = globalParameters(graph);
+    return parameters.length ? buildParameterScope(parameters, {}, scope) : scope;
+}
