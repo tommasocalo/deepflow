@@ -1,159 +1,106 @@
-import { useId, useState } from 'react';
-import { ArrowUpRight, ChevronDown, Eye, EyeOff, Plus, Trash2, Variable } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowUpRight, Plus, Trash2, Variable, X } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { parameterConsumers } from '../../domain/parameterBindings.js';
+import VariableInput from './VariableInput.jsx';
 import './template-inspector.css';
 
-const PARAM_TYPES = ['int', 'float', 'string', 'bool', 'tuple', 'enum'];
+const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-function TemplateParameters({ template, embedded, initiallyOpen, onOpenConsumer }) {
-    const patchTemplate = useTemplatesStore((s) => s.patchTemplate);
-    const addFreeParameter = useTemplatesStore((s) => s.addFreeParameter);
-    const patchFreeParameter = useTemplatesStore((s) => s.patchFreeParameter);
-    const removeFreeParameter = useTemplatesStore((s) => s.removeFreeParameter);
-    const [draftName, setDraftName] = useState('');
-    const hintId = useId();
-
-    const free = (template.freeParameters ?? []).filter((parameter) => !parameter.derived);
-    const derived = (template.freeParameters ?? []).filter((parameter) => parameter.derived);
-    const name = draftName.trim();
-    const validName = /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
-    const duplicate = (template.freeParameters ?? []).some((parameter) => parameter.name === name);
-    const canAdd = validName && !duplicate;
-    const nameHint = duplicate
-        ? 'A parameter with this name already exists.'
-        : name && !validName
-            ? 'Use letters, numbers and underscores; start with a letter or underscore.'
-            : 'Reference this parameter in a block as $name.';
-
-    const handleAdd = (event) => {
-        event.preventDefault();
-        if (!canAdd) return;
-        addFreeParameter(template.id, { name, type: 'int', description: '', default: null });
-        setDraftName('');
-    };
-
-    return (
-        <details open={initiallyOpen || undefined} className={`df-template-inspector nodrag nopan nowheel ${embedded ? 'is-embedded' : 'is-floating'}`}>
-            <summary className="df-template-summary">
-                <Variable size={15} aria-hidden="true" />
-                <span>Template parameters</span>
-                <span className="df-template-count" aria-label={`${free.length} parameters`}>{free.length}</span>
-                <ChevronDown className="df-template-chevron" size={14} aria-hidden="true" />
-            </summary>
-
-            <div className="df-template-content">
-                <p className="df-template-note">Edits apply to all instances.</p>
-                <label className="df-template-field">
-                    <span>Template name</span>
-                    <input
-                        autoFocus={initiallyOpen}
-                        value={template.name}
-                        onChange={(event) => patchTemplate(template.id, { name: event.target.value })}
-                    />
-                </label>
-                <label className="df-template-field">
-                    <span>Description</span>
-                    <textarea
-                        rows={2}
-                        placeholder="What does this template do?"
-                        value={template.description ?? ''}
-                        onChange={(event) => patchTemplate(template.id, { description: event.target.value })}
-                    />
-                </label>
-
-                <div className="df-template-parameters">
-                    <h3>Exposed parameters</h3>
-                    {free.length === 0 && (
-                        <p className="df-template-note">Use <code>$name</code> in block parameters.</p>
-                    )}
-                    {free.map((parameter) => {
-                        const uses = parameterConsumers(template, parameter.name);
-                        return (
-                        <section key={parameter.name} className="df-template-parameter" aria-label={`Parameter ${parameter.name}`}>
-                            <div className="df-template-parameter-heading">
-                                <code>${parameter.name}</code>
-                                <button type="button" className="df-field-visibility" aria-label={`${parameter.name} in ${template.name} settings`}
-                                    aria-pressed={!parameter.hidden} title={`${parameter.hidden ? 'Show' : 'Hide'} ${parameter.name} in component settings`}
-                                    onClick={() => patchFreeParameter(template.id, parameter.name, { hidden: !parameter.hidden })}>
-                                    {parameter.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
-                                </button>
-                                <button
-                                    type="button"
-                                    className="df-template-remove"
-                                    onClick={() => removeFreeParameter(template.id, parameter.name)}
-                                    disabled={uses.length > 0}
-                                    aria-label={`Remove parameter ${parameter.name}`}
-                                    title={uses.length ? 'Unlink the fields using this parameter before removing it' : `Remove ${parameter.name}`}
-                                >
-                                    <Trash2 size={13} aria-hidden="true" />
-                                </button>
-                            </div>
-                            <label className="df-template-field">
-                                <span>Type</span>
-                                <select
-                                    aria-label={`${parameter.name} type`}
-                                    value={parameter.type}
-                                    onChange={(event) => patchFreeParameter(template.id, parameter.name, { type: event.target.value })}
-                                >
-                                    {PARAM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-                                </select>
-                            </label>
-                            <label className="df-template-field">
-                                <span>Default value</span>
-                                <input
-                                    aria-label={`${parameter.name} default value`}
-                                    placeholder="Optional"
-                                    value={parameter.default ?? ''}
-                                    onChange={(event) => patchFreeParameter(template.id, parameter.name, { default: event.target.value || null })}
-                                />
-                            </label>
-                            <label className="df-template-field">
-                                <span>Description</span>
-                                <input
-                                    aria-label={`${parameter.name} description`}
-                                    placeholder="What does this control?"
-                                    value={parameter.description ?? ''}
-                                    onChange={(event) => patchFreeParameter(template.id, parameter.name, { description: event.target.value })}
-                                />
-                            </label>
-                            <details className="df-template-uses">
-                                <summary>Used by {uses.length} {uses.length === 1 ? 'field' : 'fields'}</summary>
-                                {uses.map((use) => use.parameter ? <span key={`${use.label}-${use.field}`}>{use.label} · default</span> : <button type="button" key={`${use.nodeId}-${use.field}`} disabled={!onOpenConsumer} onClick={() => onOpenConsumer?.(use.nodeId)}>{use.label} · {use.field}<ArrowUpRight size={11} /></button>)}
-                                {!uses.length && <span>Link an internal field to ${parameter.name}.</span>}
-                            </details>
-                        </section>
-                    ); })}
-                    {derived.length > 0 && <section className="df-template-derived"><h3>From inputs</h3>{derived.map((parameter) => <p key={parameter.name}><strong>{parameter.name}</strong><span>{template.graph.nodes[parameter.derived.inputId]?.label ?? 'Input'} · {parameter.derived.axis === -1 ? 'last dimension' : `axis ${parameter.derived.axis}`}</span></p>)}</section>}
-                </div>
-
-                <form className="df-template-add" onSubmit={handleAdd}>
-                    <label className="df-template-field">
-                        <span>New parameter</span>
-                        <input
-                            placeholder="e.g. hidden_size"
-                            autoComplete="off"
-                            spellCheck={false}
-                            value={draftName}
-                            onChange={(event) => setDraftName(event.target.value)}
-                            aria-invalid={name ? !canAdd : undefined}
-                            aria-describedby={hintId}
-                        />
-                    </label>
-                    <p id={hintId} className="df-template-note">{nameHint}</p>
-                    <button type="submit" className="df-template-add-button" disabled={!canAdd}>
-                        <Plus size={14} aria-hidden="true" /> Add parameter
-                    </button>
-                </form>
-            </div>
-        </details>
-    );
+/** The value decides the type: numbers, booleans and tuples; formulas keep theirs. */
+function inferType(value, current) {
+    const text = String(value ?? '').trim();
+    if (/^(true|false)$/i.test(text)) return 'bool';
+    if (/^[-+]?\d+$/.test(text)) return 'int';
+    if (/^[-+]?(\d+\.\d*|\.\d+)(e[-+]?\d+)?$/i.test(text) || /^[-+]?\d+e[-+]?\d+$/i.test(text)) return 'float';
+    if (/^[([].*[)\]]$/.test(text)) return 'tuple';
+    return current ?? 'int';
 }
 
-/** Parameters of the shared template currently open in the canvas. */
-export default function TemplateInspector({ embedded = false, templateId, initiallyOpen = false }) {
+function ParameterRow({ template, parameter, suggestions, onOpenConsumer }) {
+    const patchFreeParameter = useTemplatesStore((s) => s.patchFreeParameter);
+    const removeFreeParameter = useTemplatesStore((s) => s.removeFreeParameter);
+    const [open, setOpen] = useState(false);
+    const uses = parameterConsumers(template, parameter.name);
+    const value = Array.isArray(parameter.default) ? parameter.default.join(', ') : parameter.default ?? '';
+    return <li className="df-params-item">
+        {/* df-param-row lets the $ suggestions open across the whole row. */}
+        <div className="df-params-row df-param-row">
+            <code title={parameter.description || undefined}>${parameter.name}</code>
+            <VariableInput className="df-params-value" aria-label={`${parameter.name} value`} spellCheck={false} autoComplete="off"
+                placeholder="—" value={value} suggestions={suggestions.filter((suggestion) => suggestion.name !== parameter.name)}
+                onChange={(event) => {
+                    const next = event.target.value;
+                    patchFreeParameter(template.id, parameter.name, { default: next === '' ? null : next, type: inferType(next, parameter.type) });
+                }} />
+            <button type="button" className="df-params-uses" aria-expanded={open} disabled={!uses.length} onClick={() => setOpen(!open)}
+                title={uses.length ? 'Show where it is used' : 'Not used yet: type it as $name in a field'}>
+                {uses.length ? `${uses.length} ${uses.length === 1 ? 'use' : 'uses'}` : 'unused'}
+            </button>
+            <button type="button" className="df-params-remove" disabled={uses.length > 0} onClick={() => removeFreeParameter(template.id, parameter.name)}
+                aria-label={`Remove parameter ${parameter.name}`} title={uses.length ? 'Used by fields: change them before removing it' : `Remove ${parameter.name}`}>
+                <Trash2 size={12} aria-hidden="true" />
+            </button>
+        </div>
+        {open && <div className="df-params-consumers">
+            {uses.map((use) => use.parameter
+                ? <span key={`${use.label}-${use.field}`}>${use.label} default</span>
+                : <button type="button" key={`${use.nodeId}-${use.field}`} disabled={!onOpenConsumer} onClick={() => onOpenConsumer?.(use.nodeId)}>
+                    {use.label} · {use.field}<ArrowUpRight size={10} aria-hidden="true" />
+                </button>)}
+        </div>}
+    </li>;
+}
+
+/** Compact list of a component's variables: name, shared value, where it is used. */
+function TemplateParameters({ template, onOpenConsumer, onClose }) {
+    const patchTemplate = useTemplatesStore((s) => s.patchTemplate);
+    const addFreeParameter = useTemplatesStore((s) => s.addFreeParameter);
+    const [draft, setDraft] = useState('');
+    const parameters = template.freeParameters ?? [];
+    const free = parameters.filter((parameter) => !parameter.derived);
+    const derived = parameters.filter((parameter) => parameter.derived);
+    const suggestions = free.map((parameter) => ({ name: parameter.name, value: parameter.default }));
+    const name = draft.trim().replace(/^\$/, '');
+    const duplicate = parameters.some((parameter) => parameter.name === name);
+    const invalid = !!name && !NAME.test(name);
+    const add = (event) => {
+        event.preventDefault();
+        if (!name || invalid || duplicate) return;
+        addFreeParameter(template.id, { name, type: 'int', description: '', default: null });
+        setDraft('');
+    };
+    return <div className="df-params nodrag nopan nowheel">
+        <header className="df-params-header">
+            <Variable size={14} aria-hidden="true" />
+            <input aria-label="Component name" title="Component name" value={template.name} onChange={(event) => patchTemplate(template.id, { name: event.target.value })} />
+            {onClose && <button type="button" onClick={onClose} aria-label="Close template parameters"><X size={14} /></button>}
+        </header>
+        <p className="df-params-note">Values shared by every instance</p>
+        {free.length > 0
+            ? <ul className="df-params-list">{free.map((parameter) => <ParameterRow key={parameter.name} template={template} parameter={parameter} suggestions={suggestions} onOpenConsumer={onOpenConsumer} />)}</ul>
+            : <p className="df-params-empty">No parameters yet. Add one below, then type <code>$name</code> in a field.</p>}
+        {derived.length > 0 && <section className="df-params-derived" aria-label="Parameters from inputs">
+            <h3>From inputs</h3>
+            {derived.map((parameter) => <div key={parameter.name} className="df-params-row is-derived">
+                <code>{parameter.name}</code>
+                <span>{template.graph.nodes[parameter.derived.inputId]?.label ?? 'input'} · {parameter.derived.axis === -1 ? 'last dim' : `axis ${parameter.derived.axis}`}</span>
+            </div>)}
+        </section>}
+        <form className="df-params-add" onSubmit={add}>
+            <span aria-hidden="true">$</span>
+            <input aria-label="New parameter name" placeholder="new_parameter" autoComplete="off" spellCheck={false}
+                value={draft} onChange={(event) => setDraft(event.target.value)} aria-invalid={invalid || duplicate || undefined} />
+            <button type="submit" disabled={!name || invalid || duplicate} aria-label="Add parameter" title="Add parameter"><Plus size={13} /></button>
+        </form>
+        {(invalid || duplicate) && <p className="df-params-error" role="alert">{duplicate ? 'This name already exists.' : 'Letters, digits and _; start with a letter.'}</p>}
+    </div>;
+}
+
+/** Parameters of the component selected, or of the level open in the canvas. */
+export default function TemplateInspector({ templateId, onClose }) {
     const graph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const inspectedIterations = useArchitectureStore((s) => s.inspectedIterations);
@@ -169,5 +116,5 @@ export default function TemplateInspector({ embedded = false, templateId, initia
     const selected = selectedNodeIds.map((id) => level.graph.nodes[id]).find((node) => node && resolveGraphLevel(graph, [...currentPath, node.id], templates, inspectedIterations).templateId === template.id);
     const path = level.templateId === template.id ? currentPath : selected ? [...currentPath, selected.id] : null;
     const openConsumer = path ? (id) => { openLevel(path); selectOnly(id); setExpanded(id); } : null;
-    return <TemplateParameters key={template.id} template={template} embedded={embedded} initiallyOpen={initiallyOpen} onOpenConsumer={openConsumer} />;
+    return <TemplateParameters key={template.id} template={template} onOpenConsumer={openConsumer} onClose={onClose} />;
 }

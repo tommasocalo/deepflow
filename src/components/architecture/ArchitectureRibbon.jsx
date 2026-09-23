@@ -16,7 +16,7 @@ import './ribbon.css';
 
 const PINS_KEY = 'deepflow:ribbon-pins';
 const SHORT_NAMES = { Normalization: 'Norm', Convolution: 'Conv', Pooling: 'Pool', 'Learned positions': 'Positions', 'Sinusoidal positions': 'Sinusoidal' };
-const MENU_WIDTHS = { operations: 350, components: 360, templates: 310, preferences: 280, parameters: 310, group: 280 };
+const MENU_WIDTHS = { operations: 350, components: 360, templates: 310, preferences: 280, parameters: 272, group: 280 };
 function readPins() {
     try {
         const saved = JSON.parse(localStorage.getItem(PINS_KEY));
@@ -234,8 +234,8 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             <header><strong>Group {selection.length} {selection.length === 1 ? 'block' : 'blocks'}</strong><button type="button" onClick={() => closePopup(true)} aria-label="Close group editor"><X size={14} /></button></header>
             <form onSubmit={confirmGroup}><label>Component name<input autoFocus value={groupName} onChange={(event) => setGroupName(event.target.value)} /></label><p>The selection becomes a reusable template.</p>{error && <p role="alert" className="df-ribbon-error">{error}</p>}<button className="df-ribbon-primary" type="submit">Create component</button></form>
         </div>}
-        {popup === 'parameters' && template && <div className="df-ribbon-popover df-ribbon-popover-parameters" style={popoverStyle} role="dialog" aria-label={`${template.name} template parameters`} onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}>
-            <header><strong>{template.name}</strong><button type="button" onClick={() => closePopup(true)} aria-label="Close template parameters"><X size={14} /></button></header><TemplateInspector templateId={templateId} embedded initiallyOpen />
+        {popup === 'parameters' && template && <div className="df-ribbon-popover df-ribbon-popover-parameters" style={popoverStyle} role="dialog" aria-label={`${template.name} parameters`} onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}>
+            <TemplateInspector templateId={templateId} onClose={() => closePopup(true)} />
         </div>}
         {(notice || (error && popup !== 'group')) && <div className={`df-ribbon-notice${error ? ' is-error' : ''}`} role={error ? 'alert' : 'status'}>{!error && <Check size={12} />}<span>{error || notice}</span><button type="button" aria-label="Dismiss message" onClick={() => { setNotice(''); setError(''); }}><X size={12} /></button></div>}
     </div>;
