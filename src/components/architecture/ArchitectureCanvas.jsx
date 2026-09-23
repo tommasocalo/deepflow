@@ -369,6 +369,12 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                 data-architecture-canvas
                 className={showPanCursor ? 'deepflow-mode-pan' : 'deepflow-mode-select'}
                 style={{ flex: 1, minWidth: 0, height: '100%', backgroundColor: '#fff', position: 'relative' }}
+                onDoubleClick={(event) => {
+                    // Double-clicking empty canvas fits the graph; nodes keep their own double-click.
+                    const target = event.target;
+                    if (!target.closest?.('.react-flow') || target.closest('.react-flow__node, .react-flow__edge, .react-flow__controls, .react-flow__panel')) return;
+                    fitView({ padding: 0.2, minZoom: 0.2, maxZoom: 1, duration: 220 });
+                }}
             >
                 <GraphStatusPanel />
                 <ReactFlow
@@ -411,6 +417,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                     deleteKeyCode={keyboardActive ? ['Delete', 'Backspace'] : null}
                     edgesFocusable
                     edgesReconnectable
+                    zoomOnDoubleClick={false}
                     minZoom={0.2}
                     maxZoom={2}
                     fitViewOptions={{ padding: 0.2, minZoom: 0.2, maxZoom: 1 }}
