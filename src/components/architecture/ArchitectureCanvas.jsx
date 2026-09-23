@@ -438,7 +438,9 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                     </Controls>
                 </ReactFlow>
                 {overlay}
-                {showGradientFlow && <GradientFlowControls graph={viewGraph} report={gradientReport} anchor={edgeAnchor} edge={selectedEdgeIds.length === 1 ? viewGraph.edges.find((edge) => edge.id === selectedEdgeIds[0]) : null} onClose={() => { setSelectedEdgeIds([]); setEdgeAnchor(null); }} />}
+                {showGradientFlow && <GradientFlowControls graph={viewGraph} report={gradientReport} anchor={edgeAnchor}
+                    edges={selectedEdgeIds.map((id) => viewGraph.edges.find((edge) => edge.id === id)).filter(Boolean)}
+                    onClose={() => { setSelectedEdgeIds([]); setEdgeAnchor(null); }} />}
                 {keyboardActive && spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
                 {clipboardNotice && !spacePressed && <div className="df-space-hint" role="status">{clipboardNotice}</div>}
             </div>
