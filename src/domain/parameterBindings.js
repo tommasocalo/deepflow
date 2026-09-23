@@ -78,7 +78,7 @@ export function exposeTemplateField(template, { nodeId, field, name, spec, defau
     const { derived: _derived, required: _required, ...definition } = spec ?? {};
     return {
         ...template,
-        freeParameters: [...(template.freeParameters ?? []), { ...definition, ...(spec?.name === 'shape' && spec.type === 'tuple' ? { editor: 'dimensions' } : {}), name, default: defaultValue ?? null }],
+        freeParameters: [...(template.freeParameters ?? []), { ...definition, ...(spec?.name === 'shape' && spec.type === 'tuple' ? { editor: 'dimensions' } : {}), name, default: defaultValue ?? null, exposes: { nodeId, field } }],
         graph: { ...template.graph, nodes: { ...template.graph.nodes, [nodeId]: nextNode } },
     };
 }
@@ -98,11 +98,62 @@ export function exposedFieldParameter(template, nodeId, field) {
     return name ? template?.freeParameters?.find((parameter) => parameter.name === name && !parameter.derived) ?? null : null;
 }
 
-/** The eye changes the parent control's visibility. First exposure creates
- * an alias; later clicks retain the alias, formulas and every instance binding. */
+/** `undefined` clears the field so it inherits its default again. */
+function setFieldValue(node, field, value) {
+    if (node.kind === 'repeat' && field === 'count') return { ...node, count: value };
+    const bucket = node.kind === 'layer' ? 'parameters' : node.kind === 'repeat' ? 'bindings' : 'parameterValues';
+    const { [field]: _previous, ...rest } = node[bucket] ?? {};
+    return { ...node, [bucket]: value === undefined ? rest : { ...rest, [field]: value } };
+}
+
+/** Name the eye gives a field: its label, lowercased and underscored. */
+export function friendlyParameterName(label, field) {
+    const friendly = String(label || (field === 'p' ? 'dropout' : field)).trim()
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+        .replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+    return /^[a-z_]/.test(friendly) ? friendly : `parameter${friendly ? `_${friendly}` : ''}`;
+}
+
+/**
+ * The parameter the eye created for this field, if any. The field then holds
+ * `$alias` internally, but the cell keeps showing the alias default, so the
+ * value never appears to change. Only aliases marked by the eye qualify: a
+ * variable the user typed stays visible as `$name`.
+ */
+export function fieldAlias(template, nodeId, field) {
+    const parameter = exposedFieldParameter(template, nodeId, field);
+    return parameter?.exposes?.nodeId === nodeId && parameter.exposes.field === field ? parameter : null;
+}
+
+/**
+ * The eye shows or hides a field in the parent component's settings and never
+ * changes what the cell shows. Showing a literal or formula creates an alias
+ * behind the field; hiding it puts the value back and removes the alias, so
+ * every instance uses the cell again. Instance overrides stay stored and apply
+ * again if the field is shown later. A field that already uses a variable of
+ * this component shows or hides that variable.
+ */
 export function toggleTemplateFieldExposure(template, { nodeId, field, spec, defaultValue, label, reservedNames = [] }) {
     const node = template?.graph?.nodes?.[nodeId];
     if (!node || !field || spec?.derived || (node.kind === 'repeat' && field === 'count' && node.count === 'auto')) return null;
+    const alias = fieldAlias(template, nodeId, field);
+    if (alias?.hidden) return {
+        ...template,
+        freeParameters: template.freeParameters.map((parameter) => parameter === alias ? { ...parameter, hidden: false, exposes: { nodeId, field } } : parameter),
+    };
+    if (alias) {
+        // A field that was empty goes back to empty unless its value was edited.
+        const restored = alias.exposes.inherited && alias.default === (spec?.default ?? null) ? undefined : alias.default;
+        const graph = { ...template.graph, nodes: { ...template.graph.nodes, [nodeId]: setFieldValue(node, field, restored) } };
+        const stillUsed = parameterConsumers({ ...template, graph }, alias.name).length > 0;
+        return {
+            ...template,
+            graph,
+            freeParameters: stillUsed
+                ? template.freeParameters.map((parameter) => { if (parameter !== alias) return parameter; const { exposes: _exposes, ...rest } = parameter; return rest; })
+                : template.freeParameters.filter((parameter) => parameter !== alias),
+        };
+    }
     const exposed = exposedFieldParameter(template, nodeId, field);
     if (exposed) return {
         ...template,
@@ -119,11 +170,10 @@ export function toggleTemplateFieldExposure(template, { nodeId, field, spec, def
         ...reservedNames.map((name) => String(name).replace(/^\$/, '')),
         ...parameterReferences(raw),
     ]);
-    const friendly = String(label || (field === 'p' ? 'dropout' : field)).trim()
-        .replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
-        .replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
-    const base = /^[a-z_]/.test(friendly) ? friendly : `parameter${friendly ? `_${friendly}` : ''}`;
+    const base = friendlyParameterName(label, field);
     let name = base;
     for (let suffix = 2; reserved.has(name); suffix++) name = `${base}_${suffix}`;
-    return exposeTemplateField(template, { nodeId, field, name, spec: { ...spec, hidden: false }, defaultValue: raw });
+    const created = exposeTemplateField(template, { nodeId, field, name, spec: { ...spec, hidden: false }, defaultValue: raw });
+    if (!created || current !== undefined) return created;
+    return { ...created, freeParameters: created.freeParameters.map((parameter) => parameter.name === name ? { ...parameter, exposes: { ...parameter.exposes, inherited: true } } : parameter) };
 }

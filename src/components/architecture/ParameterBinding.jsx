@@ -7,7 +7,7 @@ import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { resolveLevelContext, useValidationContext } from '../../hooks/useValidation.js';
 import { asFreeParamRef } from '../../domain/expressions.js';
 import { exactParameterValue, isApproximateDisplay } from '../../domain/parameterDisplay.js';
-import { availableParameters, exposedFieldParameter, formatParameterValue, parameterFrames, resolvedFieldValue } from '../../domain/parameterBindings.js';
+import { availableParameters, exposedFieldParameter, fieldAlias, formatParameterValue, parameterFrames, resolvedFieldValue } from '../../domain/parameterBindings.js';
 import './parameter-binding.css';
 
 const BindingContext = createContext(null);
@@ -43,17 +43,29 @@ export function DerivedParameter({ param }) {
     </div>;
 }
 
-/** References already identify the variable; the eye controls the parent UI. */
+/** References already identify the variable; the eye controls the parent UI.
+ * A field shown through the eye keeps displaying its own value: edits write the
+ * shared value behind the alias, never the alias name. */
 export default function ParameterBinding({ param, value, children }) {
     const binding = useContext(BindingContext);
     const toggleFieldExposure = useTemplatesStore((s) => s.toggleFieldExposure);
+    const patchFreeParameter = useTemplatesStore((s) => s.patchFreeParameter);
     if (!binding || !['int', 'float', 'bool', 'tuple'].includes(param.type) || param.derived) return children;
-    const { node, owner, frames, context, component, suggestions } = binding;
+    const { node, owner, frames, context, component } = binding;
     const scope = param.name === 'count' ? context.scope : component?.scope ?? context.scope;
-    const raw = value === undefined ? param.default : value;
-    const exposed = owner ? exposedFieldParameter(owner, node.id, param.name) : null;
-    const shown = !!exposed && !exposed.hidden;
     const label = children.props.label ?? param.name.replaceAll('_', ' ');
+    const alias = owner ? fieldAlias(owner, node.id, param.name) : null;
+    const raw = alias ? alias.default : value === undefined ? param.default : value;
+    const exposed = alias ?? (owner ? exposedFieldParameter(owner, node.id, param.name) : null);
+    const shown = !!exposed && !exposed.hidden;
+    // A field cannot reference the alias that stands for itself.
+    const suggestions = alias ? binding.suggestions.filter((suggestion) => suggestion.name !== alias.name) : binding.suggestions;
+    // An empty field that inherited its default stays visually empty (grey default).
+    const inherits = alias?.exposes.inherited && alias.default === (param.default ?? null);
+    const aliasProps = alias ? {
+        value: inherits ? undefined : alias.default,
+        onChange: (next) => patchFreeParameter(owner.id, alias.name, { default: next === null || next === '' ? param.default ?? null : next }),
+    } : {};
     const parentLabel = frames.at(-1)?.instance.label ?? owner?.name;
     const VisibilityIcon = shown ? Eye : EyeOff;
     const action = owner && <button type="button" className="df-field-visibility nodrag"
@@ -63,14 +75,14 @@ export default function ParameterBinding({ param, value, children }) {
         onClick={(event) => {
             event.stopPropagation();
             toggleFieldExposure(owner.id, { nodeId: node.id, field: param.name, spec: param, label,
-                defaultValue: raw, reservedNames: suggestions.map((suggestion) => suggestion.name) });
+                defaultValue: raw, reservedNames: binding.suggestions.map((suggestion) => suggestion.name) });
         }}><VisibilityIcon size={12} aria-hidden="true" /></button>;
     const calculated = ['int', 'float'].includes(param.type) && typeof raw === 'string' && raw.trim()
         && !asFreeParamRef(raw.trim()) && !Number.isFinite(Number(raw));
     const resolved = calculated ? resolvedFieldValue(raw, scope) : null;
     const showResult = typeof resolved === 'number' && Number.isFinite(resolved);
     return <div className="df-field-binding">
-        {cloneElement(children, { suggestions, labelAction: action })}
+        {cloneElement(children, { suggestions, labelAction: action, ...aliasProps })}
         {showResult && <div className="df-parameter-result">
             <span>Result: </span><strong title={`Exact value: ${exactParameterValue(resolved)}`}>{isApproximateDisplay(resolved) ? '≈ ' : ''}{formatParameterValue(resolved)}</strong>
         </div>}

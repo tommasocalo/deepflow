@@ -272,7 +272,7 @@ test('whole-shape references remain a single binding until replaced by local dim
     assert.deepEqual(latest, [32, 16, 1], 'Exposed shape aliases retain the dimension editor metadata');
 });
 
-test('shape visibility keeps symbolic axes intact and whole references can be replaced directly', async () => {
+test('shape visibility keeps symbolic axes in the cell and hiding puts them back', async () => {
     const weight = createLayerNode({ id: 'weight', libraryKey: 'deepflow.op.Parameter', entry: getEntry('deepflow.op.Parameter'), label: 'weight', position: { x: 0, y: 0 }, parameters: { shape: ['$out_features', '$in_features'] } });
     const template = createTemplate({ id: 'projection-body', name: 'Projection', graph: { nodes: { weight }, edges: [] }, freeParameters: [
         { name: 'out_features', type: 'int', default: 32 }, { name: 'in_features', type: 'int', default: 16 },
@@ -281,6 +281,7 @@ test('shape visibility keeps symbolic axes intact and whole references can be re
     useTemplatesStore.setState({ templates: { [template.id]: template } });
     useArchitectureStore.setState({ graph: { nodes: { projection }, edges: [] }, currentPath: ['projection'], openPaths: [['projection']], expandedNodeId: 'weight' });
     await render(h(GraphHarness));
+    const stored = () => useTemplatesStore.getState().templates[template.id];
     assert.equal(byAria('shape dimension 1').value, '$out_features');
     assert.equal(container.querySelector('.df-parameter-source'), null);
     assert.equal(container.querySelector('.df-expose-trigger'), null);
@@ -288,28 +289,26 @@ test('shape visibility keeps symbolic axes intact and whole references can be re
     assert.equal(eye().getAttribute('aria-pressed'), 'false');
     await click(eye());
     assert.equal(eye().getAttribute('aria-pressed'), 'true');
-    assert.equal(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, '$shape');
-    assert.deepEqual(useTemplatesStore.getState().templates[template.id].freeParameters.at(-1).default, ['$out_features', '$in_features'], 'Exposure preserves symbolic dimensions rather than freezing this instance');
-    await act(() => useTemplatesStore.getState().patchFreeParameter(template.id, 'out_features', { default: 48 }));
-    assert.equal(byAria('shape').value, '$shape');
-    assert.equal(byAria('Add shape dimension'), null);
+    assert.equal(stored().graph.nodes.weight.parameters.shape, '$shape');
+    assert.deepEqual(stored().freeParameters.at(-1).default, ['$out_features', '$in_features'], 'Exposure preserves symbolic dimensions rather than freezing this instance');
+    assert.equal(byAria('shape dimension 1').value, '$out_features', 'The cell keeps showing the same dimensions');
+    assert.equal(byAria('shape dimension 2').value, '$in_features');
+    await typeText(byAria('shape dimension 2'), '24');
+    await blur(byAria('shape dimension 2'));
+    assert.equal(String(stored().freeParameters.at(-1).default[1]), '24', 'Editing the cell edits the shared value');
+    assert.equal(stored().graph.nodes.weight.parameters.shape, '$shape');
+    await act(() => { useArchitectureStore.getState().openLevel([]); useArchitectureStore.getState().setExpanded('projection'); });
+    assert.ok(byAria('shape') || byAria('shape dimension 1'), 'The parent presents the shown field');
+    await act(() => { useArchitectureStore.getState().openLevel(['projection']); useArchitectureStore.getState().setExpanded('weight'); });
     await click(eye());
     assert.equal(eye().getAttribute('aria-pressed'), 'false');
-    assert.equal(byAria('shape').value, '$shape', 'Hiding a control keeps its expression unchanged');
-    assert.equal(useTemplatesStore.getState().templates[template.id].freeParameters.at(-1).hidden, true);
+    assert.equal(stored().graph.nodes.weight.parameters.shape[0], '$out_features', 'Hiding puts the dimensions back into the field');
+    assert.equal(String(stored().graph.nodes.weight.parameters.shape[1]), '24');
+    assert.equal(stored().freeParameters.some((parameter) => parameter.name === 'shape'), false);
+    assert.equal(byAria('shape dimension 1').value, '$out_features');
     await act(() => { useArchitectureStore.getState().openLevel([]); useArchitectureStore.getState().setExpanded('projection'); });
     assert.equal(byAria('shape'), null, 'The parent no longer presents the hidden field');
     assert.equal(byAria('shape dimension 1'), null);
-    await act(() => { useArchitectureStore.getState().openLevel(['projection']); useArchitectureStore.getState().setExpanded('weight'); });
-    await click(eye());
-    assert.equal(useTemplatesStore.getState().templates[template.id].freeParameters.at(-1).hidden, false);
-    const reference = byAria('shape');
-    await typeText(reference, '48,16');
-    await blur(reference);
-    assert.equal(byAria('shape dimension 1').value, '48');
-    assert.equal(byAria('shape dimension 2').value, '16');
-    await click(byAria('Add shape dimension'));
-    assert.deepEqual(useTemplatesStore.getState().templates[template.id].graph.nodes.weight.parameters.shape, ['48', '16', 1]);
 });
 
 test('repeated parameter names have unique stable label associations', async () => {

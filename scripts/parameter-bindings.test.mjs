@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { availableParameters, exposedFieldParameter, exposeTemplateField, parameterConsumers, parameterFrames, parameterOrigin, parameterReferences, resolvedFieldValue, toggleTemplateFieldExposure } from '../src/domain/parameterBindings.js';
+import { availableParameters, exposedFieldParameter, exposeTemplateField, fieldAlias, parameterConsumers, parameterFrames, parameterOrigin, parameterReferences, resolvedFieldValue, toggleTemplateFieldExposure } from '../src/domain/parameterBindings.js';
 import { buildParameterScope } from '../src/domain/expressions.js';
 
 const graph = (...nodes) => ({ nodes: Object.fromEntries(nodes.map((node) => [node.id, node])), edges: [] });
@@ -39,7 +39,7 @@ test('exposing a field preserves its value and changes only the named field atom
     const result = exposeTemplateField(template, { nodeId: 'dropout', field: 'p', name: 'attention_dropout', spec: { name: 'p', type: 'float', required: true }, defaultValue: 0.15 });
     assert.equal(template.graph.nodes.dropout.parameters.p, 0.15, 'Original remains immutable');
     assert.deepEqual(result.graph.nodes.dropout.parameters, { p: '$attention_dropout', inplace: false });
-    assert.deepEqual(result.freeParameters, [{ name: 'attention_dropout', type: 'float', default: 0.15 }]);
+    assert.deepEqual(result.freeParameters, [{ name: 'attention_dropout', type: 'float', default: 0.15, exposes: { nodeId: 'dropout', field: 'p' } }]);
     assert.equal(exposeTemplateField(result, { nodeId: 'dropout', field: 'p', name: 'attention_dropout' }), null, 'No duplicate parameter');
     assert.equal(exposeTemplateField(template, { nodeId: 'dropout', field: 'p', name: 'bad name' }), null);
 });
@@ -74,27 +74,38 @@ test('store exposure is a single undoable edit across definition and field', asy
     assert.equal(templates.getState().templates.body.freeParameters[0].default, .1);
 });
 
-test('field eyes expose a friendly control and hide it without disconnecting consumers or overrides', () => {
+test('field eyes show a field in the parent and hiding puts its value back', () => {
     const original = { id: 'head', freeParameters: [], graph: graph(layer('dropout', { p: 0.15, inplace: false })) };
     const options = { nodeId: 'dropout', field: 'p', spec: { name: 'p', type: 'float', default: .5 }, label: 'Dropout' };
     const exposed = toggleTemplateFieldExposure(original, options);
     assert.equal(exposed.graph.nodes.dropout.parameters.p, '$dropout');
-    assert.equal(exposedFieldParameter(exposed, 'dropout', 'p').name, 'dropout');
-    assert.equal(exposedFieldParameter(exposed, 'dropout', 'p').default, .15);
+    assert.equal(fieldAlias(exposed, 'dropout', 'p').default, .15, 'The cell keeps showing 0.15');
     assert.equal(exposedFieldParameter(exposed, 'dropout', 'p').hidden, false);
+    const hidden = toggleTemplateFieldExposure(exposed, options);
+    assert.deepEqual(hidden, original, 'Hiding restores the field and removes the alias');
+    assert.deepEqual(toggleTemplateFieldExposure(hidden, options), exposed, 'Showing again recreates the same alias, so stored instance overrides apply again');
     const withConsumers = {
         ...exposed,
         graph: graph(exposed.graph.nodes.dropout, layer('other', { p: '$dropout' })),
         freeParameters: [...exposed.freeParameters, { name: 'doubled', type: 'float', default: '$dropout * 2' }],
     };
-    const hidden = toggleTemplateFieldExposure(withConsumers, options);
-    assert.equal(hidden.graph, withConsumers.graph, 'Visibility never changes fields or other consumers');
-    assert.equal(hidden.freeParameters.length, 2, 'The parameter remains in the runtime scope');
-    assert.equal(exposedFieldParameter(hidden, 'dropout', 'p').hidden, true);
-    assert.deepEqual(buildParameterScope(hidden.freeParameters, { dropout: .27 }), { dropout: .27, doubled: .54 });
-    assert.deepEqual(availableParameters([{ instance: { label: 'Head' }, template: hidden }]).map((parameter) => parameter.name), ['dropout', 'doubled'], 'Hidden controls remain available in expressions');
-    const shown = toggleTemplateFieldExposure(hidden, options);
-    assert.deepEqual(shown, withConsumers, 'Showing a control restores visibility without making a second alias');
+    const detached = toggleTemplateFieldExposure(withConsumers, options);
+    assert.equal(detached.graph.nodes.dropout.parameters.p, .15);
+    assert.equal(detached.graph.nodes.other.parameters.p, '$dropout', 'Other consumers keep the variable');
+    assert.equal(detached.freeParameters.find((parameter) => parameter.name === 'dropout').exposes, undefined, 'It becomes an ordinary variable');
+    assert.deepEqual(buildParameterScope(detached.freeParameters, { dropout: .27 }), { dropout: .27, doubled: .54 });
+    const unset = { id: 'head', freeParameters: [], graph: graph(layer('dropout', { inplace: false })) };
+    const shownUnset = toggleTemplateFieldExposure(unset, options);
+    assert.equal(fieldAlias(shownUnset, 'dropout', 'p').default, .5, 'An empty field shows the default it inherits');
+    assert.deepEqual(toggleTemplateFieldExposure(shownUnset, options), unset, 'Hiding an unedited empty field leaves it empty again');
+    const edited = { ...shownUnset, freeParameters: shownUnset.freeParameters.map((parameter) => ({ ...parameter, default: .3 })) };
+    assert.equal(toggleTemplateFieldExposure(edited, options).graph.nodes.dropout.parameters.p, .3, 'An edited value is kept in the field');
+    const typed = { id: 'head', freeParameters: [{ name: 'dropout', type: 'float', default: .1 }], graph: graph(layer('dropout', { p: '$dropout' })) };
+    assert.equal(fieldAlias(typed, 'dropout', 'p'), null, 'A variable typed by the user is not an alias');
+    const typedHidden = toggleTemplateFieldExposure(typed, options);
+    assert.equal(typedHidden.graph, typed.graph, 'Visibility never changes a typed reference');
+    assert.equal(typedHidden.freeParameters[0].hidden, true);
+    assert.deepEqual(availableParameters([{ instance: { label: 'Head' }, template: typedHidden }]).map((parameter) => parameter.name), ['dropout'], 'Hidden variables remain available in expressions');
     assert.equal(original.graph.nodes.dropout.parameters.p, .15);
     assert.deepEqual(original.freeParameters, []);
 });
@@ -157,16 +168,17 @@ test('field visibility and initial exposure are each atomic undoable changes', a
     const exposed = templates.getState().templates.body;
     assert.equal(templates.getState().toggleFieldExposure('body', options), true);
     assert.equal(history.getState().undoCount, 2);
-    assert.equal(templates.getState().templates.body.freeParameters[0].hidden, true);
-    assert.equal(architecture.getState().graph.nodes.component.parameterValues.dropout, .3);
+    assert.deepEqual(templates.getState().templates.body.freeParameters, [], 'Hiding a shown field removes its alias');
+    assert.equal(templates.getState().templates.body.graph.nodes.drop.parameters.p, .1, 'and puts the value back in the field');
+    assert.equal(architecture.getState().graph.nodes.component.parameterValues.dropout, .3, 'Instance overrides stay stored');
     history.getState().undo();
     assert.deepEqual(templates.getState().templates.body, exposed);
     history.getState().undo();
     assert.deepEqual(templates.getState().templates.body, body);
     history.getState().redo();
     history.getState().redo();
-    assert.equal(templates.getState().templates.body.freeParameters[0].hidden, true);
-    assert.equal(templates.getState().templates.body.graph.nodes.drop.parameters.p, '$dropout');
+    assert.deepEqual(templates.getState().templates.body.freeParameters, []);
+    assert.equal(templates.getState().templates.body.graph.nodes.drop.parameters.p, .1);
     assert.equal(templates.getState().toggleFieldExposure('missing', options), false);
     assert.equal(history.getState().undoCount, 2, 'Rejected changes do not add history entries');
 });
