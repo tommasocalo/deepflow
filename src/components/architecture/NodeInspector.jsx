@@ -1,5 +1,5 @@
 import { useComponentTemplate } from '../../hooks/useComponentTemplate.js';
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { AlertCircle, AlertTriangle, Boxes, ChevronDown, Repeat, X } from 'lucide-react';
 import { PYTORCH_BLOCKS, getEntry } from '../../domain/library/index.js';
 import { createVariantPatch, getNodeFamily, isOperationKey } from '../../domain/library/nodeFamilies.js';
@@ -8,6 +8,7 @@ import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
 import { resolveComponentContext } from '../../domain/componentContext.js';
+import { resolveParameterValue } from '../../domain/expressions.js';
 import { STANDARD_COMPONENTS } from '../../domain/components/index.js';
 import ParameterField from './ParameterField.jsx';
 import ParameterBinding, { DerivedParameter, ParameterBindingsProvider } from './ParameterBinding.jsx';
@@ -36,7 +37,42 @@ const FIELD_LABELS = {
     H: 'Heads', D: 'Width', d_head: 'Head width', n_heads: 'Heads', dropout: 'Dropout',
     shape: 'Shape', factor: 'Factor', value: 'Value', exponent: 'Exponent', chunks: 'Parts', name: 'Name',
     init: 'Distribution', scale: 'Scale', disabled_init: 'When disabled',
+    elementwise_affine: 'Affine', affine: 'Affine', eps: 'Epsilon', momentum: 'Momentum', stride: 'Stride', padding: 'Padding',
+    dilation: 'Dilation', groups: 'Groups', output_padding: 'Output padding', output_size: 'Output size', num_layers: 'Layers',
+    bidirectional: 'Bidirectional', dim_feedforward: 'Feed-forward', norm_first: 'Norm first', activation: 'Activation',
+    negative_slope: 'Slope', dtype: 'Data type', batch_first: 'Batch first', inplace: 'In place', ceil_mode: 'Ceil mode',
+    count_include_pad: 'Count padding', approximate: 'Approximation',
 };
+
+// Implementation details rather than architecture: shown only when their
+// effective value already differs from the default, so nothing set is hidden.
+const ADVANCED_FIELDS = new Set(['requires_grad', 'enabled', 'padding_idx', 'inplace', 'batch_first', 'ceil_mode', 'count_include_pad', 'eps', 'momentum', 'approximate']);
+const SCALE_FREE_INIT = new Set(['kaiming_uniform', 'zeros', 'ones']);
+
+function effectiveValue(param, values, scope) {
+    const raw = values?.[param.name];
+    return raw === undefined || raw === null || raw === '' ? param.default ?? null : resolveParameterValue(raw, scope) ?? null;
+}
+
+/** Fields worth showing, architecture first and toggles last. */
+function shownParameters(params, values, scope) {
+    const differs = (param) => String(effectiveValue(param, values, scope)) !== String(param.default ?? null);
+    const enabled = params.find((param) => param.name === 'enabled');
+    const init = params.find((param) => param.name === 'init');
+    const shown = params.filter((param) => {
+        if (param.name === 'disabled_init') return !!enabled && differs(enabled);
+        if (param.name === 'scale' && init && SCALE_FREE_INIT.has(effectiveValue(init, values, scope))) return false;
+        return !ADVANCED_FIELDS.has(param.name) || differs(param);
+    });
+    const primary = (param) => param.required || SHAPE_PRIORITY.includes(param.name);
+    const last = (param) => param.name === 'disabled_init';
+    return [
+        ...shown.filter((param) => param.type !== 'bool' && primary(param) && !last(param)),
+        ...shown.filter((param) => param.type !== 'bool' && !primary(param) && !last(param)),
+        ...shown.filter((param) => param.type === 'bool'),
+        ...shown.filter(last),
+    ];
+}
 
 // Width follows the field schema, never the number of characters being typed.
 function inspectorWidth(node, template) {
@@ -45,7 +81,7 @@ function inspectorWidth(node, template) {
 }
 
 function InspectorField({ param, value, label, fullRow = false, ...props }) {
-    const wide = ['tuple', 'string'].includes(param.type) || ['factor', 'scale'].includes(param.name);
+    const wide = ['tuple', 'string'].includes(param.type);
     return (
         <div className={`df-inspector-field${wide ? ' is-wide' : ''}${fullRow ? ' is-alone' : ''}`} data-parameter={param.name}>
             <ParameterBinding param={param} value={value}><ParameterField
@@ -60,14 +96,9 @@ function InspectorField({ param, value, label, fullRow = false, ...props }) {
     );
 }
 
-function ParamGroup({ params, values, fieldErrors, onPatch, collapsed = false, title = 'Options', initiallyOpen = false, labels = {} }) {
-    const detailsRef = useRef(null);
-    const hasErrors = params.some((p) => fieldErrors[p.name]?.length);
-    useEffect(() => {
-        if (hasErrors && detailsRef.current) detailsRef.current.open = true;
-    }, [hasErrors]);
+function ParamGroup({ params, values, fieldErrors, onPatch, labels = {} }) {
     if (!params.length) return null;
-    const fields = <div className="df-inspector-fields">{params.map((p) => (
+    return <div className="df-inspector-fields">{params.map((p) => (
         <InspectorField
             key={p.name}
             param={p}
@@ -78,13 +109,6 @@ function ParamGroup({ params, values, fieldErrors, onPatch, collapsed = false, t
             errors={(fieldErrors[p.name] ?? []).map((message) => compactParameterError(p.name, message))}
         />
     ))}</div>;
-    const inlineBias = params.length === 1 && params[0].name === 'bias';
-    return collapsed && !inlineBias ? (
-        <details ref={detailsRef} className="df-inspector-group df-inspector-options" open={initiallyOpen || undefined}>
-            <summary>{title}</summary>
-            {fields}
-        </details>
-    ) : inlineBias && collapsed ? <section className="df-inspector-group">{fields}</section> : fields;
 }
 
 function Issues({ errors, warnings }) {
@@ -101,12 +125,8 @@ function LayerBody({ id, node, fieldErrors }) {
     const entry = getEntry(node.libraryKey);
     const patchNode = useArchitectureStore((s) => s.patchNode);
     const patchLayerParameters = useArchitectureStore((s) => s.patchLayerParameters);
-    const params = entry?.parameters ?? [];
-    const primary = params.filter((p) => p.required || SHAPE_PRIORITY.includes(p.name));
-    const options = params.filter((p) => !p.required && !SHAPE_PRIORITY.includes(p.name));
-    const parameterTensor = node.libraryKey === 'deepflow.op.Parameter';
-    const initialization = parameterTensor ? options.filter((p) => ['init', 'scale'].includes(p.name)) : [];
-    const otherOptions = parameterTensor ? options.filter((p) => !['init', 'scale'].includes(p.name)) : options;
+    const scope = useValidationContext()?.scope ?? {};
+    const params = shownParameters(entry?.parameters ?? [], node.parameters, scope);
     const distribution = node.parameters.init ?? 'normal';
     const family = getNodeFamily(node.libraryKey);
     const moduleOptions = family?.variants ?? (entry && entry.category !== 'IO'
@@ -132,27 +152,25 @@ function LayerBody({ id, node, fieldErrors }) {
                 </label>
             )}
             {params.length ? (
-                <>
-                    <ParamGroup params={primary} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch} />
-                    {initialization.length > 0 && <ParamGroup params={initialization} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch}
-                        collapsed title="Initialization" initiallyOpen labels={{ scale: distribution === 'uniform' ? 'Bound (±)' : distribution === 'normal' ? 'Standard deviation' : 'Scale' }} />}
-                    <ParamGroup params={otherOptions} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch} collapsed />
-                </>
+                <ParamGroup params={params} values={node.parameters} fieldErrors={fieldErrors} onPatch={onPatch}
+                    labels={{ scale: distribution === 'uniform' ? 'Bound (±)' : distribution === 'normal' ? 'Standard deviation' : 'Scale' }} />
             ) : <p className="df-inspector-note">No parameters.</p>}
         </>
     );
 }
 
 function Bindings({ freeParams, values, onChange, hint }) {
+    const scope = useValidationContext()?.scope ?? {};
     if (!freeParams.length) return <p className="df-inspector-note">No configurable parameters.</p>;
+    const shown = shownParameters(freeParams.filter((p) => !p.derived && !p.hidden), values, scope);
     return (
         <section className="df-inspector-group">
             <div className="df-inspector-fields">
-                {freeParams.filter((p) => !p.derived && !p.hidden).map((p) => (
+                {shown.map((p) => (
                     <InspectorField
                         key={p.name}
                         param={p}
-                        fullRow={freeParams.filter((parameter) => !parameter.derived && !parameter.hidden).length === 1}
+                        fullRow={shown.length === 1}
                         label={FIELD_LABELS[p.name] ?? p.name.replaceAll('_', ' ')}
                         value={values[p.name]}
                         placeholder={p.default != null ? String(p.default) : 'Default'}

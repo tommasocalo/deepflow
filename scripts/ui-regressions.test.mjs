@@ -323,24 +323,29 @@ test('repeated parameter names have unique stable label associations', async () 
 });
 
 test('direct references stay in their inputs without duplicated values or unlink actions', async () => {
-    const gather = createLayerNode({ id: 'gather', libraryKey: 'deepflow.op.Gather', entry: getEntry('deepflow.op.Gather'), label: 'lookup', position: { x: 0, y: 0 }, parameters: { padding_idx: '$padding_idx' } });
-    const template = createTemplate({ id: 'table-body', name: 'Table', graph: { nodes: { gather }, edges: [] }, freeParameters: [{ name: 'padding_idx', type: 'int', nullable: true, default: null }] });
+    const linear = createLayerNode({ id: 'linear', libraryKey: 'torch.nn.Linear', entry: getEntry('torch.nn.Linear'), label: 'projection', position: { x: 0, y: 0 }, parameters: { in_features: 16, out_features: '$width' } });
+    const gather = createLayerNode({ id: 'gather', libraryKey: 'deepflow.op.Gather', entry: getEntry('deepflow.op.Gather'), label: 'lookup', position: { x: 0, y: 120 }, parameters: { padding_idx: '$padding_idx' } });
+    const template = createTemplate({ id: 'table-body', name: 'Table', graph: { nodes: { linear, gather }, edges: [] }, freeParameters: [
+        { name: 'width', type: 'int', default: 64 }, { name: 'padding_idx', type: 'int', nullable: true, default: null },
+    ] });
     const instance = createSuperNodeInstance({ id: 'table', templateId: template.id, label: 'Table', position: { x: 0, y: 0 } });
     useTemplatesStore.setState({ templates: { [template.id]: template } });
     useArchitectureStore.setState({ graph: { nodes: { table: instance }, edges: [] }, currentPath: ['table'], openPaths: [['table']], expandedNodeId: 'gather' });
     await render(h(GraphHarness));
-    assert.equal(byAria('padding_idx').value, '$padding_idx');
+    assert.equal(byAria('padding_idx'), null, 'An unset padding index is an implementation detail and stays hidden');
+    await act(() => useArchitectureStore.getState().setExpanded('linear'));
+    assert.equal(byAria('out_features').value, '$width');
     assert.equal(container.querySelector('.df-parameter-source'), null);
     assert.equal(container.querySelector('.df-parameter-result'), null);
-    assert.equal(byAria('Unlink padding_idx'), null);
-    const eye = () => byAria('Padding index in Table settings');
+    assert.equal(byAria('Unlink out_features'), null);
+    const eye = () => byAria('Output in Table settings');
     assert.equal(eye().getAttribute('aria-pressed'), 'true');
     await click(eye());
     assert.equal(eye().getAttribute('aria-pressed'), 'false');
-    assert.equal(byAria('padding_idx').value, '$padding_idx');
-    assert.equal(useTemplatesStore.getState().templates[template.id].freeParameters[0].default, null);
-    await act(() => useArchitectureStore.getState().patchLayerParameters('gather', { padding_idx: '$missing' }));
-    assert.equal(byAria('padding_idx').value, '$missing');
+    assert.equal(byAria('out_features').value, '$width');
+    assert.equal(useTemplatesStore.getState().templates[template.id].freeParameters[0].default, 64);
+    await act(() => useArchitectureStore.getState().patchLayerParameters('linear', { out_features: '$missing' }));
+    assert.equal(byAria('out_features').value, '$missing');
     assert.equal(container.querySelector('.df-parameter-result'), null, 'A missing variable does not become a calculated result');
 });
 
@@ -636,7 +641,7 @@ test('ribbon keyboard shortcut opens library search and Escape restores trigger 
     assert.equal(byAria('Insert operations').getAttribute('aria-expanded'), 'false');
 });
 
-test('inspector shows accessible field errors once and reveals invalid options', async () => {
+test('inspector shows accessible field errors once and keeps settings inline', async () => {
     const entry = getEntry('torch.nn.MaxPool1d');
     const pool = createLayerNode({ id: 'pool', libraryKey: entry.key, entry, position: { x: 100, y: 100 } });
     useArchitectureStore.setState({ graph: { nodes: { pool }, edges: [] } });
@@ -654,8 +659,8 @@ test('inspector shows accessible field errors once and reveals invalid options',
     assert.equal(kernel.getAttribute('aria-describedby'), null);
     assert.equal(container.querySelector('.df-param-errors'), null);
 
+    assert.equal(container.querySelector('.df-inspector-options'), null, 'No collapsed Options section');
     await act(() => useArchitectureStore.getState().patchLayerParameters('pool', { stride: 1.5 }));
-    assert.equal(container.querySelector('.df-inspector-options').open, true);
     const stride = byFieldLabel('stride');
     assert.equal(stride.getAttribute('aria-invalid'), 'true');
     assert.equal(document.getElementById(stride.getAttribute('aria-describedby')).textContent, 'Must be an integer');
