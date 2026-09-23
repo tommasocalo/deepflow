@@ -54,17 +54,17 @@ function ParallelRepeatNodeView({ id, data, selected }) {
             <div className="df-parallel-preview" aria-label={`${count ?? 'Unresolved'} parallel instances`}>
                 {instances.map((index, order) => <span key={index} className="df-parallel-preview-item">
                     {count > 3 && order === 2 && <span className="df-parallel-ellipsis" aria-hidden="true">···</span>}
-                    <button type="button" className="nodrag df-parallel-instance" disabled={!template}
+                    <button type="button" className={`nodrag df-parallel-instance${node.structureOverrides?.[String(index)]?.enabled ? ' is-own' : ''}`} disabled={!template}
                         style={{ '--parallel-copy-offset': `${order * 3}px` }}
                         aria-label={`Open ${node.label} instance ${index + 1}`}
-                        title={`${template?.name ?? 'Template'} · instance ${index + 1}. Open the definition to inspect any instance.`}
+                        title={`${template?.name ?? 'Template'} · instance ${index + 1}${node.structureOverrides?.[String(index)]?.enabled ? ' · own structure' : ''}. Open the definition to inspect any instance.`}
                         onMouseDown={(event) => event.stopPropagation()} onClick={(event) => open(event, index)}>
                         <Boxes size={15} strokeWidth={2.4} /><b>{index + 1}</b>
                     </button>
                 </span>)}
                 {!count && <span className="df-parallel-invalid">Set a valid count</span>}
             </div>
-            <div className="df-parallel-footer"><span>{localCount ? `Parallel · ${localCount} local` : 'Parallel · shared structure'}</span><span>Collection ↓</span></div>
+            <div className="df-parallel-footer"><span>{localCount ? `Parallel · ${localCount} with own structure` : 'Parallel · shared structure'}</span><span>Collection ↓</span></div>
             <button aria-label={`Delete ${node.label}`} onClick={(event) => { event.stopPropagation(); removeNode(id); }} className="nodrag df-block-delete"><X size={10} strokeWidth={3} /></button>
             <PortShapeLabels node={node} shapes={report.shapes} hideInput={ports.length > 1} />
             <NodeInputPorts node={node} shapes={report.shapes} />

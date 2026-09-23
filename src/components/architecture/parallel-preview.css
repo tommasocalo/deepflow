@@ -13,3 +13,4 @@
 .df-parallel-ellipsis { font: 900 18px/1 ui-monospace, monospace; letter-spacing: 1px; }
 .df-parallel--compact .df-parallel-footer { font-size: 8px; gap: 6px; }
 .df-parallel--compact .df-port-shape--input { max-width: calc(var(--parallel-port-width) - 8px); white-space: normal; line-height: 11px; padding: 1px 3px; }
+.df-parallel--compact .df-parallel-instance.is-own { background: #fff0af; }
