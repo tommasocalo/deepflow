@@ -177,7 +177,7 @@ export default function HuggingFaceImport({ open, onClose, onImport }) {
                 </div>
 
                 <footer className="df-hf-footer">
-                    <span>Public model configs only. No remote code or model files are executed.</span>
+                    <span>Import replaces the current graph and clears training. Public configs only; no model code or weights are loaded.</span>
                     {importError && <span className="df-hf-error" role="alert">{importError}</span>}
                     <button type="button" className="df-hf-import" onClick={confirmImport} disabled={!inspection?.supported || importBusy}>
                         {importBusy ? 'Importing…' : 'Import architecture'} <ArrowRight size={14} />

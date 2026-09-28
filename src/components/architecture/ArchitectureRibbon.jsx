@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Redo2, Ruler, Undo2, Variable, X } from 'lucide-react';
+import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Redo2, Ruler, Search, Undo2, Variable, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
+import { importHuggingFaceArchitecture } from '../../domain/huggingFace/index.js';
 import { effectiveTemplateId, inspectedInstanceIndex } from '../../domain/architecture/instanceStructure.js';
 import { resolveComponentContext } from '../../domain/componentContext.js';
 import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
 import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
-import { recordArchitectureEdit, useArchitectureHistory } from '../../stores/architectureHistory.js';
+import { useTrainingStore } from '../../stores/trainingStore.js';
+import { recordArchitectureEdit, startArchitectureSession, useArchitectureHistory } from '../../stores/architectureHistory.js';
+import HuggingFaceImport from '../HuggingFaceImport.jsx';
 import { useOpenToSide } from './OpenToSideContext.jsx';
 import BlockPalette from './BlockPalette.jsx';
+import OptimizationPanel from './OptimizationPanel.jsx';
 import TemplateInspector, { GlobalParameters } from './TemplateInspector.jsx';
 import './ribbon.css';
 
-const MENU_WIDTHS = { operations: 350, components: 360, templates: 310, parameters: 350, group: 280 };
+const MENU_WIDTHS = { operations: 350, components: 360, templates: 310, parameters: 350, group: 280, optimization: 450 };
 function RepeatIcon({ parallel }) {
     return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" aria-hidden="true">
         {parallel ? <><path d="M12 2v3H4v4m8-4h8v4M4 15v4h16v-4m-8 4v3" /><rect x="1" y="9" width="6" height="6" rx="1" /><rect x="17" y="9" width="6" height="6" rx="1" /></>
@@ -46,6 +50,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const validationContext = useValidationContext();
     const openToSide = useOpenToSide();
     const [popup, setPopup] = useState(null);
+    const [hfOpen, setHfOpen] = useState(false);
     const [popupPosition, setPopupPosition] = useState({ left: 8, top: 56, width: 310 });
     const [parameterScope, setParameterScope] = useState('global');
     const [groupName, setGroupName] = useState('Component');
@@ -68,6 +73,15 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
         setError('');
         if (restoreFocus) triggerRef.current?.focus({ preventScroll: true });
     }, []);
+    const closeHf = useCallback(() => setHfOpen(false), []);
+    const importHf = useCallback((preview) => {
+        architectureStore.getState().goToLevel(0);
+        return startArchitectureSession(() => importHuggingFaceArchitecture(preview, {
+            architectureStore: useArchitectureStore,
+            templatesStore: useTemplatesStore,
+            trainingStore: useTrainingStore,
+        }));
+    }, [architectureStore]);
     const positionPopup = useCallback((name, trigger) => {
         const ribbon = ribbonRef.current?.getBoundingClientRect();
         const anchor = trigger?.getBoundingClientRect();
@@ -186,6 +200,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                     <Braces size={21} strokeWidth={1.8} /><span>Operations <ChevronDown size={10} /></span>
                 </button>
                 <RibbonButton icon={Copy} aria-label="Browse templates" aria-expanded={popup === 'templates'} aria-haspopup="menu" onClick={(event) => togglePopup('templates', event)} title="Insert a saved project template">Templates <ChevronDown size={10} /></RibbonButton>
+                <RibbonButton icon={Search} aria-label="Import from Hugging Face" onClick={() => { closePopup(); setHfOpen(true); }} title="Search Hugging Face model configs and import a supported architecture">Hugging Face</RibbonButton>
             </RibbonGroup>
             <RibbonGroup label="Structure">
                 <RibbonButton icon={Group} disabled={selection.length < 2} aria-label="Group selection into component" aria-expanded={popup === 'group' && selection.length > 1} onClick={(event) => { setGroupName('Component'); togglePopup('group', event); }} title={selection.length > 1 ? 'Group selected blocks into a reusable component' : 'Select at least two blocks to group'}>Group</RibbonButton>
@@ -194,6 +209,9 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             </RibbonGroup>
             <RibbonGroup label="Parameters" className="df-ribbon-component">
                 <RibbonButton icon={Variable} aria-label="Edit parameters" aria-expanded={popup === 'parameters'} aria-haspopup="dialog" onClick={(event) => togglePopup('parameters', event)} title="Edit global parameters or parameters of the current component">Parameters <ChevronDown size={10} /></RibbonButton>
+            </RibbonGroup>
+            <RibbonGroup label="Optimization" className="df-ribbon-optimization">
+                <RibbonButton icon={Search} aria-label="Explore architecture settings" aria-expanded={popup === 'optimization'} aria-haspopup="dialog" onClick={(event) => togglePopup('optimization', event)} title="Compare global parameter settings by shape validity and model size">Explore</RibbonButton>
             </RibbonGroup>
             <RibbonGroup label="View">
                 <RibbonButton icon={Columns2} onClick={() => { closePopup(); openToSide?.(selectedComponent ? [...currentPath, selectedComponent.id] : currentPath); }} title="Open selected component or current level to the side" aria-label="Open to the side">To side</RibbonButton>
@@ -228,6 +246,10 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             </div>
             {activeParameterScope === 'component' ? <TemplateInspector templateId={templateId} /> : <GlobalParameters />}
         </div>}
+        {popup === 'optimization' && <div className="df-ribbon-popover df-ribbon-popover-optimization" style={popoverStyle} role="dialog" aria-label="Optimization" onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}>
+            <OptimizationPanel onClose={() => closePopup(true)} />
+        </div>}
+        <HuggingFaceImport open={hfOpen} onClose={closeHf} onImport={importHf} />
         {(notice || (error && popup !== 'group')) && <div className={`df-ribbon-notice${error ? ' is-error' : ''}`} role={error ? 'alert' : 'status'}>{!error && <Check size={12} />}<span>{error || notice}</span><button type="button" aria-label="Dismiss message" onClick={() => { setNotice(''); setError(''); }}><X size={12} /></button></div>}
     </div>;
 }

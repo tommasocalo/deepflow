@@ -1,6 +1,6 @@
 /* Compact commands stay in the ribbon; insertion menus attach to their trigger. */
 .df-architecture-ribbon { position: relative; z-index: 60; flex-shrink: 0; width: 100%; color: #111; background: #fff; border-bottom: 1px solid #d4d4ce; }
-.df-ribbon-row { display: flex; align-items: stretch; min-height: 78px; padding: 5px 12px 4px; gap: 10px; }
+.df-ribbon-row { display: flex; align-items: stretch; min-height: 78px; padding: 5px 12px 4px; gap: 10px; overflow-x: auto; scrollbar-width: thin; }
 .df-ribbon-group { flex-shrink: 0; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #e1e1dc; padding-right: 10px; min-width: 0; }
 .df-ribbon-group:last-of-type { border-right: 0; padding-right: 0; }
 .df-ribbon-group h2 { margin: 3px 0 0; color: #777; font: 700 9px/12px ui-sans-serif, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
