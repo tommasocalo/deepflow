@@ -64,7 +64,7 @@ try {
         return { x: screen.x, y: screen.y };
     });
     await page.mouse.click(point.x, point.y);
-    await page.getByRole('combobox', { name: 'Connection gradient rule' }).selectOption('stop');
+    await page.getByRole('radio', { name: 'Stop', exact: true }).check();
     await settle();
     assert.equal(await page.locator('.df-gradient-edge--stopped').count(), 1);
     assert.equal((await graph()).edges.find((edge) => edge.id === connection.id).gradientOp, 'stop');

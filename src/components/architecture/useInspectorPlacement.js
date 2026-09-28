@@ -35,7 +35,7 @@ function attachPlacement(panel, canvas, flowStore, anchorFor) {
         panel.style.maxHeight = `${Math.min(460, Math.max(120, origin.height - 24))}px`;
         const target = anchorFor(origin, [...canvas.querySelectorAll('.react-flow__node')]);
         if (!target) return;
-        const obstacles = [...canvas.querySelectorAll('.df-library, .react-flow__controls, [aria-label^="Graph checks:"], .df-gradient-legend, .df-inspector')]
+        const obstacles = [...canvas.querySelectorAll('.df-library, .react-flow__controls, [aria-label^="Graph checks:"], .df-inspector')]
             .filter((element) => element !== panel)
             .map((element) => relativeRect(element, origin));
         const placement = placeInspector({

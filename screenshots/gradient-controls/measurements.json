@@ -1,0 +1,317 @@
+[
+  {
+    "name": "02-reverse-1440",
+    "viewport": 1440,
+    "x": 864,
+    "y": 509,
+    "width": 244,
+    "height": 140,
+    "client": 240,
+    "content": 240,
+    "pageWidth": 1440,
+    "choices": [
+      {
+        "x": 874,
+        "y": 553,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 931,
+        "y": 553,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 988,
+        "y": 553,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 1045,
+        "y": 553,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      }
+    ]
+  },
+  {
+    "name": "03-mixed-1440",
+    "viewport": 1440,
+    "x": 614,
+    "y": 625,
+    "width": 244,
+    "height": 148,
+    "client": 240,
+    "content": 240,
+    "pageWidth": 1440,
+    "choices": [
+      {
+        "x": 624,
+        "y": 669,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 681,
+        "y": 669,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 738,
+        "y": 669,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 795,
+        "y": 669,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      }
+    ]
+  },
+  {
+    "name": "04-mixed-factors-1440",
+    "viewport": 1440,
+    "x": 614,
+    "y": 625,
+    "width": 244,
+    "height": 140,
+    "client": 240,
+    "content": 240,
+    "pageWidth": 1440,
+    "choices": [
+      {
+        "x": 624,
+        "y": 669,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 681,
+        "y": 669,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 738,
+        "y": 669,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 795,
+        "y": 669,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      }
+    ]
+  },
+  {
+    "name": "05-flow-no-gradient-1440",
+    "viewport": 1440,
+    "x": 426,
+    "y": 250,
+    "width": 244,
+    "height": 130,
+    "client": 240,
+    "content": 240,
+    "pageWidth": 1440,
+    "choices": [
+      {
+        "x": 436,
+        "y": 294,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 493,
+        "y": 294,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 550,
+        "y": 294,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 607,
+        "y": 294,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      }
+    ]
+  },
+  {
+    "name": "06-compact-1440",
+    "viewport": 1440,
+    "x": 855,
+    "y": 476,
+    "width": 244,
+    "height": 140,
+    "client": 240,
+    "content": 240,
+    "pageWidth": 1440,
+    "choices": [
+      {
+        "x": 865,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 922,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 979,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 1036,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      }
+    ]
+  },
+  {
+    "name": "06-compact-1024",
+    "viewport": 1024,
+    "x": 647,
+    "y": 476,
+    "width": 244,
+    "height": 140,
+    "client": 240,
+    "content": 240,
+    "pageWidth": 1024,
+    "choices": [
+      {
+        "x": 657,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 714,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 771,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 828,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      }
+    ]
+  },
+  {
+    "name": "06-compact-820",
+    "viewport": 820,
+    "x": 545,
+    "y": 476,
+    "width": 244,
+    "height": 140,
+    "client": 240,
+    "content": 240,
+    "pageWidth": 820,
+    "choices": [
+      {
+        "x": 555,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 612,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 669,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      },
+      {
+        "x": 726,
+        "y": 520,
+        "width": 53,
+        "height": 55,
+        "client": 51,
+        "content": 51
+      }
+    ]
+  }
+]
