@@ -94,12 +94,15 @@ export function buildSinusoidalPositionComponentGraph() {
 }
 
 /** Return the user's existing standard definition, or register a new definition and its dependencies. */
-export function ensureStandardTemplate(key, templatesStore) {
+export function ensureStandardTemplate(key, templatesStore, options = {}) {
     const component = STANDARD_COMPONENTS.find((item) => item.key === key);
     if (!component) return null;
+    const { fresh = false, importSource = null } = options;
+    const cache = options.cache ?? new Map();
+    if (fresh && cache.has(key)) return cache.get(key);
     // A new catalog generation never rewrites an older saved/custom definition.
     // Existing graphs keep their IDs; newly inserted examples use the new model.
-    const existing = Object.values(templatesStore.getState().templates).find((template) => template.standardKey === key
+    const existing = !fresh && Object.values(templatesStore.getState().templates).find((template) => template.standardKey === key
         && (key !== 'attention' || template.standardVersion === 2));
     if (existing) return existing.id;
     let graph, freeParameters;
@@ -113,24 +116,30 @@ export function ensureStandardTemplate(key, templatesStore) {
         graph = buildLayerNormComponentGraph();
         freeParameters = [spec('normalized_shape', 'int', 768, 'Last-axis feature count'), spec('eps', 'float', 1e-5, 'Numerical stability'), spec('elementwise_affine', 'bool', true, 'Learned scale and bias')];
     } else if (key === 'learned-position') {
-        graph = buildLearnedPositionComponentGraph(ensureStandardTemplate('embedding', templatesStore));
+        graph = buildLearnedPositionComponentGraph(ensureStandardTemplate('embedding', templatesStore, { ...options, cache }));
         freeParameters = [spec('max_len', 'int', 1024, 'Position table rows'), spec('embedding_dim', 'int', 768, 'Features per position')];
     } else if (key === 'sinusoidal-position') {
         graph = buildSinusoidalPositionComponentGraph();
         freeParameters = [spec('D', 'int', 768, 'Output feature count')];
     } else if (key === 'attention') {
-        const linearTemplateId = ensureStandardTemplate('linear', templatesStore);
-        let headTemplateId = Object.values(templatesStore.getState().templates).find((template) => template.standardKey === 'attention-head' && template.standardVersion === 2)?.id;
+        const linearTemplateId = ensureStandardTemplate('linear', templatesStore, { ...options, cache });
+        let headTemplateId = fresh ? cache.get('attention-head') : Object.values(templatesStore.getState().templates).find((template) => template.standardKey === 'attention-head' && template.standardVersion === 2)?.id;
         if (!headTemplateId) headTemplateId = templatesStore.getState().createTemplate({
-            name: 'Attention head', standardKey: 'attention-head', standardVersion: 2, graph: buildAttentionHeadGraph(),
+            name: 'Attention head', ...(fresh ? { componentStyleKey: 'attention-head', importSource: { ...importSource, component: 'attention-head' } } : { standardKey: 'attention-head', standardVersion: 2 }), graph: buildAttentionHeadGraph(),
             description: 'Scaled causal dot-product attention from editable operations.',
             freeParameters: attentionHeadParameters(),
         });
+        if (fresh) cache.set('attention-head', headTemplateId);
         graph = buildMultiHeadAttentionGraph({ headTemplateId, linearTemplateId });
         freeParameters = attentionParameters();
     }
-    return templatesStore.getState().createTemplate({ name: component.key === 'layernorm' ? 'LayerNorm' : component.key === 'attention' ? 'Multi-head attention' : component.label,
-        description: component.description, graph, freeParameters, standardKey: key, ...(key === 'attention' ? { standardVersion: 2 } : {}) });
+    const id = templatesStore.getState().createTemplate({ name: component.key === 'layernorm' ? 'LayerNorm' : component.key === 'attention' ? 'Multi-head attention' : component.label,
+        description: component.description, graph, freeParameters,
+        ...(fresh ? { componentStyleKey: key, importSource: { ...importSource, component: key } }
+            : { standardKey: key, ...(key === 'attention' ? { standardVersion: 2 } : {}) }),
+    });
+    if (fresh) cache.set(key, id);
+    return id;
 }
 
 const unsupported = (parameters, defaults) => Object.entries(defaults).some(([key, value]) => parameters[key] !== undefined && parameters[key] !== value);

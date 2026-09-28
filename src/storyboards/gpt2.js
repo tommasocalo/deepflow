@@ -25,24 +25,28 @@ function layer(key, position, parameters = {}, label) {
 }
 
 /** Pre-LN GPT-2 block, expressed as a template graph with boundary blocks. */
-export function buildTransformerBlockGraph({ attentionTemplateId, linearTemplateId, layerNormTemplateId, activation = 'gelu_new' } = {}) {
+export function buildTransformerBlockGraph({ attentionTemplateId, linearTemplateId, layerNormTemplateId, activation = 'gelu', parametric = false } = {}) {
     const componentOrLayer = (templateId, key, position, parameters, label) => templateId
         ? createSuperNodeInstance({ templateId, position, parameterValues: parameters, label })
         : layer(key, position, parameters, label);
+    const normEps = parametric ? '$norm_eps' : 1e-5;
+    const mlpWidth = parametric ? '$mlp_width' : '4 * d_model';
+    const attentionDropout = parametric ? '$attn_dropout' : 0.1;
+    const residualDropout = parametric ? '$resid_dropout' : 0.1;
     const tin  = layer('deepflow.template.Input',        { x: X, y: 0 },   {}, 'block input');
-    const ln1  = componentOrLayer(layerNormTemplateId, 'torch.nn.LayerNorm', { x: X, y: ROW_GAP }, { normalized_shape: '$d_model', eps: '$norm_eps' }, 'ln_1');
+    const ln1  = componentOrLayer(layerNormTemplateId, 'torch.nn.LayerNorm', { x: X, y: ROW_GAP }, { normalized_shape: '$d_model', eps: normEps }, 'ln_1');
     // Callers without registered templates retain the standalone legacy graph API.
     const attn = attentionTemplateId
         ? createSuperNodeInstance({ templateId: attentionTemplateId, position: { x: X, y: ROW_GAP * 2 },
-            label: 'causal self-attention', parameterValues: { D: '$d_model', H: '$n_heads', dropout: '$attn_dropout' } })
-        : layer('deepflow.nn.CausalSelfAttention', { x: X, y: ROW_GAP * 2 }, { embed_dim: '$d_model', num_heads: '$n_heads', dropout: '$attn_dropout' }, 'causal self-attention');
-    const attnDrop = layer('torch.nn.Dropout',            { x: X, y: ROW_GAP * 3 }, { p: '$resid_dropout' }, 'attention projection dropout');
+            label: 'causal self-attention', parameterValues: { D: '$d_model', H: '$n_heads', dropout: attentionDropout } })
+        : layer('deepflow.nn.CausalSelfAttention', { x: X, y: ROW_GAP * 2 }, { embed_dim: '$d_model', num_heads: '$n_heads', dropout: attentionDropout }, 'causal self-attention');
+    const attnDrop = layer('torch.nn.Dropout',            { x: X, y: ROW_GAP * 3 }, { p: residualDropout }, 'attention projection dropout');
     const add1 = layer('deepflow.op.Add',                { x: X, y: ROW_GAP * 4 }, {}, 'residual');
-    const ln2  = componentOrLayer(layerNormTemplateId, 'torch.nn.LayerNorm', { x: X, y: ROW_GAP * 5 }, { normalized_shape: '$d_model', eps: '$norm_eps' }, 'ln_2');
-    const fc   = componentOrLayer(linearTemplateId, 'torch.nn.Linear', { x: X, y: ROW_GAP * 6 }, { in_features: '$d_model', out_features: '$mlp_width' }, 'mlp fc');
+    const ln2  = componentOrLayer(layerNormTemplateId, 'torch.nn.LayerNorm', { x: X, y: ROW_GAP * 5 }, { normalized_shape: '$d_model', eps: normEps }, 'ln_2');
+    const fc   = componentOrLayer(linearTemplateId, 'torch.nn.Linear', { x: X, y: ROW_GAP * 6 }, { in_features: '$d_model', out_features: mlpWidth }, 'mlp fc');
     const gelu = layer('torch.nn.GELU',                  { x: X, y: ROW_GAP * 7 }, { approximate: activation === 'gelu_new' ? 'tanh' : 'none' }, 'gelu');
-    const proj = componentOrLayer(linearTemplateId, 'torch.nn.Linear', { x: X, y: ROW_GAP * 8 }, { in_features: '$mlp_width', out_features: '$d_model' }, 'mlp proj');
-    const drop = layer('torch.nn.Dropout',               { x: X, y: ROW_GAP * 9 }, { p: '$resid_dropout' }, 'dropout');
+    const proj = componentOrLayer(linearTemplateId, 'torch.nn.Linear', { x: X, y: ROW_GAP * 8 }, { in_features: mlpWidth, out_features: '$d_model' }, 'mlp proj');
+    const drop = layer('torch.nn.Dropout',               { x: X, y: ROW_GAP * 9 }, { p: residualDropout }, 'dropout');
     const add2 = layer('deepflow.op.Add',                { x: X, y: ROW_GAP * 10 }, {}, 'residual');
     const tout = layer('deepflow.template.Output',       { x: X, y: ROW_GAP * 11 }, {}, 'block output');
 
@@ -75,6 +79,10 @@ export function gpt2Storyboard({ architectureStore, templatesStore, trainingStor
     const arch = architectureStore.getState();
     const tpl = templatesStore.getState();
     const train = trainingStore.getState();
+    const standardOptions = importSource ? { fresh: true, cache: new Map(), importSource } : null;
+    const addComponent = (key, position, label) => standardOptions
+        ? arch.addSuperNodeInstance(ensureStandardTemplate(key, templatesStore, standardOptions), position, label)
+        : arch.addStandardComponent(key, position);
 
     arch.goToLevel(0);
     arch.resetCurrentGraph();
@@ -94,23 +102,23 @@ export function gpt2Storyboard({ architectureStore, templatesStore, trainingStor
     arch.patchNode(inputId, { label: 'tokens' });
     arch.patchLayerParameters(inputId, { shape: `(${model.context},)`, dtype: 'int64' });
 
-    const wte = arch.addStandardComponent('embedding', { x: X, y: ROW_GAP });
+    const wte = addComponent('embedding', { x: X, y: ROW_GAP }, 'Embedding');
     arch.patchNode(wte, { label: 'token embedding', parameterValues: { num_embeddings: '$vocab_size', embedding_dim: '$d_model' } });
 
-    const wpe = arch.addStandardComponent('learned-position', { x: X_BRANCH, y: ROW_GAP });
+    const wpe = addComponent('learned-position', { x: X_BRANCH, y: ROW_GAP }, 'Learned positions');
     arch.patchNode(wpe, { label: 'positional embedding', parameterValues: { max_len: '$context', embedding_dim: '$d_model' } });
 
     const add  = arch.addLayerByLibraryKey('deepflow.op.Add',   { x: X, y: ROW_GAP * 2 });
     const drop = arch.addLayerByLibraryKey('torch.nn.Dropout',  { x: X, y: ROW_GAP * 3 });
     arch.patchLayerParameters(drop, { p: model.embeddingDropout });
 
-    const attentionTemplateId = ensureStandardTemplate('attention', templatesStore);
-    const linearTemplateId = ensureStandardTemplate('linear', templatesStore);
-    const layerNormTemplateId = ensureStandardTemplate('layernorm', templatesStore);
+    const attentionTemplateId = ensureStandardTemplate('attention', templatesStore, standardOptions ?? undefined);
+    const linearTemplateId = ensureStandardTemplate('linear', templatesStore, standardOptions ?? undefined);
+    const layerNormTemplateId = ensureStandardTemplate('layernorm', templatesStore, standardOptions ?? undefined);
     const tplId = tpl.createTemplate({
         name: 'Transformer block',
         description: 'Pre-LN GPT-2 block: LayerNorm → causal self-attention → residual → LayerNorm → MLP (4×) → residual.',
-        graph: buildTransformerBlockGraph({ attentionTemplateId, linearTemplateId, layerNormTemplateId, activation: model.activation }),
+        graph: buildTransformerBlockGraph({ attentionTemplateId, linearTemplateId, layerNormTemplateId, activation: model.activation, parametric: true }),
         ...(importSource ? { importSource: { ...importSource, component: 'transformer-block' } } : {}),
     });
     tpl.addFreeParameter(tplId, { name: 'd_model', type: 'int', description: 'Model width', default: model.dModel });
@@ -126,10 +134,10 @@ export function gpt2Storyboard({ architectureStore, templatesStore, trainingStor
     } });
 
     // The repeated stack extends 15px below its face.
-    const lnf = arch.addStandardComponent('layernorm', { x: X, y: ROW_GAP * 5 + 15 });
+    const lnf = addComponent('layernorm', { x: X, y: ROW_GAP * 5 + 15 }, 'LayerNorm');
     arch.patchNode(lnf, { label: 'ln_f', parameterValues: { normalized_shape: '$d_model', eps: model.normEpsilon } });
 
-    const head = arch.addStandardComponent('linear', { x: X, y: ROW_GAP * 6 + 15 });
+    const head = addComponent('linear', { x: X, y: ROW_GAP * 6 + 15 }, 'Linear');
     arch.patchNode(head, { label: 'lm_head', parameterValues: { in_features: '$d_model', out_features: '$vocab_size', bias: false } });
 
     arch.moveNode(outputId, { x: X, y: ROW_GAP * 7 + 15 });

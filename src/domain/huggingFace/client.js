@@ -25,7 +25,9 @@ export function parseModelReference(input) {
     let url;
     try { url = new URL(text); } catch { return null; }
     if (url.protocol !== 'https:' || url.hostname !== 'huggingface.co' || url.port) return null;
-    const parts = url.pathname.split('/').filter(Boolean).map((part) => decodeURIComponent(part));
+    let parts;
+    try { parts = url.pathname.split('/').filter(Boolean).map((part) => decodeURIComponent(part)); }
+    catch { return null; }
     if (parts.length < 1) return null;
     const marker = parts.findIndex((part) => ['tree', 'blob', 'resolve'].includes(part));
     const repoParts = marker < 0 ? parts : parts.slice(0, marker);

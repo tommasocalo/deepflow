@@ -14,6 +14,8 @@ export default function HuggingFaceImport({ open, onClose, onImport }) {
     const searchRef = useRef(null);
     const searchAbort = useRef(null);
     const previewAbort = useRef(null);
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
     const [query, setQuery] = useState('gpt2');
     const [models, setModels] = useState([]);
     const [cursor, setCursor] = useState(null);
@@ -45,7 +47,7 @@ export default function HuggingFaceImport({ open, onClose, onImport }) {
             .finally(() => { if (!controller.signal.aborted) setSearchBusy(false); });
         requestAnimationFrame(() => searchRef.current?.focus());
         const onKeyDown = (event) => {
-            if (event.key === 'Escape') { event.preventDefault(); onClose(); }
+            if (event.key === 'Escape') { event.preventDefault(); onCloseRef.current(); }
         };
         document.addEventListener('keydown', onKeyDown);
         return () => {
@@ -55,7 +57,7 @@ export default function HuggingFaceImport({ open, onClose, onImport }) {
             document.removeEventListener('keydown', onKeyDown);
             previousFocus?.focus?.();
         };
-    }, [open, onClose]);
+    }, [open]);
 
     if (!open) return null;
 

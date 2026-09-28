@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import { fetchHubModelConfig, parseModelReference, searchHubModels } from '../src/domain/huggingFace/client.js';
 import { importHuggingFaceArchitecture, inspectHubModel } from '../src/domain/huggingFace/index.js';
+import { ensureStandardTemplate } from '../src/domain/components/index.js';
 import { validate } from '../src/validation/validator.js';
 
 const sha = '607a30d783dfa663caf39e06633721c8d4cfcd7e';
@@ -91,4 +92,19 @@ test('distilgpt2 config builds a validated editable graph with pinned provenance
     assert.equal(trainingStore.getState().graph.nodes && Object.keys(trainingStore.getState().graph.nodes).length, 0);
     const report = validate(graph, { templates: templatesStore.getState().templates });
     assert.equal(report.ok, true, JSON.stringify(report.errors));
+});
+
+test('imported components do not inherit edits from a previously customized standard definition', () => {
+    const editedId = ensureStandardTemplate('linear', templatesStore);
+    templatesStore.getState().patchTemplate(editedId, { name: 'Customized Linear' });
+    const edited = templatesStore.getState().getTemplate(editedId);
+    importHuggingFaceArchitecture(preview, { architectureStore, templatesStore, trainingStore });
+    const head = Object.values(architectureStore.getState().graph.nodes).find((node) => node.label === 'lm_head');
+    const imported = templatesStore.getState().getTemplate(head.templateId);
+    assert.notEqual(head.templateId, editedId);
+    assert.equal(imported.name, 'Linear');
+    assert.equal(imported.componentStyleKey, 'linear');
+    assert.equal(imported.importSource.repoId, 'distilbert/distilgpt2');
+    assert.equal(templatesStore.getState().getTemplate(editedId), edited);
+    assert.equal(ensureStandardTemplate('linear', templatesStore), editedId);
 });
