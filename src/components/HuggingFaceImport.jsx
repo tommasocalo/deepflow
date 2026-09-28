@@ -9,7 +9,7 @@ const isAbort = (error) => error?.name === 'AbortError';
 const formatCount = (value) => Number.isFinite(value) ? Intl.NumberFormat('en', { notation: 'compact' }).format(value) : null;
 
 /** Insert-menu dialog. The parent owns the architecture-history transaction. */
-export default function HuggingFaceImport({ open, onClose, onImport }) {
+export default function HuggingFaceImport({ open, onClose, onImport, currentArchitecture = null }) {
     const titleId = useId();
     const searchRef = useRef(null);
     const searchAbort = useRef(null);
@@ -34,6 +34,7 @@ export default function HuggingFaceImport({ open, onClose, onImport }) {
         const controller = new AbortController();
         searchAbort.current = controller;
         setSearchBusy(true);
+        setQuery('gpt2');
         setModels([]);
         setCursor(null);
         setSelectedId('');
@@ -68,6 +69,8 @@ export default function HuggingFaceImport({ open, onClose, onImport }) {
         if (!nextCursor) {
             const direct = parseModelReference(text);
             if (direct && (text.includes('/') || text.startsWith('https://'))) {
+                searchAbort.current?.abort();
+                setSearchBusy(false);
                 setModels([{ id: direct.repoId }]);
                 setCursor(null);
                 setSearchError('');
@@ -122,11 +125,18 @@ export default function HuggingFaceImport({ open, onClose, onImport }) {
     };
 
     const inspection = preview?.inspection;
+    const importedDimensions = inspection?.supported ? inspection.configuration : null;
+    const dimensions = importedDimensions && currentArchitecture ? [
+        { label: 'blocks', current: currentArchitecture.nLayers, imported: importedDimensions.nLayers },
+        { label: 'width', current: currentArchitecture.dModel, imported: importedDimensions.dModel },
+        { label: 'heads', current: currentArchitecture.nHeads, imported: importedDimensions.nHeads },
+    ].filter((item) => Number.isFinite(item.current)) : [];
+    const changedDimensions = dimensions.filter((item) => item.current !== item.imported);
     return createPortal(
         <div className="df-hf-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
             <section className="df-hf-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
                 <header className="df-hf-header">
-                    <div><strong id={titleId}>Import from Hugging Face</strong><span>Explore a model configuration, then open it as editable architecture.</span></div>
+                    <div><span className="df-hf-header-kicker">MODEL CONFIGURATION</span><strong id={titleId}>Import from Hugging Face</strong><span>Explore a model configuration, then open it as editable architecture.</span></div>
                     <button className="df-hf-close" type="button" aria-label="Close Hugging Face import" onClick={onClose}><X size={18} /></button>
                 </header>
 
@@ -167,6 +177,11 @@ export default function HuggingFaceImport({ open, onClose, onImport }) {
                                     <div><span>Heads</span><strong>{inspection.configuration.nHeads}</strong></div>
                                     <div><span>Context</span><strong>{inspection.configuration.context}</strong></div>
                                 </div>
+                                {dimensions.length > 0 && <div className="df-hf-impact" aria-label="Comparison with current architecture">
+                                    <strong>Compared with current graph</strong>
+                                    {changedDimensions.length ? <p>{changedDimensions.map((item) => `${item.label} ${item.current} → ${item.imported}`).join(' · ')}</p>
+                                        : <p>Same block count, width and heads. The graph may look unchanged; its Hugging Face source will be recorded.</p>}
+                                </div>}
                                 <div className="df-hf-section-title">Editable components</div>
                                 <ul className="df-hf-components">{inspection.components.map((component) => <li key={component.name}><strong>{component.name}</strong><span>{component.detail}</span></li>)}</ul>
                                 <div className="df-hf-limits"><strong>Import scope</strong>{inspection.limitations.map((item) => <p key={item}>{item}</p>)}</div>
@@ -176,9 +191,12 @@ export default function HuggingFaceImport({ open, onClose, onImport }) {
                     </div>
                 </div>
 
+                {importError && <div className="df-hf-import-error" role="alert">
+                    <div><strong>Import failed</strong><span>{importError} Your current architecture is preserved.</span></div>
+                    <button type="button" onClick={confirmImport}>Try again</button>
+                </div>}
                 <footer className="df-hf-footer">
                     <span>Import replaces the current graph and clears training. Public configs only; no model code or weights are loaded.</span>
-                    {importError && <span className="df-hf-error" role="alert">{importError}</span>}
                     <button type="button" className="df-hf-import" onClick={confirmImport} disabled={!inspection?.supported || importBusy}>
                         {importBusy ? 'Importing…' : 'Import architecture'} <ArrowRight size={14} />
                     </button>
