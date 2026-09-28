@@ -25,7 +25,11 @@ try {
     await settle();
     assert.equal(await ribbon.count(), 1);
     assert.equal(await page.locator('.df-library, .df-ribbon-context, .df-insert-menu').count(), 0);
-    for (const name of ['Linear', 'Embedding', 'Attention', 'Norm']) assert.ok(await ribbon.getByRole('button', { name: `Add ${name}`, exact: true }).isVisible());
+    assert.equal(await ribbon.locator('.df-ribbon-row').getByRole('button', { name: /Add (Linear|Embedding|Attention|Norm)/ }).count(), 0, 'The ribbon has no pinned component shortcuts');
+    await ribbon.getByRole('button', { name: 'Browse components', exact: true }).click();
+    const componentCatalog = page.getByRole('menu', { name: 'Insert components', exact: true });
+    for (const name of ['Linear', 'Embedding', 'Attention', 'Norm']) assert.ok(await componentCatalog.getByRole('menuitem', { name: `Add ${name}`, exact: true }).isVisible());
+    await ribbon.getByRole('button', { name: 'Browse components', exact: true }).click();
     for (const width of [1440, 1024, 820]) {
         await page.setViewportSize({ width, height: 900 });
         await settle();
@@ -46,6 +50,7 @@ try {
     const anchor = await ribbon.getByRole('button', { name: 'Insert operations' }).boundingBox();
     const menuBounds = await page.locator('[data-ribbon-menu="operations"]').boundingBox();
     assert.ok(Math.abs(anchor.x - menuBounds.x) < 2, 'Operations opens directly below its trigger');
+    assert.ok(Math.abs(menuBounds.y - anchor.y - anchor.height - 3) < 2, 'Operations opens at the bottom of its trigger');
     assert.equal(await operations.evaluate((element) => element.scrollHeight <= element.clientHeight), true, 'The complete operations menu fits when the desktop has room');
     await page.screenshot({ path: `${directory}/operations-menu.png` });
     await page.getByRole('textbox', { name: 'Search operations', exact: true }).fill('Scale');
@@ -102,15 +107,19 @@ try {
     assert.equal(await page.getByRole('combobox', { name: 'Repeat mode', exact: true }).count(), 0);
     await sequential.click();
     assert.deepEqual(await selected(), repeated, 'Turning repetition back on restores its previous configuration');
-    await ribbon.getByRole('button', { name: 'Edit template parameters', exact: true }).click();
-    const params = page.getByRole('dialog', { name: 'Ribbon component template parameters', exact: true });
-    await params.getByRole('textbox', { name: 'New parameter', exact: true }).fill('width');
+    await ribbon.getByRole('button', { name: 'Edit parameters', exact: true }).click();
+    const params = page.locator('.df-ribbon-popover-parameters');
+    assert.equal(await params.getAttribute('aria-label'), 'Ribbon component parameters');
+    assert.equal(await params.getByRole('tab', { name: 'Component' }).getAttribute('aria-selected'), 'true');
+    await params.getByRole('textbox', { name: 'New parameter name', exact: true }).fill('width');
     await params.getByRole('button', { name: 'Add parameter', exact: true }).click();
-    await params.getByRole('textbox', { name: 'width default value', exact: true }).fill('32');
-    await params.getByRole('button', { name: 'Close template parameters', exact: true }).click();
+    await params.locator('input[aria-label="width value"]').fill('32');
+    await params.getByRole('tab', { name: 'Global' }).click();
+    assert.equal(await params.getAttribute('aria-label'), 'Global parameters');
+    await params.getByRole('button', { name: 'Close parameters', exact: true }).click();
     assert.equal(await ribbon.getByRole('button', { name: 'Make copy', exact: true }).count(), 0);
     const component = await selected();
-    await ribbon.getByRole('button', { name: 'Edit definition', exact: true }).click();
+    await main.locator(`.react-flow__node[data-id="${component.id}"]`).getByRole('button', { name: `Open ${component.label}`, exact: true }).click();
     assert.deepEqual(await page.evaluate(() => window.__deepflow.architectureStore.getState().currentPath), [component.id]);
     const activeTab = main.getByRole('tab', { selected: true });
     assert.equal(await activeTab.locator('..').evaluate((element) => getComputedStyle(element).borderRadius), '0px');
@@ -126,21 +135,16 @@ try {
     const templateGraph = () => page.evaluate((id) => window.__deepflow.templatesStore.getState().templates[id].graph, component.templateId);
     const originalRoot = await root();
     const beforeTemplate = await templateGraph();
-    await ribbon.getByRole('button', { name: 'Add Linear', exact: true }).click();
+    await ribbon.getByRole('button', { name: 'Browse components', exact: true }).click();
+    await page.getByRole('menu', { name: 'Insert components', exact: true }).getByRole('menuitem', { name: 'Add Linear', exact: true }).click();
     const addedComponent = Object.values((await templateGraph()).nodes).find((node) => !beforeTemplate.nodes[node.id]);
     assert.equal(addedComponent.kind, 'supernode', 'Common ribbon blocks insert editable component definitions');
     assert.deepEqual(await root(), originalRoot, 'Side insertion leaves the root graph untouched');
     await main.getByRole('tab', { name: 'main', exact: true }).click();
     await ribbon.getByRole('button', { name: 'Browse components', exact: true }).click();
-    await page.getByRole('button', { name: 'Customize pinned components', exact: true }).click();
-    const preferences = page.getByRole('dialog', { name: 'Pinned components', exact: true });
-    await preferences.getByRole('checkbox', { name: 'Convolution', exact: true }).check();
-    await preferences.getByRole('checkbox', { name: 'Activation', exact: true }).check();
-    assert.ok(await preferences.getByRole('checkbox', { name: 'Recurrent', exact: true }).isDisabled(), 'Pinning is bounded to six shortcuts');
-    await preferences.getByRole('button', { name: 'Close ribbon preferences', exact: true }).click();
-    assert.ok(await ribbon.getByRole('button', { name: 'Add Convolution', exact: true }).isVisible());
+    assert.equal(await page.getByRole('button', { name: 'Customize pinned components', exact: true }).count(), 0);
     const beforeDrop = Object.keys((await templateGraph()).nodes).length;
-    await ribbon.getByRole('button', { name: 'Add Convolution', exact: true }).dragTo(side.locator('.react-flow__pane'), { targetPosition: { x: 120, y: 180 } });
+    await page.getByRole('menu', { name: 'Insert components', exact: true }).getByRole('menuitem', { name: 'Add Convolution', exact: true }).dragTo(side.locator('.react-flow__pane'), { targetPosition: { x: 120, y: 180 } });
     await settle();
     assert.equal(Object.keys((await templateGraph()).nodes).length, beforeDrop + 1);
     assert.equal(await ribbon.getAttribute('data-active-pane'), 'side');
@@ -160,11 +164,10 @@ try {
     await settle();
     assert.equal(await main.locator('.react-flow__viewport').getAttribute('style'), mainViewport);
     await page.reload();
-    assert.ok(await ribbon.getByRole('button', { name: 'Add Convolution', exact: true }).isVisible(), 'Pinned shortcuts survive reload');
     await page.setViewportSize({ width: 1024, height: 900 });
-    assert.equal(await ribbon.evaluate((element) => element.scrollWidth <= element.clientWidth), true, 'Six pinned entries fit at laptop width');
+    assert.equal(await ribbon.evaluate((element) => element.scrollWidth <= element.clientWidth), true, 'Insert catalog fits at laptop width');
     assert.deepEqual(errors, []);
-    console.log(`Ribbon checks passed: flat tabs, anchored distinct menus, editable components, bounded persistent pins, repeat modes, parameters, pane-aware insert/gradient/fit, cross-pane drag, and keyboard search. Screenshots: ${directory}`);
+    console.log(`Ribbon checks passed: flat tabs, anchored distinct menus, editable components, repeat modes, parameters, pane-aware insert/gradient/fit, cross-pane drag, and keyboard search. Screenshots: ${directory}`);
 } finally {
     await browser.close();
 }

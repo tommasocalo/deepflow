@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Globe, Group, Maximize, Redo2, Ruler, Undo2, Variable, X } from 'lucide-react';
+import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Redo2, Ruler, Undo2, Variable, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { effectiveTemplateId, inspectedInstanceIndex } from '../../domain/architecture/instanceStructure.js';
 import { resolveComponentContext } from '../../domain/componentContext.js';
@@ -8,22 +8,11 @@ import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/arch
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { recordArchitectureEdit, useArchitectureHistory } from '../../stores/architectureHistory.js';
 import { useOpenToSide } from './OpenToSideContext.jsx';
-import { DEFAULT_PINS, PINNABLE_ENTRIES, setInsertionDragData } from './ribbonEntries.js';
 import BlockPalette from './BlockPalette.jsx';
 import TemplateInspector, { GlobalParameters } from './TemplateInspector.jsx';
-import OperationIcon from './OperationIcon.jsx';
 import './ribbon.css';
 
-const PINS_KEY = 'deepflow:ribbon-pins';
-const SHORT_NAMES = { Normalization: 'Norm', Convolution: 'Conv', Pooling: 'Pool', 'Learned positions': 'Positions', 'Sinusoidal positions': 'Sinusoidal' };
-const MENU_WIDTHS = { operations: 350, components: 360, templates: 310, preferences: 280, parameters: 272, globals: 272, group: 280 };
-function readPins() {
-    try {
-        const saved = JSON.parse(localStorage.getItem(PINS_KEY));
-        if (Array.isArray(saved)) return [...new Set(saved)].filter((key) => PINNABLE_ENTRIES.some((entry) => entry.key === key)).slice(0, 6);
-    } catch { /* Personal ribbon preferences are optional. */ }
-    return DEFAULT_PINS;
-}
+const MENU_WIDTHS = { operations: 350, components: 360, templates: 310, parameters: 350, group: 280 };
 function RepeatIcon({ parallel }) {
     return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" aria-hidden="true">
         {parallel ? <><path d="M12 2v3H4v4m8-4h8v4M4 15v4h16v-4m-8 4v3" /><rect x="1" y="9" width="6" height="6" rx="1" /><rect x="17" y="9" width="6" height="6" rx="1" /></>
@@ -57,8 +46,8 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const validationContext = useValidationContext();
     const openToSide = useOpenToSide();
     const [popup, setPopup] = useState(null);
-    const [popupLeft, setPopupLeft] = useState(0);
-    const [pins, setPins] = useState(readPins);
+    const [popupPosition, setPopupPosition] = useState({ left: 8, top: 56, width: 310 });
+    const [parameterScope, setParameterScope] = useState('global');
     const [groupName, setGroupName] = useState('Component');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
@@ -72,22 +61,38 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const templateId = selectedComponent ? effectiveTemplateId(selectedComponent, selectedIteration) : level.templateId;
     const template = templates[templateId];
     const selectedRepeatMode = selectedComponent?.kind === 'repeat' ? selectedComponent.mode ?? 'sequential' : null;
-    const quickEntries = pins.map((key) => PINNABLE_ENTRIES.find((entry) => entry.key === key)).filter(Boolean);
+    const activeParameterScope = parameterScope === 'component' && template ? 'component' : 'global';
 
     const closePopup = useCallback((restoreFocus = false) => {
         setPopup(null);
         setError('');
         if (restoreFocus) triggerRef.current?.focus({ preventScroll: true });
     }, []);
-    const showPopup = useCallback((name, trigger) => {
+    const positionPopup = useCallback((name, trigger) => {
         const ribbon = ribbonRef.current?.getBoundingClientRect();
         const anchor = trigger?.getBoundingClientRect();
-        if (ribbon && anchor) setPopupLeft(Math.max(8, Math.min(anchor.left - ribbon.left, ribbon.width - MENU_WIDTHS[name] - 8)));
+        if (!ribbon || !anchor) return;
+        const width = Math.min(MENU_WIDTHS[name], Math.max(0, ribbon.width - 16), window.innerWidth - 16);
+        setPopupPosition({
+            left: Math.max(8, Math.min(anchor.left - ribbon.left, ribbon.width - width - 8)),
+            top: anchor.bottom - ribbon.top + 3,
+            width,
+        });
+    }, []);
+    const showPopup = useCallback((name, trigger) => {
+        positionPopup(name, trigger);
         triggerRef.current = trigger;
+        if (name === 'parameters') setParameterScope(template ? 'component' : 'global');
         setNotice('');
         setError('');
         setPopup(name);
-    }, []);
+    }, [positionPopup, template]);
+    useEffect(() => {
+        if (!popup) return;
+        const resize = () => positionPopup(popup, triggerRef.current);
+        window.addEventListener('resize', resize);
+        return () => window.removeEventListener('resize', resize);
+    }, [popup, positionPopup]);
     useEffect(() => {
         if (!popup) return;
         const dismissOutside = (event) => { if (!ribbonRef.current?.contains(event.target)) closePopup(); };
@@ -115,10 +120,6 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     function togglePopup(name, event) {
         if (popup === name) closePopup();
         else showPopup(name, event.currentTarget);
-    }
-    function savePins(next) {
-        setPins(next);
-        try { localStorage.setItem(PINS_KEY, JSON.stringify(next)); } catch { /* Still usable without persistence. */ }
     }
     function addEntry(entry, isTemplate = false) {
         const id = onInsert(entry, isTemplate);
@@ -173,17 +174,12 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     }
     const targetLabel = split ? `${paneId === 'side' ? 'Right' : 'Left'} pane` : 'Current graph';
     const menu = ['operations', 'components', 'templates'].includes(popup);
-    const popoverStyle = { left: popupLeft, width: MENU_WIDTHS[popup] };
+    const popoverStyle = popupPosition;
 
     return <div ref={ribbonRef} className="df-architecture-ribbon" role="region" aria-label={`Architecture ribbon — ${targetLabel}`} data-active-pane={paneId}
         onKeyDown={(event) => { if (event.key === 'Escape' && popup) { event.preventDefault(); event.stopPropagation(); closePopup(true); } }}>
         <div className="df-ribbon-row">
             <RibbonGroup label="Insert" className="df-ribbon-insert">
-                {quickEntries.map((entry) => <button type="button" key={entry.key} className="df-ribbon-button df-ribbon-family" data-library-key={entry.key}
-                    draggable onDragStart={(event) => setInsertionDragData(event, entry)} onClick={() => addEntry(entry)}
-                    title={`${entry.name}: click to add, or drag into a pane. ${entry.description}`} aria-label={`Add ${entry.name}`}>
-                    <OperationIcon libraryKey={entry.libraryKey ?? entry.key} size={25} /><span>{SHORT_NAMES[entry.name] ?? entry.name}</span>
-                </button>)}
                 <RibbonButton icon={Boxes} aria-label="Browse components" aria-expanded={popup === 'components'} aria-haspopup="menu" onClick={(event) => togglePopup('components', event)} title="All editable components and layer modules">Components <ChevronDown size={10} /></RibbonButton>
                 <button ref={operationsButtonRef} type="button" className="df-ribbon-button" aria-label="Insert operations" aria-keyshortcuts="/ Meta+k Control+k"
                     aria-expanded={popup === 'operations'} aria-haspopup="menu" onClick={(event) => togglePopup('operations', event)} title="Math, routing, sources and outputs (⌘K / Ctrl+K)">
@@ -197,10 +193,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection in parallel" aria-pressed={selectedRepeatMode === 'parallel'} onClick={() => repeatSelection('parallel')} title={selectedRepeatMode === 'parallel' ? 'Return to a single instance' : 'Repeat in parallel; combine outputs with Concat, Add or Stack'}><RepeatIcon parallel /><span>Parallel</span></button>
             </RibbonGroup>
             <RibbonGroup label="Parameters" className="df-ribbon-component">
-                <div className="df-ribbon-command-list">
-                    <button type="button" aria-label="Global parameters" aria-expanded={popup === 'globals'} onClick={(event) => togglePopup('globals', event)} title="Model-wide parameters, usable in any field as $name"><Globe size={12} />Global<ChevronDown size={9} /></button>
-                    <button type="button" disabled={!template} aria-label="Component parameters" aria-expanded={popup === 'parameters'} onClick={(event) => togglePopup('parameters', event)} title={template ? `Parameters of ${template.name}` : 'Open or select a component'}><Variable size={12} />Component<ChevronDown size={9} /></button>
-                </div>
+                <RibbonButton icon={Variable} aria-label="Edit parameters" aria-expanded={popup === 'parameters'} aria-haspopup="dialog" onClick={(event) => togglePopup('parameters', event)} title="Edit global parameters or parameters of the current component">Parameters <ChevronDown size={10} /></RibbonButton>
             </RibbonGroup>
             <RibbonGroup label="View">
                 <RibbonButton icon={Columns2} onClick={() => { closePopup(); openToSide?.(selectedComponent ? [...currentPath, selectedComponent.id] : currentPath); }} title="Open selected component or current level to the side" aria-label="Open to the side">To side</RibbonButton>
@@ -217,24 +210,23 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             {split && <span className="df-ribbon-pane-cue" aria-live="polite"><ArrowUpRight size={11} />{targetLabel}</span>}
         </div>
         {menu && <div className="df-ribbon-dropdown" style={popoverStyle} data-ribbon-menu={popup} onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}>
-            <BlockPalette key={popup} section={popup} onAdd={addEntry} onClose={() => closePopup(true)}
-                onCustomize={popup === 'components' ? () => showPopup('preferences', triggerRef.current) : undefined} />
-        </div>}
-        {popup === 'preferences' && <div className="df-ribbon-popover df-ribbon-preferences" style={popoverStyle} role="dialog" aria-label="Pinned components">
-            <header><strong>Pinned components</strong><button type="button" onClick={() => closePopup(true)} aria-label="Close ribbon preferences"><X size={14} /></button></header>
-            <p>Choose up to six shortcuts.</p><div className="df-ribbon-pin-list">{PINNABLE_ENTRIES.map((entry) => <label key={entry.key}><input type="checkbox" checked={pins.includes(entry.key)} disabled={!pins.includes(entry.key) && pins.length >= 6}
-                onChange={(event) => savePins(event.target.checked ? [...pins, entry.key] : pins.filter((key) => key !== entry.key))} /><OperationIcon libraryKey={entry.libraryKey ?? entry.key} size={19} /><span>{entry.name}</span></label>)}</div>
-            <button type="button" className="df-ribbon-restore-pins" onClick={() => savePins(DEFAULT_PINS)}>Restore defaults</button>
+            <BlockPalette key={popup} section={popup} onAdd={addEntry} onClose={() => closePopup(true)} />
         </div>}
         {popup === 'group' && selection.length > 1 && <div className="df-ribbon-popover df-ribbon-popover-group" style={popoverStyle} role="dialog" aria-label="Create component">
             <header><strong>Group {selection.length} {selection.length === 1 ? 'block' : 'blocks'}</strong><button type="button" onClick={() => closePopup(true)} aria-label="Close group editor"><X size={14} /></button></header>
             <form onSubmit={confirmGroup}><label>Component name<input autoFocus value={groupName} onChange={(event) => setGroupName(event.target.value)} /></label><p>The selection becomes a reusable template.</p>{error && <p role="alert" className="df-ribbon-error">{error}</p>}<button className="df-ribbon-primary" type="submit">Create component</button></form>
         </div>}
-        {popup === 'globals' && <div className="df-ribbon-popover df-ribbon-popover-parameters" style={popoverStyle} role="dialog" aria-label="Global parameters" onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}>
-            <GlobalParameters onClose={() => closePopup(true)} />
-        </div>}
-        {popup === 'parameters' && template && <div className="df-ribbon-popover df-ribbon-popover-parameters" style={popoverStyle} role="dialog" aria-label={`${template.name} parameters`} onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}>
-            <TemplateInspector templateId={templateId} onClose={() => closePopup(true)} />
+        {popup === 'parameters' && <div className="df-ribbon-popover df-ribbon-popover-parameters" style={popoverStyle} role="dialog"
+            aria-label={activeParameterScope === 'component' ? `${template.name} parameters` : 'Global parameters'} onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}>
+            <div className="df-ribbon-parameter-bar">
+                <div className="df-ribbon-parameter-tabs" role="tablist" aria-label="Parameter scope">
+                    <button type="button" role="tab" aria-selected={activeParameterScope === 'global'} onClick={() => setParameterScope('global')}>Global</button>
+                    <button type="button" role="tab" aria-selected={activeParameterScope === 'component'} disabled={!template} onClick={() => setParameterScope('component')}
+                        title={template ? `Parameters of ${template.name}` : 'Open or select a component'}>Component</button>
+                </div>
+                <button type="button" className="df-ribbon-parameter-close" onClick={() => closePopup(true)} aria-label="Close parameters"><X size={14} /></button>
+            </div>
+            {activeParameterScope === 'component' ? <TemplateInspector templateId={templateId} /> : <GlobalParameters />}
         </div>}
         {(notice || (error && popup !== 'group')) && <div className={`df-ribbon-notice${error ? ' is-error' : ''}`} role={error ? 'alert' : 'status'}>{!error && <Check size={12} />}<span>{error || notice}</span><button type="button" aria-label="Dismiss message" onClick={() => { setNotice(''); setError(''); }}><X size={12} /></button></div>}
     </div>;

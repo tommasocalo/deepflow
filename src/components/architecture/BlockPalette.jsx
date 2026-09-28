@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Boxes, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Boxes, Search, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { containsTemplate } from '../../domain/architecture/templateReferences.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
@@ -23,7 +23,7 @@ function LibraryItem({ entry, onAdd, onDragEnd, template = false }) {
 }
 
 /** An anchored ribbon menu: each trigger has one purpose and one catalog. */
-export default function BlockPalette({ onAdd, onClose, section = 'operations', onCustomize }) {
+export default function BlockPalette({ onAdd, onClose, section = 'operations' }) {
     const [query, setQuery] = useState('');
     const panelRef = useRef(null);
     const searchRef = useRef(null);
@@ -72,6 +72,5 @@ export default function BlockPalette({ onAdd, onClose, section = 'operations', o
             </section>)}
             {!visibleEntries.length && <p className="df-insert-empty">{section === 'templates' && !query ? 'Group blocks to create a reusable template.' : 'No matches.'}</p>}
         </div>
-        {onCustomize && <button type="button" className="df-insert-customize" onClick={onCustomize}><SlidersHorizontal size={13} />Customize pinned components</button>}
     </div>;
 }

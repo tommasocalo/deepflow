@@ -14,8 +14,6 @@ export const MODULE_ENTRIES = [
     ...getPaletteEntries().filter((entry) => !['IO', 'Operations'].includes(entry.category) && !convertedFamilies.has(entry.family?.key)),
     ...PYTORCH_BLOCKS.filter((entry) => entry.category === 'Normalization' && entry.key !== 'torch.nn.LayerNorm'),
 ].map((entry) => entry.key === 'torch.nn.TransformerEncoderLayer' ? { ...entry, name: 'Transformer', aliases: [entry.name] } : entry);
-export const PINNABLE_ENTRIES = [...STANDARD_ENTRIES, ...MODULE_ENTRIES.filter((entry) => entry.family || entry.key === 'torch.nn.Dropout')];
-export const DEFAULT_PINS = ['component:linear', 'component:embedding', 'component:attention', 'component:layernorm'];
 export const OPERATION_ENTRIES = [
     ...getPaletteEntries().filter((entry) => ['IO', 'Operations'].includes(entry.category)),
     ...PYTORCH_BLOCKS.filter((entry) => entry.key === 'torch.nn.Softmax').map((entry) => ({ ...entry, category: 'Operations' })),

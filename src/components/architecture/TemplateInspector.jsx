@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUpRight, Globe, Plus, Trash2, Variable, X } from 'lucide-react';
+import { ArrowUpRight, Globe, Plus, Trash2, Variable } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
@@ -84,7 +84,7 @@ function ParameterList({ parameters, derived = [], suggestions, usesOf, onChange
     </>;
 }
 
-function TemplateParameters({ template, globals, onOpenConsumer, onClose }) {
+function TemplateParameters({ template, globals, onOpenConsumer }) {
     const patchTemplate = useTemplatesStore((s) => s.patchTemplate);
     const addFreeParameter = useTemplatesStore((s) => s.addFreeParameter);
     const patchFreeParameter = useTemplatesStore((s) => s.patchFreeParameter);
@@ -102,9 +102,8 @@ function TemplateParameters({ template, globals, onOpenConsumer, onClose }) {
         <header className="df-params-header">
             <Variable size={14} aria-hidden="true" />
             <input aria-label="Component name" title="Component name" value={template.name} onChange={(event) => patchTemplate(template.id, { name: event.target.value })} />
-            {onClose && <button type="button" onClick={onClose} aria-label="Close template parameters"><X size={14} /></button>}
         </header>
-        <p className="df-params-note">Values shared by every instance</p>
+        <p className="df-params-note">Shared defaults</p>
         <ParameterList parameters={own} suggestions={suggestions} usesOf={usesOf}
             derived={parameters.filter((parameter) => parameter.derived).map((parameter) => ({ name: parameter.name,
                 source: `${template.graph.nodes[parameter.derived.inputId]?.label ?? 'input'} · ${parameter.derived.axis === -1 ? 'last dim' : `axis ${parameter.derived.axis}`}` }))}
@@ -117,7 +116,7 @@ function TemplateParameters({ template, globals, onOpenConsumer, onClose }) {
 }
 
 /** Parameters of the component selected, or of the level open in the canvas. */
-export default function TemplateInspector({ templateId, onClose }) {
+export default function TemplateInspector({ templateId }) {
     const graph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
     const inspectedIterations = useArchitectureStore((s) => s.inspectedIterations);
@@ -133,11 +132,11 @@ export default function TemplateInspector({ templateId, onClose }) {
     const selected = selectedNodeIds.map((id) => level.graph.nodes[id]).find((node) => node && resolveGraphLevel(graph, [...currentPath, node.id], templates, inspectedIterations).templateId === template.id);
     const path = level.templateId === template.id ? currentPath : selected ? [...currentPath, selected.id] : null;
     const openConsumer = path ? (id) => { openLevel(path); selectOnly(id); setExpanded(id); } : null;
-    return <TemplateParameters key={template.id} template={template} globals={globalParameters(graph)} onOpenConsumer={openConsumer} onClose={onClose} />;
+    return <TemplateParameters key={template.id} template={template} globals={globalParameters(graph)} onOpenConsumer={openConsumer} />;
 }
 
 /** Model-wide variables, always available: any field can use them as $name. */
-export function GlobalParameters({ onClose }) {
+export function GlobalParameters() {
     const graph = useArchitectureStore((s) => s.graph);
     const templates = useTemplatesStore((s) => s.templates);
     const addGlobalParameter = useArchitectureStore((s) => s.addGlobalParameter);
@@ -156,9 +155,8 @@ export function GlobalParameters({ onClose }) {
         <header className="df-params-header">
             <Globe size={14} aria-hidden="true" />
             <strong>Global parameters</strong>
-            {onClose && <button type="button" onClick={onClose} aria-label="Close global parameters"><X size={14} /></button>}
         </header>
-        <p className="df-params-note">Usable in any field, at any level, as <code>$name</code></p>
+        <p className="df-params-note">Available everywhere as <code>$name</code></p>
         <ParameterList parameters={parameters} suggestions={parameters.map((parameter) => ({ name: parameter.name, value: parameter.default }))} usesOf={usesOf}
             onChange={(name, patch) => patchGlobalParameter(name, patch)}
             onRemove={(name) => removeGlobalParameter(name)}

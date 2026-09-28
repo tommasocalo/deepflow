@@ -11,7 +11,7 @@
 .df-params-note code, .df-params-empty code { color: #111; }
 .df-params-list { display: grid; margin: 0; padding: 2px 6px 4px; list-style: none; }
 .df-params-item + .df-params-item { border-top: 1px solid #ecece6; }
-.df-params .df-params-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 44px 20px; align-items: center; gap: 6px; min-height: 30px; max-width: none; padding: 2px 4px; border-radius: 0; background: transparent; }
+.df-params .df-params-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(82px, 96px) 42px 20px; align-items: center; gap: 4px; min-height: 29px; max-width: none; padding: 2px 4px; border-radius: 0; background: transparent; }
 .df-params .df-params-row .df-variable-suggestions.is-portaled { grid-column: 1 / -1; margin: 0 0 4px; }
 .df-params-row > code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .df-params-row .df-variable-field { width: 100%; }
