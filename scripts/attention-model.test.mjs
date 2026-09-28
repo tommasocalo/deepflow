@@ -83,7 +83,7 @@ test('the default GPT-2 and standalone example register and open explicit attent
     const transformer = templatesStore.getState().getTemplate(block.templateId);
     const attention = byLabel(transformer.graph, 'causal self-attention');
     assert.equal(attention.kind, 'supernode');
-    assert.deepEqual(attention.parameterValues, { D: '$d_model', H: '$n_heads' });
+    assert.deepEqual(attention.parameterValues, { D: '$d_model', H: '$n_heads', dropout: '$attn_dropout' });
     assert.equal(templatesStore.getState().getTemplate(attention.templateId).name, 'Multi-head attention');
     for (const template of Object.values(templatesStore.getState().templates)) {
         assert.ok(nodesOf(template.graph).every((node) => !['deepflow.nn.CausalSelfAttention', 'torch.nn.MultiheadAttention'].includes(node.libraryKey)));

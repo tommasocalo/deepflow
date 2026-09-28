@@ -15,7 +15,7 @@ export function tensorFlowNodeIds(graph) {
     const has = (node, key, label) => node.libraryKey === key && node.label === label;
     const expression = (value) => String(value ?? '').replace(/\s+/g, '');
     const isWidth = (value) => expression(value) === '$d_model';
-    const isExpandedWidth = (value) => expression(value) === '4*d_model';
+    const isExpandedWidth = (value) => ['4*d_model', '$mlp_width'].includes(expression(value));
 
     for (const norm of nodes.filter((node) => has(node, 'torch.nn.LayerNorm', 'ln_2') && isWidth(node.parameters?.normalized_shape))) {
         const fc = nodes.find((node) => has(node, 'torch.nn.Linear', 'mlp fc') && linked(norm, node)
@@ -32,7 +32,9 @@ export function tensorFlowNodeIds(graph) {
         if (!residual) continue;
         const previousResidual = nodes.find((node) => has(node, 'deepflow.op.Add', 'residual') && linked(node, norm) && linked(node, residual));
         if (!previousResidual) continue;
-        const hasAttention = nodes.some((node) => node.libraryKey === 'deepflow.nn.CausalSelfAttention' && linked(node, previousResidual));
+        const hasAttention = nodes.some((node) => node.libraryKey === 'deepflow.nn.CausalSelfAttention'
+            && (linked(node, previousResidual) || nodes.some((dropout) => has(dropout, 'torch.nn.Dropout', 'attention projection dropout')
+                && linked(node, dropout) && linked(dropout, previousResidual))));
         const hasOutput = nodes.some((node) => node.libraryKey === 'deepflow.template.Output' && linked(residual, node));
         if (hasAttention && hasOutput) [norm, fc, gelu, proj, drop, residual].forEach((node) => ids.add(node.id));
     }
