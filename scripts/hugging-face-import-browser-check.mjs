@@ -95,9 +95,20 @@ try {
     await dialog.getByRole('button', { name: 'Try again' }).click();
     await dialog.waitFor({ state: 'detached' });
     assert.equal(await currentBlocks(), 6);
-    assert.match(await page.locator('.df-import-source').first().innerText(), /distilbert\/distilgpt2/);
+    assert.match(await page.locator('.df-import-source').first().getAttribute('title'), /distilbert\/distilgpt2/);
     assert.equal(await page.evaluate(() => window.__deepflow.architectureStore.getState().graph.importSource.repoId), 'distilbert/distilgpt2');
     await page.screenshot({ path: `${directory}/05-changed-graph-820.png` });
+    await page.getByRole('button', { name: 'Open to the side' }).click();
+    await page.getByRole('button', { name: 'Import from Hugging Face' }).click();
+    dialog = page.getByRole('dialog', { name: 'Import from Hugging Face' });
+    await dialog.getByRole('button', { name: /openai-community\/gpt2/ }).click();
+    await dialog.getByText('Supported', { exact: true }).waitFor();
+    await dialog.getByRole('button', { name: 'Import architecture' }).click();
+    await dialog.waitFor({ state: 'detached' });
+    assert.equal(await currentBlocks(), 12);
+    assert.equal(await page.locator('.df-import-source').count(), 2, 'Both panes show the imported source');
+    assert.match(await page.locator('.df-import-source').first().getAttribute('title'), /openai-community\/gpt2/);
+    await page.screenshot({ path: `${directory}/06-side-import-820.png` });
     assert.deepEqual(errors, []);
     console.log(`Hugging Face import: same and changed configurations pass. Screenshots: ${directory}`);
 } finally {

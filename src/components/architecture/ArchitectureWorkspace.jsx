@@ -58,7 +58,7 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
             <div className="df-graph-pane-header">
                 <LevelTabs />
                 {importSource?.provider === 'huggingface' && <span className="df-import-source" title={`Imported architecture from Hugging Face: ${importSource.repoId} at ${importSource.commit}. Weights were not loaded.`}>
-                    <span>HF import</span><strong>{importSource.repoId}</strong>
+                    <span>HF import</span><strong className="df-import-source-full">{importSource.repoId}</strong><strong className="df-import-source-short">{importSource.repoId.split('/').at(-1)}</strong>
                 </span>}
                 {onClose && <button type="button" className="df-side-close" onClick={onClose} aria-label="Close side view" title="Close side view"><X size={13} strokeWidth={3} /></button>}
             </div>

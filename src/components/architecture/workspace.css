@@ -6,7 +6,8 @@
 .df-import-source { display: inline-flex; align-items: center; gap: 5px; align-self: center; flex: 0 1 auto; min-width: 0; max-width: min(280px, 36%); padding: 3px 7px; margin-right: 9px; border: 1px solid #111; background: #fff5cf; color: #111; font-size: 9px; line-height: 1.2; white-space: nowrap; }
 .df-import-source > span { flex-shrink: 0; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
 .df-import-source > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
-@media (max-width: 900px) { .df-import-source { max-width: 30%; } .df-import-source > span { display: none; } }
+.df-import-source-short { display: none; }
+@media (max-width: 900px) { .df-import-source { max-width: 35%; } .df-import-source > span { font-size: 0; } .df-import-source > span::after { content: 'HF'; font-size: 9px; } .df-import-source-full { display: none; } .df-import-source-short { display: block; } }
 .df-architecture-split.is-split .df-levels { padding-left: 10px; padding-right: 8px; }
 .df-architecture-split.is-split .df-levels-hint { display: none; }
 .df-architecture-split.is-split .df-graph-pane.is-active .df-graph-pane-header { box-shadow: inset 2px 0 #111; }
