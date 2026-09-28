@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
+import { spawnSync } from 'node:child_process';
 import { fetchHubModelConfig, parseModelReference, searchHubModels } from '../src/domain/huggingFace/client.js';
 import { importHuggingFaceArchitecture, inspectHubModel } from '../src/domain/huggingFace/index.js';
 import { ensureStandardTemplate } from '../src/domain/components/index.js';
@@ -115,6 +116,17 @@ test('BERT masked-LM config builds a bidirectional post-LN encoder and MLM head'
     const generated = generateArchitectureModule(graph, { templates: templatesStore.getState().templates });
     assert.match(generated, /torch\.matmul/);
     assert.doesNotMatch(generated, /triu\(/, 'BERT attention must not be causal');
+});
+
+const torchAvailable = spawnSync('python3', ['-c', 'import torch'], { encoding: 'utf8' }).status === 0;
+test('a small imported BERT encoder and MLM head run with token and segment IDs', { skip: !torchAvailable }, () => {
+    const small = { ...bertPreview, config: { ...bertConfig, vocab_size: 31, hidden_size: 8,
+        num_hidden_layers: 2, num_attention_heads: 2, intermediate_size: 16, max_position_embeddings: 4 } };
+    importHuggingFaceArchitecture(small, { architectureStore, templatesStore, trainingStore });
+    const graph = architectureStore.getState().graph;
+    const source = generateArchitectureModule(graph, { templates: templatesStore.getState().templates });
+    const result = spawnSync('python3', ['-c', `${source}\nmodel = Model()\nids = torch.randint(1, 31, (2, 4))\nsegments = torch.zeros_like(ids)\nlogits = model(ids, segments)\nassert logits.shape == (2, 4, 31), logits.shape\nlogits.sum().backward()\nassert any(p.grad is not None for p in model.parameters())\n`], { encoding: 'utf8', timeout: 30000 });
+    assert.equal(result.status, 0, result.stderr);
 });
 
 test('distilgpt2 config builds a validated editable graph with pinned provenance and no invented training', () => {
