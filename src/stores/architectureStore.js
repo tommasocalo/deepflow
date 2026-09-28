@@ -27,9 +27,12 @@ import { isValidLevelPath, nearestOpenAncestor, reconcileOpenLevels, sameLevelPa
 import { containsTemplate } from '../domain/architecture/templateReferences.js';
 import { copyGraphSelection, pasteGraphSelection } from '../domain/architecture/clipboard.js';
 import { changeStructureScope, effectiveTemplateId, structureOverrideKey } from '../domain/architecture/instanceStructure.js';
+import { resolveLevelContext } from '../domain/architecture/levelContext.js';
+import { applyRepeatSettingsEdit } from '../domain/architecture/repeatBulkEdit.js';
 import { instanceAsRepeat, repeatAsSingle, singleConversionIssue } from '../domain/architecture/repeatStructure.js';
 import { componentBindingsForLayer, ensureStandardTemplate, getStandardComponentForLayer, STANDARD_COMPONENTS } from '../domain/components/index.js';
 import { removeGlobalParameter as removeGlobalFromModel } from '../domain/parameterBindings.js';
+import { repeatBindingValue } from '../domain/expressions.js';
 import { useTemplatesStore } from './templatesStore.js';
 import { architectureDocumentReplaced, configureArchitectureHistory, isRestoringArchitectureHistory, withArchitectureHistory } from './architectureHistory.js';
 
@@ -148,6 +151,25 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         return clonedLevel.templateId;
     };
 
+    /** Only explicit repeat settings scopes use bulk editing. Ordinary edits
+     * retain the existing shared/local structure behavior. */
+    const updateScopedRepeatSettings = (nodeId, kind, transform) => {
+        const state = get();
+        const mode = state.repeatEditModes[JSON.stringify(state.currentPath)];
+        if (!mode || !isActive()) return false;
+        const selection = state.repeatSelections[JSON.stringify(state.currentPath)];
+        const result = applyRepeatSettingsEdit({ graph: state.graph, templates: useTemplatesStore.getState().templates,
+            path: state.currentPath, inspectedIterations: state.inspectedIterations, mode,
+            indices: selection?.indices ?? [], nodeId, kind, transform });
+        if (result.error) {
+            set({ repeatEditError: { pathKey: JSON.stringify(state.currentPath), message: result.error } });
+            return true;
+        }
+        useTemplatesStore.setState({ templates: result.templates });
+        set({ graph: result.graph, ...sharedGraphPatch(get(), result.graph), repeatEditError: null });
+        return true;
+    };
+
     return withArchitectureHistory({
         graph,
         /** @type {string[]} ids of currently-selected nodes in the active view */
@@ -162,6 +184,30 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         recentLibraryKeys: [],
         /** Per-pane previews of a repeat's shared body, keyed by its absolute level path. */
         inspectedIterations: {},
+        /** Snapshot selections and settings scope live only in this editor pane. */
+        repeatSelections: {},
+        repeatEditModes: {},
+        repeatEditError: null,
+        setRepeatSelection: (path, indices, rule) => {
+            if (!Array.isArray(path) || !path.length || !Array.isArray(indices)) return false;
+            const state = get();
+            const context = resolveGraphLevel(state.graph, path, useTemplatesStore.getState().templates, state.inspectedIterations);
+            if (context.instance?.kind !== 'repeat') return false;
+            const key = JSON.stringify(path);
+            const count = resolveLevelContext(state.graph, path, useTemplatesStore.getState().templates, state.inspectedIterations).repeat?.count ?? 0;
+            const selected = [...new Set(indices)].filter((index) => Number.isInteger(index) && index >= 0 && index < count).sort((a, b) => a - b);
+            set({ repeatSelections: { ...state.repeatSelections, [key]: { indices: selected, rule } },
+                repeatEditModes: { ...state.repeatEditModes, [key]: selected.length ? 'selected' : 'current' }, repeatEditError: null });
+            return true;
+        },
+        setRepeatEditMode: (path, mode) => {
+            if (!['current', 'selected', 'all'].includes(mode)) return false;
+            const state = get();
+            const key = JSON.stringify(path);
+            if (mode === 'selected' && !state.repeatSelections[key]?.indices.length) return false;
+            set({ repeatEditModes: { ...state.repeatEditModes, [key]: mode }, repeatEditError: null });
+            return true;
+        },
         showDimensions: true,
         setShowDimensions: (value) => set({ showDimensions: Boolean(value) }),
         showGradientFlow: false,
@@ -304,7 +350,36 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
                 return { ...g, nodes: { ...g.nodes, [id]: { ...existing, ...patch } } };
             }),
 
-        patchRepeatBinding: (id, paramName, value) =>
+        patchRepeatBinding: (id, paramName, value) => {
+            const state = get();
+            const childPath = [...state.currentPath, id];
+            const childKey = JSON.stringify(childPath);
+            const childMode = state.repeatEditModes[childKey];
+            if (childMode === 'selected' || childMode === 'current') {
+                const child = resolveLevelContext(state.graph, childPath, useTemplatesStore.getState().templates, state.inspectedIterations);
+                const count = child.repeat?.count ?? 0;
+                const indices = childMode === 'current' ? [child.repeat?.index]
+                    : state.repeatSelections[childKey]?.indices ?? [];
+                const targets = [...new Set(indices)].filter((index) => Number.isInteger(index) && index >= 0 && index < count);
+                if (!targets.length) { set({ repeatEditError: { pathKey: childKey, message: 'No instances selected' } }); return; }
+                const parameter = useTemplatesStore.getState().templates[child.levels.at(-1)?.instance.templateId]
+                    ?.freeParameters?.find((candidate) => candidate.name === paramName);
+                updateCurrentGraph((g) => {
+                    const existing = g.nodes[id];
+                    if (!existing || existing.kind !== 'repeat') return g;
+                    const previous = existing.bindings?.[paramName];
+                    const values = Array.from({ length: count }, (_, index) => repeatBindingValue(previous, parameter, index));
+                    for (const index of targets) values[index] = value;
+                    return patchNode(g, id, { bindings: { ...existing.bindings, [paramName]: values } });
+                });
+                set({ repeatEditError: null });
+                return;
+            }
+            if (updateScopedRepeatSettings(id, 'repeat', (g) => {
+                const existing = g.nodes[id];
+                return existing?.kind === 'repeat'
+                    ? patchNode(g, id, { bindings: { ...existing.bindings, [paramName]: value } }) : g;
+            })) return;
             updateCurrentGraph((g) => {
                 const existing = g.nodes[id];
                 if (!existing || existing.kind !== 'repeat') return g;
@@ -318,7 +393,8 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
                         },
                     },
                 };
-            }),
+            });
+        },
 
         deleteElements: ({ nodeIds = [], edgeIds = [] }, expected) => {
             if (!matchesContext(expected)) return false;
@@ -344,10 +420,29 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
             }));
         },
 
-        patchNode: (id, patch) => updateCurrentGraph((g) => patchNode(g, id, patch)),
+        patchNode: (id, patch) => {
+            const source = getViewGraph(get()).nodes[id];
+            const parameterOnly = patch.parameterValues && Object.keys(patch).every((key) => key === 'parameterValues');
+            if (source && parameterOnly && updateScopedRepeatSettings(id, source.kind, (g) => {
+                const existing = g.nodes[id];
+                if (!existing || existing.kind !== source.kind) return g;
+                const nextPatch = { ...patch };
+                if (patch.parameterValues) {
+                    // The inspector sends its entire current map; apply only
+                    // fields the user changed to differently configured copies.
+                    const changed = Object.fromEntries(Object.entries(patch.parameterValues)
+                        .filter(([name, value]) => !Object.is(value, source.parameterValues?.[name])));
+                    nextPatch.parameterValues = { ...existing.parameterValues, ...changed };
+                }
+                return patchNode(g, id, nextPatch);
+            })) return;
+            updateCurrentGraph((g) => patchNode(g, id, patch));
+        },
 
-        patchLayerParameters: (id, parameterPatch) =>
-            updateCurrentGraph((g) => patchLayerParameters(g, id, parameterPatch)),
+        patchLayerParameters: (id, parameterPatch) => {
+            if (updateScopedRepeatSettings(id, 'layer', (g) => patchLayerParameters(g, id, parameterPatch))) return;
+            updateCurrentGraph((g) => patchLayerParameters(g, id, parameterPatch));
+        },
 
         moveNode: (id, position) => updateCurrentGraph((g) => moveNode(g, id, position)),
 

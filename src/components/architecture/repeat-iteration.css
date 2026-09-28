@@ -1,5 +1,5 @@
 /* Navigator, instance strip, then the change scope, kept together. */
-.df-iteration-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-height: 34px; padding: 4px 12px; border-bottom: 1px solid #111; background: #fff; font-size: 11px; }
+.df-iteration-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 34px; padding: 4px 12px; border-bottom: 1px solid #111; background: #fff; font-size: 11px; }
 .df-iteration-bar.is-local { background: #fffbe6; box-shadow: inset 3px 0 0 #111; }
 .df-iteration-counter { display: inline-flex; align-items: center; border: 1px solid #111; border-radius: 2px; background: #fff; }
 .df-iteration-counter > button { display: grid; place-items: center; width: 22px; height: 24px; padding: 0; font: bold 16px/1 ui-monospace, monospace; }
@@ -19,8 +19,31 @@
 .df-iteration-strip button.is-own { background: #fde68a; }
 .df-iteration-strip button.is-current { background: #111; }
 .df-iteration-strip button.is-current.is-own { background: #fde68a; box-shadow: inset 0 0 0 2px #111; }
+.df-iteration-strip button.is-selected { outline: 2px solid #ef5c2f; outline-offset: 2px; }
+.df-iteration-strip button.is-current.is-selected { outline-color: #ef5c2f; }
 .df-iteration-strip button:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
 .df-iteration-gap { font: 700 10px/1 ui-monospace, monospace; color: #777; }
+.df-iteration-rule-anchor { position: relative; flex: 0 0 auto; }
+.df-iteration-rule-trigger { min-height: 26px; padding: 3px 7px; border: 1px solid #111; border-radius: 2px; background: #fff; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.df-iteration-rule-trigger:hover, .df-iteration-rule-trigger.has-selection { background: #fff0b5; }
+.df-iteration-rule-panel { position: absolute; z-index: 60; top: calc(100% + 5px); left: 0; box-sizing: border-box; width: min(330px, calc(100vw - 32px)); padding: 10px; border: 2px solid #111; border-radius: 3px; background: #fff; box-shadow: 4px 4px 0 #111; }
+.df-iteration-rule-panel > label { display: block; margin-bottom: 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.df-iteration-rule-panel > input { box-sizing: border-box; width: 100%; min-height: 30px; padding: 5px 7px; border: 1px solid #111; border-radius: 2px; font: 700 11px/1.3 ui-monospace, monospace; }
+.df-iteration-rule-panel > input:focus { outline: 2px solid #ef5c2f; outline-offset: 1px; }
+.df-iteration-rule-completions { display: grid; position: absolute; z-index: 1; top: 65px; right: 10px; left: 10px; border: 1px solid #111; background: #fff; box-shadow: 2px 2px 0 #111; }
+.df-iteration-rule-completions button { padding: 4px 7px; text-align: left; font: 700 10px/1.3 ui-monospace, monospace; }
+.df-iteration-rule-completions button:hover { background: #fff0b5; }
+.df-iteration-rule-help { margin: 6px 0 8px; color: #555; font: 10px/1.35 ui-monospace, monospace; }
+.df-iteration-rule-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.df-iteration-rule-footer strong { flex: 1 1 130px; font: 800 10px/1.3 ui-monospace, monospace; }
+.df-iteration-rule-footer strong.is-error { color: #aa1d14; }
+.df-iteration-rule-footer button { padding: 4px 7px; border: 1px solid #111; border-radius: 2px; background: #fff; font-size: 10px; font-weight: 800; }
+.df-iteration-rule-footer button:hover:not(:disabled) { background: #fff0b5; }
+.df-iteration-rule-footer button:disabled { opacity: .45; cursor: default; }
+.df-iteration-apply { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.df-iteration-apply select { box-sizing: border-box; min-height: 26px; max-width: 115px; padding: 2px 18px 2px 6px; border: 1px solid #111; border-radius: 2px; background: #fff; font-size: 10px; font-weight: 800; }
+.df-iteration-apply select:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.df-iteration-edit-error { flex-basis: 100%; color: #aa1d14; font-size: 10px; font-weight: 800; }
 .df-iteration-toggle { display: inline-flex; align-items: center; gap: 7px; position: relative; margin-left: 4px; padding: 3px 6px; border: 1px solid transparent; border-radius: 2px; font-size: 10px; font-weight: 700; color: #111; white-space: nowrap; }
 .df-iteration-toggle::before { content: ''; position: absolute; left: -10px; top: 3px; bottom: 3px; border-left: 1px solid #d4d4ce; }
 .df-iteration-toggle:hover { border-color: #d4d4ce; background: #f4f4ef; }
