@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
-import { ArchitectureStoreProvider, createArchitecturePaneStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
+import { ArchitectureStoreProvider, createArchitecturePaneStore, useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
 import ArchitectureCanvas from './ArchitectureCanvas.jsx';
 import ArchitectureRibbon from './ArchitectureRibbon.jsx';
 import LevelTabs from './LevelTabs.jsx';
@@ -49,6 +49,7 @@ function CanvasCommandBridge({ paneId, register }) {
 }
 
 function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
+    const importSource = useArchitectureStore((state) => state.graph.importSource);
     return (
         <section className={`df-graph-pane${active ? ' is-active' : ''}`} data-graph-pane={id}
             aria-label={id === 'main' ? 'Main graph pane' : 'Side graph pane'}
@@ -56,6 +57,9 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
             onDropCapture={(event) => { onActivate(); event.currentTarget.focus({ preventScroll: true }); }}>
             <div className="df-graph-pane-header">
                 <LevelTabs />
+                {importSource?.provider === 'huggingface' && <span className="df-import-source" title={`Imported architecture from Hugging Face: ${importSource.repoId} at ${importSource.commit}. Weights were not loaded.`}>
+                    <span>HF import</span><strong>{importSource.repoId}</strong>
+                </span>}
                 {onClose && <button type="button" className="df-side-close" onClick={onClose} aria-label="Close side view" title="Close side view"><X size={13} strokeWidth={3} /></button>}
             </div>
             <RepeatIterationBar />

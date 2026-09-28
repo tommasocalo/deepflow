@@ -248,6 +248,16 @@ test('example/initial document sessions suppress construction steps; persisted s
     assert.deepEqual(Object.keys(templatesSaved), ['templates']);
 });
 
+test('a failed document session leaves earlier undo history available', () => {
+    const original = architecture.getState().graph.nodes.a.parameters.out_features;
+    architecture.getState().patchLayerParameters('a', { out_features: 17 });
+    assert.equal(history.getState().undoCount, 1);
+    assert.throws(() => startArchitectureSession(() => { throw new Error('Import failed'); }), /Import failed/);
+    assert.equal(history.getState().undoCount, 1);
+    history.getState().undo();
+    assert.equal(architecture.getState().graph.nodes.a.parameters.out_features, original);
+});
+
 test('history is bounded and disposed panes cannot mutate it or follow restored snapshots', () => {
     const pane = paneAt();
     const disposedState = pane.getState();

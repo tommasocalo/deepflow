@@ -75,13 +75,33 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     }, []);
     const closeHf = useCallback(() => setHfOpen(false), []);
     const importHf = useCallback((preview) => {
-        architectureStore.getState().goToLevel(0);
-        return startArchitectureSession(() => importHuggingFaceArchitecture(preview, {
-            architectureStore: useArchitectureStore,
-            templatesStore: useTemplatesStore,
-            trainingStore: useTrainingStore,
-        }));
-    }, [architectureStore]);
+        const previous = {
+            architecture: useArchitectureStore.getState(),
+            templates: useTemplatesStore.getState(),
+            training: useTrainingStore.getState(),
+            pane: architectureStore.getState(),
+        };
+        const source = startArchitectureSession(() => {
+            try {
+                architectureStore.getState().goToLevel(0);
+                return importHuggingFaceArchitecture(preview, {
+                    architectureStore: useArchitectureStore,
+                    templatesStore: useTemplatesStore,
+                    trainingStore: useTrainingStore,
+                });
+            } catch (error) {
+                useTemplatesStore.setState(previous.templates, true);
+                useArchitectureStore.setState(previous.architecture, true);
+                useTrainingStore.setState(previous.training, true);
+                architectureStore.setState(previous.pane, true);
+                throw error;
+            }
+        });
+        const blocks = source.configuration?.nLayers;
+        setNotice(`Imported ${source.repoId}${blocks ? ` · ${blocks} blocks` : ''} · config only`);
+        requestAnimationFrame(() => requestAnimationFrame(() => onFitView?.()));
+        return source;
+    }, [architectureStore, onFitView]);
     const positionPopup = useCallback((name, trigger) => {
         const ribbon = ribbonRef.current?.getBoundingClientRect();
         const anchor = trigger?.getBoundingClientRect();
@@ -249,7 +269,12 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
         {popup === 'optimization' && <div className="df-ribbon-popover df-ribbon-popover-optimization" style={popoverStyle} role="dialog" aria-label="Optimization" onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}>
             <OptimizationPanel onClose={() => closePopup(true)} />
         </div>}
-        <HuggingFaceImport open={hfOpen} onClose={closeHf} onImport={importHf} />
+        <HuggingFaceImport open={hfOpen} onClose={closeHf} onImport={importHf} currentArchitecture={{
+            nLayers: graph.parameters?.find((parameter) => parameter.name === 'n_layers')?.default,
+            dModel: graph.parameters?.find((parameter) => parameter.name === 'd_model')?.default,
+            nHeads: graph.parameters?.find((parameter) => parameter.name === 'n_heads')?.default,
+            source: graph.importSource?.repoId,
+        }} />
         {(notice || (error && popup !== 'group')) && <div className={`df-ribbon-notice${error ? ' is-error' : ''}`} role={error ? 'alert' : 'status'}>{!error && <Check size={12} />}<span>{error || notice}</span><button type="button" aria-label="Dismiss message" onClick={() => { setNotice(''); setError(''); }}><X size={12} /></button></div>}
     </div>;
 }

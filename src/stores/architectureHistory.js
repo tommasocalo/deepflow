@@ -111,9 +111,10 @@ export function withArchitectureHistory(state, labels) {
 export function startArchitectureSession(callback) {
     transactionDepth++;
     try {
-        return callback();
+        const result = callback();
+        useArchitectureHistory.getState().clear();
+        return result;
     } finally {
         transactionDepth--;
-        useArchitectureHistory.getState().clear();
     }
 }
