@@ -37,25 +37,24 @@ try {
         await page.setViewportSize({ width, height: 900 });
         const trigger = ribbon.getByRole('button', { name: 'Explore architecture settings' });
         await trigger.click();
-        const dialog = ribbon.getByRole('dialog', { name: 'Optimization' });
-        const [buttonBox, dialogBox] = await Promise.all([trigger.boundingBox(), dialog.boundingBox()]);
-        assert.ok(buttonBox && dialogBox, `Optimization visible at ${width}px`);
-        assert.ok(Math.abs(dialogBox.y - buttonBox.y - buttonBox.height - 3) < 2, `Optimization opens below its trigger at ${width}px`);
+        const dialog = page.getByRole('dialog', { name: 'Explore configurations' });
+        const dialogBox = await dialog.boundingBox();
+        assert.ok(dialogBox, `Optimization visible at ${width}px`);
+        assert.ok(dialogBox.width > Math.min(width - 80, 700), `Optimization uses a workspace at ${width}px`);
         assert.ok(dialogBox.x >= 0 && dialogBox.x + dialogBox.width <= width, `Optimization stays on screen at ${width}px`);
         await page.screenshot({ path: `${directory}/${width}-optimization.png` });
         if (width === 1440) {
-            await dialog.getByRole('button', { name: 'Compare' }).click();
-            await dialog.locator('tbody tr').first().waitFor();
-            await page.waitForFunction(() => document.querySelectorAll('.df-opt-results tbody tr').length === 3);
-            assert.equal(await dialog.locator('tbody tr').count(), 3);
+            await dialog.getByRole('button', { name: 'Compare configurations' }).click();
+            await page.waitForFunction(() => document.querySelectorAll('.df-opt-candidate').length === 3);
+            assert.equal(await dialog.locator('.df-opt-candidate').count(), 3);
             assert.equal(await page.evaluate(() => window.__deepflow.architectureStore.getState().graph.parameters.find((item) => item.name === 'd_model').default), 768);
             await page.screenshot({ path: `${directory}/1440-optimization-results.png` });
-            await dialog.locator('tbody tr').first().getByRole('button', { name: 'Apply' }).click();
+            await dialog.getByRole('button', { name: 'Apply selected' }).click();
             assert.equal(await page.evaluate(() => window.__deepflow.architectureStore.getState().graph.parameters.find((item) => item.name === 'd_model').default), 384);
+            await dialog.getByRole('button', { name: 'Close optimization' }).click();
             await ribbon.getByRole('button', { name: 'Undo' }).click();
             assert.equal(await page.evaluate(() => window.__deepflow.architectureStore.getState().graph.parameters.find((item) => item.name === 'd_model').default), 768);
-        }
-        await dialog.getByRole('button', { name: 'Close optimization' }).click();
+        } else await dialog.getByRole('button', { name: 'Close optimization' }).click();
     }
 
     for (const width of [1440, 820]) {

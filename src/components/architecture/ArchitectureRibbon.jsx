@@ -16,7 +16,7 @@ import OptimizationPanel from './OptimizationPanel.jsx';
 import TemplateInspector, { GlobalParameters } from './TemplateInspector.jsx';
 import './ribbon.css';
 
-const MENU_WIDTHS = { operations: 350, components: 360, templates: 310, parameters: 350, group: 280, optimization: 450 };
+const MENU_WIDTHS = { operations: 350, components: 360, templates: 310, parameters: 350, group: 280 };
 function RepeatIcon({ parallel }) {
     return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" aria-hidden="true">
         {parallel ? <><path d="M12 2v3H4v4m8-4h8v4M4 15v4h16v-4m-8 4v3" /><rect x="1" y="9" width="6" height="6" rx="1" /><rect x="17" y="9" width="6" height="6" rx="1" /></>
@@ -51,6 +51,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const openToSide = useOpenToSide();
     const [popup, setPopup] = useState(null);
     const [hfOpen, setHfOpen] = useState(false);
+    const [optimizationOpen, setOptimizationOpen] = useState(false);
     const [popupPosition, setPopupPosition] = useState({ left: 8, top: 56, width: 310 });
     const [parameterScope, setParameterScope] = useState('global');
     const [groupName, setGroupName] = useState('Component');
@@ -74,6 +75,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
         if (restoreFocus) triggerRef.current?.focus({ preventScroll: true });
     }, []);
     const closeHf = useCallback(() => setHfOpen(false), []);
+    const closeOptimization = useCallback(() => setOptimizationOpen(false), []);
     const importHf = useCallback((preview) => {
         const previous = {
             architecture: useArchitectureStore.getState(),
@@ -231,7 +233,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 <RibbonButton icon={Variable} aria-label="Edit parameters" aria-expanded={popup === 'parameters'} aria-haspopup="dialog" onClick={(event) => togglePopup('parameters', event)} title="Edit global parameters or parameters of the current component">Parameters <ChevronDown size={10} /></RibbonButton>
             </RibbonGroup>
             <RibbonGroup label="Optimization" className="df-ribbon-optimization">
-                <RibbonButton icon={Search} aria-label="Explore architecture settings" aria-expanded={popup === 'optimization'} aria-haspopup="dialog" onClick={(event) => togglePopup('optimization', event)} title="Compare global parameter settings by shape validity and model size">Explore</RibbonButton>
+                <RibbonButton icon={Search} aria-label="Explore architecture settings" aria-expanded={optimizationOpen} aria-haspopup="dialog" onClick={() => { closePopup(); setOptimizationOpen(true); }} title="Compare global parameter settings by shape validity and model size">Explore</RibbonButton>
             </RibbonGroup>
             <RibbonGroup label="View">
                 <RibbonButton icon={Columns2} onClick={() => { closePopup(); openToSide?.(selectedComponent ? [...currentPath, selectedComponent.id] : currentPath); }} title="Open selected component or current level to the side" aria-label="Open to the side">To side</RibbonButton>
@@ -266,9 +268,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             </div>
             {activeParameterScope === 'component' ? <TemplateInspector templateId={templateId} /> : <GlobalParameters />}
         </div>}
-        {popup === 'optimization' && <div className="df-ribbon-popover df-ribbon-popover-optimization" style={popoverStyle} role="dialog" aria-label="Optimization" onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}>
-            <OptimizationPanel onClose={() => closePopup(true)} />
-        </div>}
+        <OptimizationPanel open={optimizationOpen} onClose={closeOptimization} />
         <HuggingFaceImport open={hfOpen} onClose={closeHf} onImport={importHf} currentArchitecture={{
             nLayers: graph.parameters?.find((parameter) => parameter.name === 'n_layers')?.default,
             dModel: graph.parameters?.find((parameter) => parameter.name === 'd_model')?.default,
