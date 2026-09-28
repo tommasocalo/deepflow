@@ -69,12 +69,7 @@ export default function HuggingFaceImport({ open, onClose, onImport, currentArch
         if (!nextCursor) {
             const direct = parseModelReference(text);
             if (direct && (text.includes('/') || text.startsWith('https://'))) {
-                searchAbort.current?.abort();
-                setSearchBusy(false);
-                setModels([{ id: direct.repoId }]);
-                setCursor(null);
-                setSearchError('');
-                void showPreview(direct);
+                openDirect(direct);
                 return;
             }
         }
@@ -115,6 +110,16 @@ export default function HuggingFaceImport({ open, onClose, onImport, currentArch
         }
     };
 
+    const openDirect = (reference, nextQuery = null) => {
+        searchAbort.current?.abort();
+        setSearchBusy(false);
+        setModels([{ id: reference.repoId }]);
+        setCursor(null);
+        setSearchError('');
+        if (nextQuery) setQuery(nextQuery);
+        void showPreview(reference);
+    };
+
     const confirmImport = async () => {
         if (!preview?.inspection.supported || importBusy) return;
         setImportBusy(true);
@@ -141,11 +146,23 @@ export default function HuggingFaceImport({ open, onClose, onImport, currentArch
                 </header>
 
                 <form className="df-hf-search" onSubmit={doSearch}>
-                    <Search size={16} aria-hidden="true" />
-                    <input ref={searchRef} type="search" aria-label="Search Hugging Face models or paste a model URL"
-                        placeholder="Search models or paste a Hugging Face URL" value={query} onChange={(event) => setQuery(event.target.value)} />
-                    <button type="submit">Search</button>
+                    <div className="df-hf-search-field">
+                        <Search size={18} aria-hidden="true" />
+                        <input ref={searchRef} type="search" aria-label="Search Hugging Face models or paste a model URL"
+                            placeholder="Model name, ID or Hugging Face URL" value={query} onChange={(event) => setQuery(event.target.value)} />
+                        {query && <button className="df-hf-search-clear" type="button" aria-label="Clear model search" title="Clear search"
+                            onClick={() => { setQuery(''); searchRef.current?.focus(); }}><X size={14} /></button>}
+                    </div>
+                    <button className="df-hf-search-submit" type="submit">Search <ArrowRight size={14} aria-hidden="true" /></button>
                 </form>
+                <div className="df-hf-search-example"><span>Quick models</span>
+                    <button type="button" aria-pressed={selectedId === 'openai-community/gpt2'}
+                        onClick={() => openDirect({ repoId: 'openai-community/gpt2' }, 'openai-community/gpt2')}>GPT-2 decoder</button>
+                    <button type="button" aria-pressed={selectedId === 'google-bert/bert-base-uncased'}
+                        onClick={() => openDirect({ repoId: 'google-bert/bert-base-uncased' }, 'google-bert/bert-base-uncased')}>
+                        BERT masked LM <ArrowRight size={12} aria-hidden="true" />
+                    </button>
+                </div>
 
                 <div className="df-hf-body">
                     <div className="df-hf-results" aria-label="Hugging Face model results">
@@ -168,7 +185,7 @@ export default function HuggingFaceImport({ open, onClose, onImport, currentArch
                         {preview && <>
                             <div className="df-hf-preview-head">
                                 <div><span className="df-hf-eyebrow">{inspection.family}</span><h3>{preview.repoId}</h3><span className="df-hf-commit">{preview.requestedRevision} · {preview.commit.slice(0, 12)}</span></div>
-                                <span className={`df-hf-status ${inspection.supported ? 'is-supported' : ''}`}>{inspection.supported ? 'Supported' : 'Unsupported'}</span>
+                                <span className={`df-hf-status ${inspection.supported ? 'is-supported' : ''}`}>{inspection.supported ? 'Supported' : 'Not mapped yet'}</span>
                             </div>
                             {!inspection.supported ? <p className="df-hf-unsupported">{inspection.reason}</p> : <>
                                 <div className="df-hf-facts">
@@ -180,12 +197,16 @@ export default function HuggingFaceImport({ open, onClose, onImport, currentArch
                                 {dimensions.length > 0 && <div className="df-hf-impact" aria-label="Comparison with current architecture">
                                     <strong>Compared with current graph</strong>
                                     {changedDimensions.length ? <p>{changedDimensions.map((item) => `${item.label} ${item.current} → ${item.imported}`).join(' · ')}</p>
-                                        : <p>Same block count, width and heads. The graph may look unchanged; its Hugging Face source will be recorded.</p>}
+                                        : <p>Dimensions match. Import replaces the graph with {inspection.family} components and records their source; an identical layout may look unchanged.</p>}
                                 </div>}
                                 <div className="df-hf-section-title">Editable components</div>
                                 <ul className="df-hf-components">{inspection.components.map((component) => <li key={component.name}><strong>{component.name}</strong><span>{component.detail}</span></li>)}</ul>
                                 <div className="df-hf-limits"><strong>Import scope</strong>{inspection.limitations.map((item) => <p key={item}>{item}</p>)}</div>
                             </>}
+                            <details className="df-hf-config">
+                                <summary>Inspect config.json <span>{Object.keys(preview.config).length} fields</span></summary>
+                                <pre>{JSON.stringify(preview.config, null, 2)}</pre>
+                            </details>
                             <a className="df-hf-external" href={preview.url} target="_blank" rel="noopener noreferrer">View source revision <ExternalLink size={12} /></a>
                         </>}
                     </div>

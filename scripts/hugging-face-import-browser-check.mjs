@@ -31,6 +31,27 @@ try {
                 resid_pdrop: 0.1, layer_norm_epsilon: 1e-5,
             }) });
         }
+        if (url.pathname.includes('google-bert/bert-base-uncased') && url.pathname.endsWith('/revision/main')) {
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'google-bert/bert-base-uncased', sha }) });
+        }
+        if (url.pathname.includes('google-bert/bert-base-uncased') && url.pathname.endsWith(`/resolve/${sha}/config.json`)) {
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+                model_type: 'bert', architectures: ['BertForMaskedLM'], vocab_size: 30522,
+                max_position_embeddings: 512, hidden_size: 768, num_hidden_layers: 12,
+                num_attention_heads: 12, intermediate_size: 3072, type_vocab_size: 2,
+                pad_token_id: 0, hidden_act: 'gelu', hidden_dropout_prob: 0.1,
+                attention_probs_dropout_prob: 0.1, layer_norm_eps: 1e-12,
+            }) });
+        }
+        if (url.pathname.includes('nlpconnect/vit-gpt2-image-captioning') && url.pathname.endsWith('/revision/main')) {
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'nlpconnect/vit-gpt2-image-captioning', sha }) });
+        }
+        if (url.pathname.includes('nlpconnect/vit-gpt2-image-captioning') && url.pathname.endsWith(`/resolve/${sha}/config.json`)) {
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+                model_type: 'vision-encoder-decoder', architectures: ['VisionEncoderDecoderModel'],
+                encoder: { model_type: 'vit' }, decoder: { model_type: 'gpt2', add_cross_attention: true },
+            }) });
+        }
         return route.fulfill({ status: 404, body: 'Unexpected Hugging Face request' });
     });
     await page.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
@@ -42,14 +63,16 @@ try {
     let dialog = page.getByRole('dialog', { name: 'Import from Hugging Face' });
     await dialog.getByRole('button', { name: /openai-community\/gpt2/ }).click();
     await dialog.getByText('Supported', { exact: true }).waitFor();
-    assert.match(await dialog.innerText(), /Same block count, width and heads.*graph may look unchanged/s);
+    assert.match(await dialog.innerText(), /Dimensions match.*GPT-2 components.*identical layout may look unchanged/s);
     assert.equal(await dialog.evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(255, 255, 255)');
+    assert.ok(await dialog.locator('.df-hf-search').evaluate((element) => element.getBoundingClientRect().height >= 44), 'Search control has a comfortable height');
     await page.screenshot({ path: `${directory}/01-same-config-1440.png` });
     await dialog.getByRole('button', { name: 'Import architecture' }).click();
     await dialog.waitFor({ state: 'detached' });
     assert.equal(await currentBlocks(), 12);
-    await page.getByText('HF import', { exact: true }).waitFor();
+    await page.getByRole('link', { name: 'View imported Hugging Face source openai-community/gpt2' }).waitFor();
     assert.match(await page.locator('.df-import-source').first().innerText(), /openai-community\/gpt2/);
+    assert.ok(await page.locator('.df-import-source').first().evaluate((element) => element.getBoundingClientRect().width >= 170), 'Source label is legible at full width');
     await page.screenshot({ path: `${directory}/02-imported-source-1440.png` });
 
     const beforeFailure = await page.evaluate(() => {
@@ -72,6 +95,7 @@ try {
     await search.press('Enter');
     await dialog.getByText('Supported', { exact: true }).waitFor();
     assert.match(await dialog.innerText(), /blocks 12 → 6/);
+    assert.ok(await dialog.locator('.df-hf-search').evaluate((element) => element.getBoundingClientRect().height >= 44), 'Search control remains tall at 820px');
     await page.screenshot({ path: `${directory}/03-changed-config-820.png` });
     await dialog.getByRole('button', { name: 'Import architecture' }).click();
     await dialog.getByText('Import failed', { exact: true }).waitFor();
@@ -108,7 +132,41 @@ try {
     assert.equal(await currentBlocks(), 12);
     assert.equal(await page.locator('.df-import-source').count(), 2, 'Both panes show the imported source');
     assert.match(await page.locator('.df-import-source').first().getAttribute('title'), /openai-community\/gpt2/);
+    const paneSourceBounds = await page.locator('.df-graph-pane').evaluateAll((panes) => panes.map((pane) => {
+        const paneBounds = pane.getBoundingClientRect();
+        const sourceBounds = pane.querySelector('.df-import-source').getBoundingClientRect();
+        return { paneLeft: paneBounds.left, paneRight: paneBounds.right, sourceLeft: sourceBounds.left, sourceRight: sourceBounds.right, sourceWidth: sourceBounds.width };
+    }));
+    assert.equal(paneSourceBounds.every((bounds) => bounds.sourceLeft >= bounds.paneLeft && bounds.sourceRight <= bounds.paneRight && bounds.sourceWidth >= 60), true, `Source labels fit inside both split panes: ${JSON.stringify(paneSourceBounds)}`);
     await page.screenshot({ path: `${directory}/06-side-import-820.png` });
+    await page.getByRole('button', { name: 'Import from Hugging Face' }).click();
+    dialog = page.getByRole('dialog', { name: 'Import from Hugging Face' });
+    await dialog.getByRole('button', { name: 'BERT masked LM' }).click();
+    await dialog.getByText('Supported', { exact: true }).waitFor();
+    assert.match(await dialog.innerText(), /google-bert\/bert-base-uncased/);
+    assert.match(await dialog.innerText(), /Dimensions match.*BERT components/);
+    await page.screenshot({ path: `${directory}/07-bert-example-820.png` });
+    await dialog.getByRole('button', { name: 'Import architecture' }).click();
+    await dialog.waitFor({ state: 'detached' });
+    assert.equal(await page.evaluate(() => window.__deepflow.architectureStore.getState().graph.importSource.repoId), 'google-bert/bert-base-uncased');
+    assert.ok(await page.evaluate(() => Object.keys(window.__deepflow.architectureStore.getState().graph.nodes).length >= 15));
+    await page.getByRole('button', { name: 'Close side view' }).click();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('button', { name: 'Fit active graph' }).click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${directory}/08-bert-import-1440.png` });
+
+    await page.setViewportSize({ width: 820, height: 900 });
+    await page.getByRole('button', { name: 'Import from Hugging Face' }).click();
+    dialog = page.getByRole('dialog', { name: 'Import from Hugging Face' });
+    const visionSearch = dialog.getByRole('searchbox', { name: 'Search Hugging Face models or paste a model URL' });
+    await visionSearch.fill('nlpconnect/vit-gpt2-image-captioning');
+    await visionSearch.press('Enter');
+    await dialog.getByText('Not mapped yet', { exact: true }).waitFor();
+    assert.equal(await dialog.getByRole('button', { name: 'Import architecture' }).isDisabled(), true);
+    await dialog.getByText('Inspect config.json').click();
+    assert.match(await dialog.locator('.df-hf-config pre').innerText(), /vision-encoder-decoder/);
+    await page.screenshot({ path: `${directory}/09-vision-unmapped-820.png` });
     assert.deepEqual(errors, []);
     console.log(`Hugging Face import: same and changed configurations pass. Screenshots: ${directory}`);
 } finally {

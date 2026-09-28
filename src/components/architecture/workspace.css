@@ -3,11 +3,19 @@
 .df-graph-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .df-graph-pane-header { display: flex; align-items: stretch; min-width: 0; background: #fff; }
 .df-graph-pane-header .df-levels { flex: 1; min-width: 0; }
-.df-import-source { display: inline-flex; align-items: center; gap: 5px; align-self: center; flex: 0 1 auto; min-width: 0; max-width: min(280px, 36%); padding: 3px 7px; margin-right: 9px; border: 1px solid #111; background: #fff5cf; color: #111; font-size: 9px; line-height: 1.2; white-space: nowrap; }
-.df-import-source > span { flex-shrink: 0; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
-.df-import-source > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
-.df-import-source-short { display: none; }
-@media (max-width: 900px) { .df-import-source { max-width: 35%; } .df-import-source > span { font-size: 0; } .df-import-source > span::after { content: 'HF'; font-size: 9px; } .df-import-source-full { display: none; } .df-import-source-short { display: block; } }
+.df-import-source { display: inline-flex; align-items: stretch; align-self: center; flex: 0 1 auto; width: max-content; min-width: 0; max-width: min(330px, 42%); height: 28px; margin: 2px 10px 2px 0; border: 1px solid #111; background: #fff; box-shadow: 1px 1px 0 #111; color: #111; text-decoration: none; white-space: nowrap; }
+.df-import-source:hover, .df-import-source:focus-visible { background: #fff9e8; outline: none; box-shadow: 2px 2px 0 #111; }
+.df-import-source-mark { display: grid; place-items: center; width: 27px; flex: 0 0 27px; border-right: 1px solid #111; background: #f9e8a8; font-size: 10px; font-weight: 900; letter-spacing: -.04em; }
+.df-import-source-copy { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; padding: 0 7px; }
+.df-import-source-kicker { color: #555; font-size: 8px; font-weight: 750; line-height: 1; }
+.df-import-source-copy strong { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 10px; font-weight: 800; line-height: 1.1; }
+.df-import-source-copy .df-import-source-short { display: none; }
+.df-import-source > svg { align-self: center; flex: 0 0 auto; margin: 0 6px 0 1px; }
+.df-architecture-split.is-split .df-import-source { max-width: 36%; margin-right: 5px; }
+.df-architecture-split.is-split .df-import-source-kicker, .df-architecture-split.is-split .df-import-source > svg { display: none; }
+.df-architecture-split.is-split .df-import-source-copy .df-import-source-full { display: none; }
+.df-architecture-split.is-split .df-import-source-copy .df-import-source-short { display: block; }
+@media (max-width: 700px) { .df-import-source { max-width: 38%; } .df-import-source-kicker, .df-import-source > svg { display: none; } .df-import-source-copy .df-import-source-full { display: none; } .df-import-source-copy .df-import-source-short { display: block; } }
 .df-architecture-split.is-split .df-levels { padding-left: 10px; padding-right: 8px; }
 .df-architecture-split.is-split .df-levels-hint { display: none; }
 .df-architecture-split.is-split .df-graph-pane.is-active .df-graph-pane-header { box-shadow: inset 2px 0 #111; }
