@@ -8,6 +8,7 @@ import {
     ReactFlowProvider,
     useReactFlow,
     useStore as useFlowStore,
+    useStoreApi as useFlowStoreApi,
 } from '@xyflow/react';
 import { Hand, MousePointer2 } from 'lucide-react';
 import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
@@ -44,6 +45,11 @@ const edgeTypes = {
 const NODE_ORIGIN = [0.5, 0];
 
 const VIEWPORT_KEY_PREFIX = 'deepflow:architecture-viewport';
+
+function isAdditivePaneClick(event) {
+    return event.button === 0 && (event.metaKey || event.ctrlKey || event.shiftKey)
+        && event.target.classList?.contains('react-flow__pane');
+}
 
 function viewportKey(currentPath, paneId) {
     const prefix = paneId === 'main' ? VIEWPORT_KEY_PREFIX : `${VIEWPORT_KEY_PREFIX}:${paneId}`;
@@ -92,7 +98,9 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     const gradientReport = useGradientFlow(showGradientFlow);
 
     const { screenToFlowPosition, getViewport, setViewport, setNodes, fitView } = useReactFlow();
+    const flowStore = useFlowStoreApi();
     const wrapperRef = useRef(null);
+    const completedMarqueeRef = useRef(false);
     const lastViewportKeyRef = useRef(null);
     const mountedRef = useRef(false);
     const connectionContextRef = useRef(null);
@@ -369,6 +377,22 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                 data-architecture-canvas
                 className={showPanCursor ? 'deepflow-mode-pan' : 'deepflow-mode-select'}
                 style={{ flex: 1, minWidth: 0, height: '100%', backgroundColor: '#fff', position: 'relative' }}
+                onPointerUpCapture={(event) => {
+                    const { userSelectionActive, userSelectionRect } = flowStore.getState();
+                    completedMarqueeRef.current = userSelectionActive;
+                    if (isAdditivePaneClick(event) && !userSelectionActive && userSelectionRect) {
+                        // ReactFlow treats an unmoved selection rectangle as a
+                        // pane click on pointer-up. Cancel that pending click
+                        // before its unconditional selection reset runs.
+                        flowStore.setState({ userSelectionRect: null });
+                    }
+                }}
+                onClickCapture={(event) => {
+                    const completedMarquee = completedMarqueeRef.current;
+                    completedMarqueeRef.current = false;
+                    // Let ReactFlow finish real marquee gestures normally.
+                    if (!completedMarquee && isAdditivePaneClick(event)) event.stopPropagation();
+                }}
                 onDoubleClick={(event) => {
                     // Double-clicking empty canvas fits the graph; nodes keep their own double-click.
                     const target = event.target;
@@ -404,7 +428,8 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                     onDrop={onDrop}
                     onMoveEnd={handleMoveEnd}
                     onEdgeClick={(event) => setEdgeAnchor(screenToFlowPosition({ x: event.clientX, y: event.clientY }))}
-                    onPaneClick={() => {
+                    onPaneClick={(event) => {
+                        if (isAdditivePaneClick(event)) return;
                         clearSelection();
                         clearExpanded();
                         setSelectedEdgeIds([]);
@@ -413,7 +438,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                     selectionOnDrag={interactionMode === 'select'}
                     panOnDrag={interactionMode === 'pan'}
                     panActivationKeyCode={keyboardActive ? 'Space' : null}
-                    multiSelectionKeyCode={['Meta', 'Shift']}
+                    multiSelectionKeyCode={['Meta', 'Control', 'Shift']}
                     deleteKeyCode={keyboardActive ? ['Delete', 'Backspace'] : null}
                     edgesFocusable
                     edgesReconnectable
