@@ -57,19 +57,6 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
             onDropCapture={(event) => { onActivate(); event.currentTarget.focus({ preventScroll: true }); }}>
             <div className="df-graph-pane-header">
                 <LevelTabs />
-                {importSource?.provider === 'huggingface' && <a className="df-import-source"
-                    href={`https://huggingface.co/${importSource.repoId}/tree/${encodeURIComponent(importSource.commit)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    aria-label={`View imported Hugging Face source ${importSource.repoId}`}
-                    title={`Imported from ${importSource.repoId} at ${importSource.commit}. Configuration only; weights were not loaded.`}>
-                    <span className="df-import-source-mark" aria-hidden="true">HF</span>
-                    <span className="df-import-source-copy">
-                        <span className="df-import-source-kicker">Imported from Hugging Face</span>
-                        <strong className="df-import-source-full">{importSource.repoId}</strong>
-                        <strong className="df-import-source-short">{importSource.repoId.split('/').at(-1)}</strong>
-                    </span>
-                    <ExternalLink size={11} aria-hidden="true" />
-                </a>}
                 {onClose && <button type="button" className="df-side-close" onClick={onClose} aria-label="Close side view" title="Close side view"><X size={13} strokeWidth={3} /></button>}
             </div>
             <RepeatIterationBar />
@@ -80,6 +67,16 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
                         <CanvasCommandBridge paneId={id} register={registerCommands} />
                     </>
                 )} />
+                {importSource?.provider === 'huggingface' && <a className="df-import-source"
+                    href={`https://huggingface.co/${importSource.repoId}/tree/${encodeURIComponent(importSource.commit)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    aria-label={`View imported Hugging Face source ${importSource.repoId}`}
+                    title={`Imported from ${importSource.repoId} at ${importSource.commit}. Configuration only; weights were not loaded.`}>
+                    <span>Architecture from Hugging Face · </span>
+                    <strong className="df-import-source-full">{importSource.repoId}</strong>
+                    <strong className="df-import-source-short">{importSource.repoId.split('/').at(-1)}</strong>
+                    <ExternalLink size={10} aria-hidden="true" />
+                </a>}
             </div>
         </section>
     );

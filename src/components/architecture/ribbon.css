@@ -40,7 +40,7 @@
 .df-ribbon-parameter-tabs button:disabled { color: #999; cursor: default; }
 .df-ribbon-parameter-close { display: grid; place-items: center; flex-shrink: 0; width: 30px; border-left: 1px solid #e2e2dc; }
 .df-ribbon-parameter-close:hover { background: #f1f1eb; }
-.df-ribbon-notice { position: fixed; bottom: 18px; right: 18px; z-index: 90; display: flex; align-items: center; gap: 7px; max-width: min(380px, calc(100vw - 24px)); padding: 6px 8px; border: 1px solid #333; border-radius: 2px; background: #f6fff8; font-size: 10px; box-shadow: 2px 2px 0 #111; }
+.df-ribbon-notice { position: fixed; bottom: 50px; right: 18px; z-index: 90; display: flex; align-items: center; gap: 7px; max-width: min(380px, calc(100vw - 24px)); padding: 6px 8px; border: 1px solid #333; border-radius: 2px; background: #f6fff8; font-size: 10px; box-shadow: 2px 2px 0 #111; }
 .df-ribbon-notice.is-error { background: #fef2f2; color: #991b1b; }
 .df-ribbon-notice button { display: grid; place-items: center; margin-left: 5px; }
 .df-insert-menu { display: flex; flex-direction: column; max-height: min(720px, calc(100dvh - 195px)); min-height: 0; }

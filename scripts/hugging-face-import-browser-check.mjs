@@ -72,7 +72,18 @@ try {
     assert.equal(await currentBlocks(), 12);
     await page.getByRole('link', { name: 'View imported Hugging Face source openai-community/gpt2' }).waitFor();
     assert.match(await page.locator('.df-import-source').first().innerText(), /openai-community\/gpt2/);
-    assert.ok(await page.locator('.df-import-source').first().evaluate((element) => element.getBoundingClientRect().width >= 170), 'Source label is legible at full width');
+    assert.equal(await page.locator('.df-import-source').first().getAttribute('href'),
+        `https://huggingface.co/openai-community/gpt2/tree/${sha}`);
+    const sourcePlacement = await page.locator('.df-import-source').first().evaluate((element) => {
+        const canvas = element.closest('.df-architecture-body').getBoundingClientRect();
+        const link = element.getBoundingClientRect();
+        return { inHeader: !!element.closest('.df-graph-pane-header'), rightGap: canvas.right - link.right,
+            bottomGap: canvas.bottom - link.bottom, width: link.width };
+    });
+    assert.equal(sourcePlacement.inHeader, false, 'Source is outside the navigation tabs');
+    assert.ok(sourcePlacement.rightGap >= 0 && sourcePlacement.rightGap <= 16
+        && sourcePlacement.bottomGap >= 0 && sourcePlacement.bottomGap <= 16 && sourcePlacement.width >= 170,
+        `Source sits quietly at the lower right of the canvas: ${JSON.stringify(sourcePlacement)}`);
     await page.screenshot({ path: `${directory}/02-imported-source-1440.png` });
 
     const beforeFailure = await page.evaluate(() => {
@@ -133,11 +144,15 @@ try {
     assert.equal(await page.locator('.df-import-source').count(), 2, 'Both panes show the imported source');
     assert.match(await page.locator('.df-import-source').first().getAttribute('title'), /openai-community\/gpt2/);
     const paneSourceBounds = await page.locator('.df-graph-pane').evaluateAll((panes) => panes.map((pane) => {
-        const paneBounds = pane.getBoundingClientRect();
-        const sourceBounds = pane.querySelector('.df-import-source').getBoundingClientRect();
-        return { paneLeft: paneBounds.left, paneRight: paneBounds.right, sourceLeft: sourceBounds.left, sourceRight: sourceBounds.right, sourceWidth: sourceBounds.width };
+        const canvas = pane.querySelector('.df-architecture-body').getBoundingClientRect();
+        const source = pane.querySelector('.df-import-source').getBoundingClientRect();
+        return { rightGap: canvas.right - source.right, bottomGap: canvas.bottom - source.bottom,
+            sourceWidth: source.width, sourceLeft: source.left, canvasLeft: canvas.left };
     }));
-    assert.equal(paneSourceBounds.every((bounds) => bounds.sourceLeft >= bounds.paneLeft && bounds.sourceRight <= bounds.paneRight && bounds.sourceWidth >= 60), true, `Source labels fit inside both split panes: ${JSON.stringify(paneSourceBounds)}`);
+    assert.equal(paneSourceBounds.every((bounds) => bounds.sourceLeft >= bounds.canvasLeft
+        && bounds.rightGap >= 0 && bounds.rightGap <= 12
+        && bounds.bottomGap >= 0 && bounds.bottomGap <= 12 && bounds.sourceWidth >= 60), true,
+    `Source links fit at the bottom right of both split canvases: ${JSON.stringify(paneSourceBounds)}`);
     await page.screenshot({ path: `${directory}/06-side-import-820.png` });
     await page.getByRole('button', { name: 'Import from Hugging Face' }).click();
     dialog = page.getByRole('dialog', { name: 'Import from Hugging Face' });
