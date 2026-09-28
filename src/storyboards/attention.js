@@ -26,21 +26,21 @@ const graphOf = (nodes, connections) => ({
 });
 
 /** One shared, editable head body; each parallel iteration receives its own Q/K/V slice. */
-export function buildAttentionHeadGraph() {
+export function buildAttentionHeadGraph({ causal = true } = {}) {
     const q = layer('deepflow.template.Input', 180, 0, {}, 'Q', ATTENTION_HEAD_INPUT_IDS.q);
     const k = layer('deepflow.template.Input', 560, 0, {}, 'K', ATTENTION_HEAD_INPUT_IDS.k);
     const v = layer('deepflow.template.Input', 940, 0, {}, 'V', ATTENTION_HEAD_INPUT_IDS.v);
     const transpose = layer('deepflow.op.Transpose', 560, 140, { dim0: -2, dim1: -1 }, 'K transpose');
     const scores = layer('deepflow.op.MatMul', 380, 280, {}, 'Q × Kᵀ');
     const scale = layer('deepflow.op.Scale', 380, 410, { factor: '1 / (d_head ** 0.5)' }, 'scaled scores');
-    const mask = layer('deepflow.op.CausalMask', 380, 540, {}, 'causal mask');
+    const mask = causal ? layer('deepflow.op.CausalMask', 380, 540, {}, 'causal mask') : null;
     const softmax = layer('torch.nn.Softmax', 380, 670, { dim: -1 }, 'attention weights');
     const drop = layer('torch.nn.Dropout', 380, 800, { p: '$dropout' }, 'attention dropout');
     const weighted = layer('deepflow.op.MatMul', 560, 930, {}, 'weights × V');
     const output = layer('deepflow.template.Output', 560, 1060, {}, 'head output');
-    return graphOf([q, k, v, transpose, scores, scale, mask, softmax, drop, weighted, output], [
+    return graphOf([q, k, v, transpose, scores, scale, ...(mask ? [mask] : []), softmax, drop, weighted, output], [
         [q, scores, 'a'], [k, transpose], [transpose, scores, 'b'],
-        [scores, scale], [scale, mask], [mask, softmax], [softmax, drop],
+        [scores, scale], ...(mask ? [[scale, mask], [mask, softmax]] : [[scale, softmax]]), [softmax, drop],
         [drop, weighted, 'a'], [v, weighted, 'b'], [weighted, output],
     ]);
 }

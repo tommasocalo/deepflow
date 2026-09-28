@@ -1,8 +1,10 @@
 import { inspectGpt2Config, importGpt2Architecture } from './gpt2.js';
+import { inspectBertConfig, importBertArchitecture } from './bert.js';
 
 /** New architecture families register a config inspector and converter here. */
 export const MODEL_ADAPTERS = Object.freeze([
     { id: 'gpt2', inspect: inspectGpt2Config, importArchitecture: importGpt2Architecture },
+    { id: 'bert', inspect: inspectBertConfig, importArchitecture: importBertArchitecture },
 ]);
 
 export function inspectHubModel(preview) {
@@ -14,7 +16,7 @@ export function inspectHubModel(preview) {
     return { ...preview, adapterId: null, inspection: {
         supported: false,
         family: config?.model_type || 'Unknown architecture',
-        reason: `DeepFlow cannot yet convert ${config?.model_type || 'this model type'} into an editable graph.`,
+        reason: `No exact editable adapter is mapped for ${config?.model_type || 'this model type'} yet.`,
     } };
 }
 

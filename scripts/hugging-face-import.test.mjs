@@ -4,6 +4,7 @@ import { fetchHubModelConfig, parseModelReference, searchHubModels } from '../sr
 import { importHuggingFaceArchitecture, inspectHubModel } from '../src/domain/huggingFace/index.js';
 import { ensureStandardTemplate } from '../src/domain/components/index.js';
 import { validate } from '../src/validation/validator.js';
+import { generateArchitectureModule } from '../src/codegen/architecture.js';
 
 const sha = '607a30d783dfa663caf39e06633721c8d4cfcd7e';
 const config = {
@@ -13,6 +14,15 @@ const config = {
     resid_pdrop: 0.2, layer_norm_epsilon: 1e-6,
 };
 const preview = { repoId: 'distilbert/distilgpt2', requestedRevision: 'main', commit: sha, config };
+const bertConfig = {
+    model_type: 'bert', architectures: ['BertForMaskedLM'], vocab_size: 30522,
+    max_position_embeddings: 512, hidden_size: 768, num_hidden_layers: 12,
+    num_attention_heads: 12, intermediate_size: 3072, type_vocab_size: 2,
+    pad_token_id: 0, hidden_act: 'gelu', hidden_dropout_prob: 0.1,
+    attention_probs_dropout_prob: 0.1, layer_norm_eps: 1e-12,
+    position_embedding_type: 'absolute',
+};
+const bertPreview = { repoId: 'google-bert/bert-base-uncased', requestedRevision: 'main', commit: sha, config: bertConfig };
 const storage = new Map();
 globalThis.window = { localStorage: {
     getItem: (key) => storage.get(key) ?? null,
@@ -67,9 +77,44 @@ test('config is fetched at the resolved immutable commit', async () => {
 
 test('inspectors reject unsupported architecture variants explicitly', () => {
     assert.equal(inspectHubModel({ config: { model_type: 'bert' } }).inspection.supported, false);
+    assert.equal(inspectHubModel({ config: { ...bertConfig, architectures: ['BertModel'] } }).inspection.supported, false);
+    assert.equal(inspectHubModel({ config: { ...bertConfig, is_decoder: true } }).inspection.supported, false);
+    assert.equal(inspectHubModel({ config: { ...bertConfig, position_embedding_type: 'relative_key' } }).inspection.supported, false);
+    assert.equal(inspectHubModel({ config: { ...bertConfig, hidden_act: 'relu' } }).inspection.supported, false);
     assert.match(inspectHubModel({ config: { ...config, add_cross_attention: true } }).inspection.reason, /attention topology/);
     assert.match(inspectHubModel({ config: { ...config, activation_function: 'relu' } }).inspection.reason, /Activation/);
     assert.equal(inspectHubModel(preview).inspection.configuration.nLayers, 6);
+});
+
+test('BERT masked-LM config builds a bidirectional post-LN encoder and MLM head', () => {
+    const inspection = inspectHubModel(bertPreview).inspection;
+    assert.equal(inspection.supported, true);
+    assert.match(inspection.limitations.join(' '), /padding attention mask/);
+    const source = importHuggingFaceArchitecture(bertPreview, { architectureStore, templatesStore, trainingStore });
+    const graph = architectureStore.getState().graph;
+    const nodes = Object.values(graph.nodes);
+    const blocks = nodes.find((node) => node.kind === 'repeat');
+    const encoder = templatesStore.getState().getTemplate(blocks.templateId);
+    const encoderNodes = Object.values(encoder.graph.nodes);
+    const attention = encoderNodes.find((node) => node.label === 'bidirectional attention');
+    const attentionTemplate = templatesStore.getState().getTemplate(attention.templateId);
+    const head = Object.values(attentionTemplate.graph.nodes).find((node) => node.kind === 'repeat');
+    const headTemplate = templatesStore.getState().getTemplate(head.templateId);
+    assert.equal(Object.values(headTemplate.graph.nodes).some((node) => node.libraryKey === 'deepflow.op.CausalMask'), false);
+    assert.equal(encoderNodes.filter((node) => node.label?.includes('LayerNorm')).length, 2);
+    assert.equal(encoder.graph.edges.length, encoderNodes.length - 1 + 2);
+    assert.equal(nodes.filter((node) => node.libraryKey === 'deepflow.io.Input').length, 2);
+    assert.equal(nodes.filter((node) => node.label === 'word embedding' || node.label === 'segment embedding' || node.label === 'position embedding').length, 3);
+    assert.equal(nodes.find((node) => node.label === 'vocabulary decoder').parameterValues.out_features, '$vocab_size');
+    assert.equal(graph.parameters.find((parameter) => parameter.name === 'n_layers').default, 12);
+    assert.equal(source.fidelity, 'editable-config-approximation');
+    assert.equal(source.attentionMaskRepresented, false);
+    assert.equal(graph.importSource.repoId, 'google-bert/bert-base-uncased');
+    const report = validate(graph, { templates: templatesStore.getState().templates });
+    assert.equal(report.ok, true, JSON.stringify(report.errors));
+    const generated = generateArchitectureModule(graph, { templates: templatesStore.getState().templates });
+    assert.match(generated, /torch\.matmul/);
+    assert.doesNotMatch(generated, /triu\(/, 'BERT attention must not be causal');
 });
 
 test('distilgpt2 config builds a validated editable graph with pinned provenance and no invented training', () => {
