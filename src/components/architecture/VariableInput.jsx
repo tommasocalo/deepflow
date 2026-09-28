@@ -5,8 +5,9 @@ import './variable-input.css';
 
 /** Text input with scoped parameter completion. It remains a normal input for
  * selection, arithmetic, clipboard shortcuts, and native text editing. */
-export default function VariableInput({ suggestions = [], multiline = false, onChange, onFocus, onBlur, onKeyDown, onSelect, ...props }) {
+export default function VariableInput({ suggestions = [], multiline = false, floatingSuggestions = false, onChange, onFocus, onBlur, onKeyDown, onSelect, ...props }) {
     const inputRef = useRef(null);
+    const listRef = useRef(null);
     const completedRef = useRef(null);
     const listId = useId();
     const [reference, setReference] = useState(null);
@@ -14,6 +15,7 @@ export default function VariableInput({ suggestions = [], multiline = false, onC
     const [highlighted, setHighlighted] = useState(0);
     const [dismissed, setDismissed] = useState(null);
     const [anchor, setAnchor] = useState(null);
+    const [floatingStyle, setFloatingStyle] = useState(null);
     const referenceKey = reference && `${reference.start}:${reference.end}:${reference.prefix}`;
     const seen = new Set();
     const options = reference ? suggestions.filter((item) => {
@@ -25,8 +27,57 @@ export default function VariableInput({ suggestions = [], multiline = false, onC
     const open = focused && reference && dismissed !== referenceKey && options.length > 0;
     const active = Math.min(highlighted, options.length - 1);
     useLayoutEffect(() => {
-        if (open) document.getElementById(`${listId}-${active}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-    }, [open, active, listId]);
+        if (!floatingSuggestions || !open) return undefined;
+        const input = inputRef.current;
+        const list = listRef.current;
+        if (!input || !list) return undefined;
+        const position = () => {
+            const rect = input.getBoundingClientRect();
+            const viewportWidth = document.documentElement.clientWidth;
+            const viewportHeight = document.documentElement.clientHeight;
+            const gap = 4;
+            const margin = 8;
+            const width = Math.min(Math.max(200, rect.width), viewportWidth - margin * 2);
+            const left = Math.max(margin, Math.min(rect.left, viewportWidth - width - margin));
+            const desiredHeight = Math.min(180, list.scrollHeight + 2);
+            const below = viewportHeight - rect.bottom - gap - margin;
+            const above = rect.top - gap - margin;
+            const placeAbove = below < desiredHeight && above > below;
+            const available = Math.max(40, placeAbove ? above : below);
+            const maxHeight = Math.min(180, available);
+            const top = placeAbove ? Math.max(margin, rect.top - gap - Math.min(desiredHeight, maxHeight)) : rect.bottom + gap;
+            setFloatingStyle({ top, left, width, maxHeight });
+        };
+        position();
+        const observer = new ResizeObserver(position);
+        observer.observe(input);
+        observer.observe(list);
+        window.addEventListener('scroll', position, true);
+        window.addEventListener('resize', position);
+        window.visualViewport?.addEventListener('resize', position);
+        window.visualViewport?.addEventListener('scroll', position);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('scroll', position, true);
+            window.removeEventListener('resize', position);
+            window.visualViewport?.removeEventListener('resize', position);
+            window.visualViewport?.removeEventListener('scroll', position);
+        };
+    }, [floatingSuggestions, open, options.length, referenceKey]);
+    useLayoutEffect(() => {
+        if (!open) return;
+        const option = document.getElementById(`${listId}-${active}`);
+        if (!floatingSuggestions) {
+            option?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+            return;
+        }
+        const list = listRef.current;
+        if (!list || !option) return;
+        const optionRect = option.getBoundingClientRect();
+        const listRect = list.getBoundingClientRect();
+        if (optionRect.bottom > listRect.bottom) list.scrollTop += optionRect.bottom - listRect.bottom;
+        else if (optionRect.top < listRect.top) list.scrollTop -= listRect.top - optionRect.top;
+    }, [open, active, listId, floatingSuggestions]);
 
     const updateReference = (input, changed = false) => {
         const row = input.closest('.df-param-row');
@@ -63,8 +114,9 @@ export default function VariableInput({ suggestions = [], multiline = false, onC
         input.focus();
     };
     const Input = multiline ? 'textarea' : 'input';
-    const list = open && <span id={listId} role="listbox" aria-label="Available parameters"
-        className={`df-variable-suggestions nodrag${anchor ? ' is-portaled' : ''}`}>
+    const list = open && <span id={listId} ref={listRef} role="listbox" aria-label="Available parameters"
+        style={floatingSuggestions ? floatingStyle ?? { visibility: 'hidden' } : undefined}
+        className={`df-variable-suggestions nodrag${anchor && !floatingSuggestions ? ' is-portaled' : ''}${floatingSuggestions ? ' is-floating' : ''}`}>
         {options.map((option, index) => <span key={option.name} id={`${listId}-${index}`}
             role="option" aria-selected={index === active} className="df-variable-option"
             onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
@@ -103,6 +155,6 @@ export default function VariableInput({ suggestions = [], multiline = false, onC
                     setDismissed(referenceKey);
                 }
             }} />
-        {anchor && list ? createPortal(list, anchor) : list}
+        {floatingSuggestions && list ? createPortal(list, document.body) : anchor && list ? createPortal(list, anchor) : list}
     </span>;
 }

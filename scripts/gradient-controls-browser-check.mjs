@@ -162,7 +162,48 @@ try {
         await detail.getByRole('button', { name: 'Close connection settings', exact: true }).click();
     }
     await selectEdge(reverse.id);
-    await page.evaluate(() => window.__deepflow.architectureStore.getState().addGlobalParameter({ name: 'lambda', type: 'float', default: 0.75 }));
+    await page.evaluate(() => {
+        const state = window.__deepflow.architectureStore.getState();
+        for (const [name, value] of Object.entries({ lambda: .75, alpha: .1, beta: .2, gamma: .3, delta: .4,
+            scale: .5, sigma: .6, temperature: .7 })) state.addGlobalParameter({ name, type: 'float', default: value });
+    });
+    for (const width of [1440, 820]) {
+        await detail.getByRole('button', { name: 'Close connection settings', exact: true }).click();
+        await page.setViewportSize({ width, height: 900 });
+        await fit();
+        await selectEdge(reverse.id);
+        const before = await detail.boundingBox();
+        await factor.fill('$');
+        const option = page.getByRole('option', { name: /\$lambda/ });
+        await option.waitFor();
+        assert.ok(await page.getByRole('listbox', { name: 'Available parameters' }).getByRole('option').count() >= 8);
+        await settle();
+        const popup = await page.locator('.df-variable-suggestions.is-floating').evaluate((element) => {
+            const panel = document.querySelector('.df-connection-inspector');
+            const panelRect = panel.getBoundingClientRect();
+            const box = element.getBoundingClientRect();
+            return { position: getComputedStyle(element).position, insidePanel: panel.contains(element),
+                panel: { x: panelRect.x, y: panelRect.y, width: panelRect.width, height: panelRect.height },
+                x: box.x, y: box.y, width: box.width, height: box.height,
+                viewportWidth: document.documentElement.clientWidth, viewportHeight: document.documentElement.clientHeight };
+        });
+        assert.equal(popup.position, 'fixed', 'Suggestions float above the canvas');
+        assert.equal(popup.insidePanel, false, 'Suggestions escape the clipped inspector frame');
+        for (const dimension of ['x', 'y', 'width', 'height']) assert.ok(Math.abs(popup.panel[dimension] - before[dimension]) < 1,
+            `Opening suggestions does not move or resize the inspector (${dimension})`);
+        assert.ok(popup.x >= 0 && popup.x + popup.width <= popup.viewportWidth, `${width}: suggestions fit horizontally`);
+        assert.ok(popup.y >= 0 && popup.y + popup.height <= popup.viewportHeight, `${width}: suggestions fit vertically`);
+        assert.ok(popup.height <= 180, `${width}: suggestions scroll inside their own bounded menu`);
+        await page.screenshot({ path: `${directory}/07-suggestions-${width}.png` });
+        const viewportBefore = await page.locator('.react-flow__viewport').getAttribute('style');
+        for (let index = 0; index < 7; index += 1) await factor.press('ArrowDown');
+        assert.ok(await page.locator('.df-variable-suggestions.is-floating').evaluate((element) => element.scrollTop) > 0,
+            `${width}: keyboard navigation scrolls inside the suggestion menu`);
+        assert.equal(await page.locator('.react-flow__viewport').getAttribute('style'), viewportBefore,
+            `${width}: keyboard navigation does not pan the graph`);
+        await factor.press('Escape');
+    }
+    await factor.fill('');
     await factor.fill('$la');
     await page.getByRole('option', { name: /\$lambda/ }).click();
     await factor.press('Tab');

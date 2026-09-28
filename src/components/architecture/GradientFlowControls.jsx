@@ -16,6 +16,7 @@ const RULES = [
 
 function ReverseFactor({ factor, scope, globals, onCommit }) {
     const [draft, setDraft] = useState(null);
+    const [editing, setEditing] = useState(false);
     const shown = draft ?? (factor === '' ? '' : String(factor));
     const resolved = shown ? resolveGradientFactor(shown, scope) : null;
     const symbolic = typeof shown === 'string' && /[A-Za-z_$]/.test(shown);
@@ -33,13 +34,13 @@ function ReverseFactor({ factor, scope, globals, onCommit }) {
     };
     return <div className="df-gradient-factor">
         <span className="df-gradient-factor-label" title="Backward gradient is multiplied by −λ; the forward value stays unchanged">Factor λ</span>
-        <VariableInput aria-label="Gradient reversal factor" type="text" inputMode="decimal" autoComplete="off" spellCheck={false}
+        <VariableInput aria-label="Gradient reversal factor" type="text" inputMode="decimal" autoComplete="off" spellCheck={false} floatingSuggestions
             placeholder={factor === '' ? 'Mixed' : '1'} value={shown} suggestions={suggestions}
-            aria-invalid={!!resolved?.error} onFocus={() => setDraft((current) => current ?? (factor === '' ? '' : String(factor)))}
-            onChange={(event) => setDraft(event.target.value)} onBlur={commit}
+            aria-invalid={!!resolved?.error && !editing} onFocus={() => { setEditing(true); setDraft((current) => current ?? (factor === '' ? '' : String(factor))); }}
+            onChange={(event) => setDraft(event.target.value)} onBlur={() => { setEditing(false); commit(); }}
             onKeyDown={(event) => { if (event.key === 'Enter' && event.currentTarget.getAttribute('aria-expanded') !== 'true') event.currentTarget.blur(); }} />
         {symbolic && !resolved?.error && <output className="df-gradient-factor-value" title="Resolved factor">= {resolved.value}</output>}
-        {resolved?.error && <small className="df-gradient-factor-error" role="alert">{resolved.error}</small>}
+        {resolved?.error && !editing && <small className="df-gradient-factor-error" role="alert">{resolved.error}</small>}
     </div>;
 }
 
