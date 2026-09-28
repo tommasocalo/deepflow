@@ -1,8 +1,10 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { GitBranch, X } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { recordArchitectureEdit } from '../../stores/architectureHistory.js';
+import { resolveGradientFactor } from '../../domain/gradientFactor.js';
 import { useConnectionPlacement } from './useInspectorPlacement.js';
+import VariableInput from './VariableInput.jsx';
 import './gradient-flow.css';
 
 const RULES = [
@@ -11,11 +13,40 @@ const RULES = [
     { value: 'detach', label: 'Detach', icon: 'detach', hint: 'Detach the tensor from autograd. Same backward effect as Stop.' },
     { value: 'reverse', label: 'Reverse', icon: 'reverse', hint: 'Multiply the backward gradient by −λ; forward values stay unchanged.' },
 ];
-const STATUS_LABELS = { flow: 'Differentiable', reverse: 'Reversed', stopped: 'Stopped', constant: 'No gradient', unknown: 'Unknown' };
+
+function ReverseFactor({ factor, scope, globals, onCommit }) {
+    const [draft, setDraft] = useState(null);
+    const shown = draft ?? (factor === '' ? '' : String(factor));
+    const resolved = shown ? resolveGradientFactor(shown, scope) : null;
+    const symbolic = typeof shown === 'string' && /[A-Za-z_$]/.test(shown);
+    const suggestions = Object.entries(scope ?? {})
+        .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+        .map(([name, value]) => ({ name, value, owner: globals.has(name) ? 'Global' : 'Current level' }));
+    const commit = () => {
+        if (draft === null) return;
+        const raw = draft.trim();
+        if (!raw) { setDraft(null); return; }
+        const checked = resolveGradientFactor(raw, scope);
+        if (checked.error) return;
+        onCommit(/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw) ? checked.value : raw);
+        setDraft(null);
+    };
+    return <div className="df-gradient-factor">
+        <span className="df-gradient-factor-label" title="Backward gradient is multiplied by −λ; the forward value stays unchanged">Factor λ</span>
+        <VariableInput aria-label="Gradient reversal factor" type="text" inputMode="decimal" autoComplete="off" spellCheck={false}
+            placeholder={factor === '' ? 'Mixed' : '1'} value={shown} suggestions={suggestions}
+            aria-invalid={!!resolved?.error} onFocus={() => setDraft((current) => current ?? (factor === '' ? '' : String(factor)))}
+            onChange={(event) => setDraft(event.target.value)} onBlur={commit}
+            onKeyDown={(event) => { if (event.key === 'Enter' && event.currentTarget.getAttribute('aria-expanded') !== 'true') event.currentTarget.blur(); }} />
+        {symbolic && !resolved?.error && <output className="df-gradient-factor-value" title="Resolved factor">= {resolved.value}</output>}
+        {resolved?.error && <small className="df-gradient-factor-error" role="alert">{resolved.error}</small>}
+    </div>;
+}
 
 /** One card edits every selected connection: shared values show, differing ones read Mixed. */
 function ConnectionDetail({ graph, edges, report, anchor, onClose }) {
     const patchEdge = useArchitectureStore((s) => s.patchEdge);
+    const rootGraph = useArchitectureStore((s) => s.graph);
     const groupId = useId();
     const lead = edges.at(-1);
     const panelRef = useConnectionPlacement(lead.id, anchor);
@@ -28,13 +59,7 @@ function ConnectionDetail({ graph, edges, report, anchor, onClose }) {
     const patchAll = (patch) => recordArchitectureEdit('Change gradient flow', () => {
         for (const edge of edges) patchEdge(edge.id, patch);
     });
-    const statuses = new Map();
-    for (const edge of edges) {
-        const { status = 'unknown', reason = 'Gradient path is unknown' } = report?.edges[edge.id] ?? {};
-        const reasons = statuses.get(status) ?? [];
-        reasons.push(many ? `${graph.nodes[edge.source]?.label} → ${graph.nodes[edge.target]?.label}: ${reason}` : reason);
-        statuses.set(status, reasons);
-    }
+    const globals = new Set((rootGraph.parameters ?? []).map((parameter) => parameter.name));
     return <aside ref={panelRef} className="df-inspector df-panel-subtle df-connection-inspector nodrag nopan nowheel"
         aria-label="Connection gradient settings" onKeyDown={(event) => {
             // ReactFlow tracks additive selection from these key events even
@@ -55,18 +80,9 @@ function ConnectionDetail({ graph, edges, report, anchor, onClose }) {
                     <span id={`${groupId}-${value}`} className="df-gradient-sr-only">{hint}</span>
                 </label>)}
             </fieldset>
-            <div className="df-gradient-footer">
-                {rule === 'reverse' && <label className="df-connection-field"><span title="Gradient reversal factor">Factor λ</span><input aria-label="Gradient reversal factor" type="number" min="0" step="0.1" value={factor} placeholder="Mixed" onChange={(event) => {
-                    const value = Number(event.target.value);
-                    if (event.target.value !== '' && Number.isFinite(value) && value >= 0) patchAll({ gradientOpLambda: value });
-                }} /></label>}
-                <div className="df-gradient-statuses" aria-label="Gradient path status" aria-live="polite">
-                    {rule === '' && <span className="df-gradient-mixed">Mixed rules</span>}
-                    {[...statuses].map(([status, reasons]) => <span key={status} className={`df-gradient-status is-${status}`} title={reasons.join('\n')}>
-                        <i aria-hidden="true" />{many && `${reasons.length} `}{STATUS_LABELS[status] ?? status}
-                    </span>)}
-                </div>
-            </div>
+            {rule === 'reverse' && <ReverseFactor factor={factor} scope={report?.scope ?? {}} globals={globals}
+                onCommit={(value) => patchAll({ gradientOpLambda: value })} />}
+            {rule === '' && <p className="df-gradient-mixed">Mixed rules</p>}
         </div>
     </aside>;
 }

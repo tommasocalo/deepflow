@@ -1,10 +1,24 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { availableParameters, exposedFieldParameter, exposeTemplateField, fieldAlias, parameterConsumers, parameterFrames, parameterOrigin, parameterReferences, resolvedFieldValue, toggleTemplateFieldExposure } from '../src/domain/parameterBindings.js';
+import { availableParameters, exposedFieldParameter, exposeTemplateField, fieldAlias, parameterConsumers, parameterFrames, parameterOrigin, parameterReferences, removeGlobalParameter, removeTemplateParameter, resolvedFieldValue, toggleTemplateFieldExposure } from '../src/domain/parameterBindings.js';
 import { buildParameterScope } from '../src/domain/expressions.js';
 
 const graph = (...nodes) => ({ nodes: Object.fromEntries(nodes.map((node) => [node.id, node])), edges: [] });
 const layer = (id, parameters) => ({ id, kind: 'layer', label: id, libraryKey: 'torch.nn.Dropout', parameters });
+
+test('reverse factor references count as uses and survive parameter removal', () => {
+    const nodes = graph(layer('source', {}), layer('target', {}));
+    const connection = { id: 'wire', source: 'source', target: 'target', gradientOp: 'reverse', gradientOpLambda: '$factor * 0.5' };
+    const template = { id: 'body', freeParameters: [{ name: 'factor', type: 'float', default: 0.8 }], graph: { ...nodes, edges: [connection] } };
+    assert.deepEqual(parameterConsumers(template, 'factor').map((use) => use.field), ['reverse factor']);
+    const inlined = removeTemplateParameter(template, 'factor');
+    assert.equal(inlined.graph.edges[0].gradientOpLambda, '0.8 * 0.5');
+    assert.equal(template.graph.edges[0].gradientOpLambda, '$factor * 0.5');
+    const root = { ...nodes, parameters: [{ name: 'factor', type: 'float', default: 0.8 }], edges: [connection] };
+    const removed = removeGlobalParameter(root, {}, 'factor');
+    assert.equal(removed.graph.edges[0].gradientOpLambda, '0.8 * 0.5');
+    assert.deepEqual(removed.graph.parameters, []);
+});
 
 test('source provenance follows explicit aliases through nested components and respects local overrides', () => {
     const root = graph({ id: 'transformer', kind: 'supernode', label: 'Transformer', templateId: 'transformer-body', parameterValues: { n_heads: 8 } });

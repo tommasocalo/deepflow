@@ -217,7 +217,8 @@ test('stop and reversal apply to every tensor in nested parallel collections', {
     root.edges[1].gradientOp = 'stop';
     const stopped = generateArchitectureModule(root, { templates, className: 'Stopped' });
     root.edges[1].gradientOp = 'reverse';
-    root.edges[1].gradientOpLambda = 0.25;
+    root.parameters = [{ name: 'lambda', type: 'float', default: 0.25 }];
+    root.edges[1].gradientOpLambda = '$lambda';
     const reversed = generateArchitectureModule(root, { templates, className: 'Reversed' });
     python(`${reference}\n${stopped}\n${reversed}
 reference, stopped, reversed_model = Reference().double(), Stopped().double(), Reversed().double()

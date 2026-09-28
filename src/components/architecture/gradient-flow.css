@@ -8,16 +8,11 @@
 .df-gradient-choice img { display: block; flex-shrink: 0; width: 30px; height: 30px; object-fit: contain; mix-blend-mode: multiply; }
 .df-gradient-choice input { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .df-gradient-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.df-gradient-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 7px; }
-.df-connection-field { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 700; }
-.df-connection-field input { box-sizing: border-box; min-width: 0; width: 72px; height: 24px; border: 1px solid #111; border-radius: 2px; background: white; padding: 2px 5px; font: 600 11px ui-monospace, monospace; }
-.df-gradient-statuses { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; color: #555; font-size: 10px; line-height: 14px; }
-.df-connection-field + .df-gradient-statuses { margin-left: auto; }
-.df-gradient-status { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.df-gradient-status i { display: inline-block; width: 11px; border-top: 2px solid #111; }
-.df-gradient-status.is-reverse i { border-color: #6d28d9; }
-.df-gradient-status.is-stopped { color: #b91c1c; }
-.df-gradient-status.is-stopped i { border-color: #b91c1c; border-top-style: dashed; }
-.df-gradient-status.is-constant i { border-color: #94949b; border-top-style: dashed; }
-.df-gradient-status.is-unknown i { border-color: #94949b; border-top-style: dotted; }
-.df-gradient-mixed { color: #111; font-weight: 700; }
+.df-gradient-factor { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 6px; min-width: 0; margin-top: 7px; }
+.df-gradient-factor-label { font-size: 10px; font-weight: 800; white-space: nowrap; }
+.df-gradient-factor .df-variable-field { display: block; width: 100%; }
+.df-gradient-factor input { box-sizing: border-box; width: 100%; min-width: 0; height: 25px; padding: 2px 6px; border: 1px solid #111; border-radius: 2px; background: #fff; font: 700 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.df-gradient-factor input[aria-invalid='true'] { border-color: #b91c1c; }
+.df-gradient-factor-value { font: 800 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: nowrap; }
+.df-gradient-factor-error { grid-column: 1 / -1; color: #b91c1c; font-size: 10px; line-height: 1.3; }
+.df-gradient-mixed { margin: 6px 0 0; color: #555; font-size: 10px; font-weight: 700; }

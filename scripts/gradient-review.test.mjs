@@ -1,10 +1,60 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { analyzeGradientFlow } from '../src/domain/gradientFlow.js';
+import { resolveGradientFactor } from '../src/domain/gradientFactor.js';
+import { validate } from '../src/validation/validator.js';
+import { generateArchitectureModule } from '../src/codegen/architecture.js';
 
 const layer = (id, libraryKey, parameters = {}) => ({ id, kind: 'layer', libraryKey, parameters });
 const edge = (source, target, rest = {}) => ({ id: `${source}_${target}`, source, target, ...rest });
 const graph = (nodes, edges) => ({ nodes: Object.fromEntries(nodes.map((node) => [node.id, node])), edges });
+
+test('reverse factor resolves numeric parameters in analysis, validation and Python export', () => {
+    const model = {
+        ...graph([
+            layer('input', 'deepflow.io.Input', { shape: '(4,)', requires_grad: true }),
+            layer('output', 'deepflow.io.Output'),
+        ], [edge('input', 'output', { gradientOp: 'reverse', gradientOpLambda: '$lambda * 0.5' })]),
+        parameters: [{ name: 'lambda', type: 'float', default: 0.6 }],
+    };
+    assert.deepEqual(resolveGradientFactor('$lambda * 0.5', { lambda: 0.6 }), { value: 0.3, error: null });
+    assert.equal(validate(model).ok, true);
+    assert.equal(analyzeGradientFlow(model).edges.input_output.status, 'reverse');
+    assert.match(generateArchitectureModule(model), /_grad_reverse\(x, 0\.3\)/);
+
+    model.parameters[0].default = 0;
+    assert.equal(analyzeGradientFlow(model).edges.input_output.status, 'stopped');
+    model.edges[0].gradientOpLambda = '$missing';
+    assert.equal(validate(model).ok, false, 'An unresolved factor is flagged on its target node');
+    assert.match(validate(model).errors.output.join(' '), /Reverse factor/);
+    assert.equal(analyzeGradientFlow(model).edges.input_output.status, 'unknown');
+    assert.throws(() => generateArchitectureModule(model), /Reverse factor/);
+    model.edges[0].gradientOpLambda = -0.2;
+    assert.equal(validate(model).ok, false);
+});
+
+test('reverse factor can use a component-local value and the repeat index', () => {
+    const inner = {
+        id: 'body', name: 'Body', freeParameters: [{ name: 'factor', type: 'float', default: 1 }],
+        graph: graph([
+            layer('in', 'deepflow.template.Input'), layer('out', 'deepflow.template.Output'),
+        ], [edge('in', 'out', { gradientOp: 'reverse', gradientOpLambda: '$factor' })]),
+    };
+    const model = graph([
+        layer('input', 'deepflow.io.Input', { shape: '(4,)', requires_grad: true }),
+        { id: 'repeat', kind: 'repeat', label: 'Repeat', templateId: 'body', mode: 'parallel', count: 2,
+            iterationVariable: 'i', bindings: { factor: 'i * 0.5' } },
+        layer('output', 'deepflow.io.Output'),
+    ], [edge('input', 'repeat'), edge('repeat', 'output')]);
+    const templates = { body: inner };
+    assert.equal(validate(model, { templates }).ok, true);
+    const report = analyzeGradientFlow(model, { templates });
+    assert.equal(report.children.repeat[0].edges.in_out.status, 'stopped');
+    assert.equal(report.children.repeat[1].edges.in_out.status, 'reverse');
+    const python = generateArchitectureModule(model, { templates });
+    assert.match(python, /_grad_reverse\([^,]+, 0\)/);
+    assert.match(python, /_grad_reverse\([^,]+, 0\.5\)/);
+});
 
 test('integer architecture inputs are constant index tensors', () => {
     for (const dtype of ['int32', 'int64']) {

@@ -5,6 +5,7 @@ import { defaultParameterValues, getEntry } from './library/index.js';
 import { isShapeCollection } from './shapeCollections.js';
 import { validate } from '../validation/validator.js';
 import { effectiveTemplateId } from './architecture/instanceStructure.js';
+import { resolveGradientFactor } from './gradientFactor.js';
 
 const tensor = (requires = 'unknown', dtype = 'float', dependencies = []) => ({ requires, dtype, dependencies: [...new Set(dependencies)] });
 const items = (value) => value?.items ? value.items.flatMap(items) : [value ?? tensor()];
@@ -14,7 +15,8 @@ const merge = (values) => {
     return tensor(requires, all.every((v) => v.dtype === 'index') ? 'index' : 'float', all.flatMap((v) => v.dependencies));
 };
 const detach = (value) => value?.items ? { items: value.items.map(detach) } : tensor('no', value?.dtype ?? 'float');
-const cut = (edge) => ['stop', 'detach'].includes(edge.gradientOp) || (edge.gradientOp === 'reverse' && Number(edge.gradientOpLambda ?? 1) === 0);
+const cut = (edge, scope) => ['stop', 'detach'].includes(edge.gradientOp) || (edge.gradientOp === 'reverse' && resolveGradientFactor(edge.gradientOpLambda ?? 1, scope).value === 0);
+const invalidReverse = (edge, scope) => edge.gradientOp === 'reverse' && !!resolveGradientFactor(edge.gradientOpLambda ?? 1, scope).error;
 const trainableModule = (key) => /^torch\.nn\.(Linear|Embedding|Bilinear|Conv|BatchNorm|LayerNorm|GroupNorm|InstanceNorm|RNN|GRU|LSTM|MultiheadAttention|Transformer)/.test(key)
     || key === 'deepflow.nn.PositionalEmbedding' || key === 'deepflow.nn.CausalSelfAttention';
 const unknownModule = (key) => /^(deepflow\.op\.|deepflow\.(io|template)\.|torch\.nn\.|deepflow\.nn\.)/.test(key) === false;
@@ -30,7 +32,8 @@ export function analyzeGradientFlow(graph, { templates = {}, scope: outerScope =
         if (--budget.remaining < 0) break;
         const node = graph.nodes[id];
         const incoming = getIncomingEdges(graph, id);
-        const valueFor = (edge) => !edge ? tensor() : cut(edge) ? detach(report.nodes[edge.source]) : report.nodes[edge.source] ?? tensor();
+        const valueFor = (edge) => !edge ? tensor() : cut(edge, scope) ? detach(report.nodes[edge.source])
+            : invalidReverse(edge, scope) ? tensor() : report.nodes[edge.source] ?? tensor();
         let used = incoming;
         let output;
         if (node.kind === 'supernode' || node.kind === 'repeat') {
@@ -116,7 +119,7 @@ export function analyzeGradientFlow(graph, { templates = {}, scope: outerScope =
             }
         }
         report.nodes[id] = output;
-        for (const edge of used) if (!cut(edge)) allowed.add(edge.id);
+        for (const edge of used) if (!cut(edge, scope) && !invalidReverse(edge, scope)) allowed.add(edge.id);
     }
     const outputs = Object.values(graph.nodes).filter((node) => ['deepflow.io.Output', 'deepflow.template.Output'].includes(node.libraryKey));
     report.output = outputs.length ? report.nodes[outputs.at(-1).id] ?? tensor() : tensor();
@@ -129,7 +132,8 @@ export function analyzeGradientFlow(graph, { templates = {}, scope: outerScope =
     for (const edge of graph.edges) {
         const source = merge([report.nodes[edge.source]]);
         let status, reason;
-        if (cut(edge)) { status = 'stopped'; reason = 'Gradient is explicitly stopped on this connection'; }
+        if (cut(edge, scope)) { status = 'stopped'; reason = 'Gradient is explicitly stopped on this connection'; }
+        else if (invalidReverse(edge, scope)) { status = 'unknown'; reason = 'Gradient reversal factor is unresolved'; }
         else if (!report.nodes[edge.source] || !report.nodes[edge.target]) { status = 'unknown'; reason = 'Gradient path cannot be resolved for this graph'; }
         else if (!allowed.has(edge.id)) { status = 'constant'; reason = 'This input is used as indices or metadata, without a derivative'; }
         else if (source.dtype === 'index') { status = 'constant'; reason = 'Integer indices have no gradient'; }

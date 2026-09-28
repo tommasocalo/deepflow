@@ -44,11 +44,17 @@ export function parameterOrigin(name, frames, end = frames.length - 1) {
 
 export function parameterConsumers(template, name) {
     const uses = [];
-    for (const node of Object.values(template?.graph?.nodes ?? {})) {
+    const nodes = template?.graph?.nodes ?? {};
+    for (const node of Object.values(nodes)) {
         const fields = node.kind === 'layer' ? node.parameters : node.kind === 'repeat' ? { ...node.bindings, count: node.count } : node.parameterValues;
         for (const [field, value] of Object.entries(fields ?? {})) {
             if (parameterReferences(value).includes(name)) uses.push({ nodeId: node.id, label: node.label, field });
         }
+    }
+    for (const edge of template?.graph?.edges ?? []) {
+        if (!parameterReferences(edge.gradientOpLambda).includes(name)) continue;
+        uses.push({ edgeId: edge.id, nodeId: edge.target,
+            label: `${nodes[edge.source]?.label ?? 'Source'} → ${nodes[edge.target]?.label ?? 'Target'}`, field: 'reverse factor' });
     }
     for (const parameter of template?.freeParameters ?? []) {
         if (!parameter.derived && parameter.name !== name && parameterReferences(parameter.default).includes(name)) uses.push({ label: parameter.name, field: 'default', parameter: true });
@@ -96,7 +102,11 @@ function inlineInNode(node, name, replacement) {
 /** Rewrite every field of a graph and the other parameters' defaults. */
 function inlineEverywhere(graph, parameters, name, replacement) {
     return {
-        graph: { ...graph, nodes: Object.fromEntries(Object.entries(graph.nodes ?? {}).map(([id, node]) => [id, inlineInNode(node, name, replacement)])) },
+        graph: { ...graph,
+            nodes: Object.fromEntries(Object.entries(graph.nodes ?? {}).map(([id, node]) => [id, inlineInNode(node, name, replacement)])),
+            edges: (graph.edges ?? []).map((edge) => edge.gradientOpLambda === undefined ? edge
+                : { ...edge, gradientOpLambda: inlineParameter(edge.gradientOpLambda, name, replacement) }),
+        },
         parameters: parameters.filter((parameter) => parameter.name !== name)
             .map((parameter) => parameter.derived ? parameter : { ...parameter, default: inlineParameter(parameter.default, name, replacement) }),
     };

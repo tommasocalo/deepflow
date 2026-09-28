@@ -97,7 +97,7 @@ function TemplateParameters({ template, globals, onOpenConsumer }) {
     ];
     const usesOf = (name) => parameterConsumers(template, name).map((use) => use.parameter
         ? { key: `${use.label}-default`, text: `$${use.label} default` }
-        : { key: `${use.nodeId}-${use.field}`, text: `${use.label} · ${use.field}`, onOpen: onOpenConsumer ? () => onOpenConsumer(use.nodeId) : undefined });
+        : { key: `${use.edgeId ?? use.nodeId}-${use.field}`, text: `${use.label} · ${use.field}`, onOpen: onOpenConsumer ? () => onOpenConsumer(use.nodeId) : undefined });
     return <div className="df-params nodrag nopan nowheel">
         <header className="df-params-header">
             <Variable size={14} aria-hidden="true" />
@@ -149,8 +149,8 @@ export function GlobalParameters() {
     const usesOf = (name) => globalParameterUses(graph, templates, name).map((use) => use.parameter
         ? { key: `${use.label}-default`, text: `$${use.label} default` }
         : use.root
-            ? { key: `root-${use.nodeId}-${use.field}`, text: `${use.label} · ${use.field}`, onOpen: () => { openLevel([]); selectOnly(use.nodeId); setExpanded(use.nodeId); } }
-            : { key: `${use.template}-${use.nodeId}-${use.field}`, text: `${use.template} › ${use.label} · ${use.field}` });
+            ? { key: `root-${use.edgeId ?? use.nodeId}-${use.field}`, text: `${use.label} · ${use.field}`, onOpen: () => { openLevel([]); selectOnly(use.nodeId); setExpanded(use.nodeId); } }
+            : { key: `${use.template}-${use.edgeId ?? use.nodeId}-${use.field}`, text: `${use.template} › ${use.label} · ${use.field}` });
     return <div className="df-params nodrag nopan nowheel">
         <header className="df-params-header">
             <Globe size={14} aria-hidden="true" />

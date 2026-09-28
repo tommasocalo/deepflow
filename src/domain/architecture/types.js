@@ -71,7 +71,7 @@
  * @property {string} [sourceHandle]
  * @property {string} [targetHandle]
  * @property {GradientOp} [gradientOp]
- * @property {number} [gradientOpLambda]                  for `reverse`: scaling factor (default 1.0)
+ * @property {number | string} [gradientOpLambda]         for `reverse`: non-negative factor or parameter expression (default 1.0)
  *
  * @typedef {Object} ArchitectureGraph
  * @property {Object<string, ArchNode>} nodes

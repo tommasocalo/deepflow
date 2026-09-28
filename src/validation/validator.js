@@ -5,6 +5,7 @@ import { buildParameterScope, resolveLayerParameters, resolveRepeatCount, withGl
 import { getIncomingEdges, getTemplateInputIds, getOperationInputIds, mapTemplateInputs, orderOperationEdges, validateInputPorts } from '../domain/graphInputs.js';
 import { isShapeCollection, shapeCollection } from '../domain/shapeCollections.js';
 import { effectiveTemplateId } from '../domain/architecture/instanceStructure.js';
+import { resolveGradientFactor } from '../domain/gradientFactor.js';
 
 const TEMPLATE_INPUT = 'deepflow.template.Input';
 const TEMPLATE_OUTPUT = 'deepflow.template.Output';
@@ -51,6 +52,12 @@ export function validate(graph, opts = {}) {
             if (outDeg === 0 && Object.keys(graph.nodes).length > 1) push(warnings, id, 'No outgoing connections');
             if (!templates[node.templateId]) push(errors, id, 'Template missing — re-create or remove this node');
         }
+    }
+
+    for (const edge of graph.edges ?? []) {
+        if (edge.gradientOp !== 'reverse') continue;
+        const { error } = resolveGradientFactor(edge.gradientOpLambda ?? 1, scope);
+        if (error) push(errors, edge.target, `Reverse factor on connection ${edge.id}: ${error}`);
     }
 
     for (const id of topo) {

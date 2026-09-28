@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/gradient-controls';
+const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/gradient-factor';
 await mkdir(directory, { recursive: true });
 const browser = await chromium.launch();
 try {
@@ -16,7 +16,8 @@ try {
     const detail = page.getByRole('complementary', { name: 'Connection gradient settings', exact: true });
     const rules = detail.getByRole('group', { name: 'Connection gradient rule', exact: true });
     const radio = (name) => rules.getByRole('radio', { name, exact: true });
-    const factor = detail.getByRole('spinbutton', { name: 'Gradient reversal factor', exact: true });
+    const factor = detail.getByLabel('Gradient reversal factor', { exact: true });
+    const commitFactor = async (value) => { await factor.fill(value); await factor.press('Tab'); await settle(); };
     const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const graph = () => page.evaluate(() => window.__deepflow.architectureStore.getState().getViewGraph());
     const history = () => page.evaluate(() => window.__deepflow.architectureHistory.getState().undoCount);
@@ -91,16 +92,18 @@ try {
     assert.equal(await radio('Reverse').isChecked(), true);
     assert.equal(await factor.inputValue(), '1');
     await capture('02-reverse-1440');
-    await factor.fill('0.5');
+    await commitFactor('0.5');
     await checkRule('Flow');
     assert.equal(await factor.count(), 0);
     await checkRule('Reverse');
     assert.equal(await factor.inputValue(), '0.5', 'Returning to Reverse retains its factor');
-    await factor.fill('0');
+    await commitFactor('0');
     await settle();
     assert.equal(await radio('Reverse').isChecked(), true);
-    assert.equal(await detail.getByText('Stopped', { exact: true }).count(), 1, 'A zero reversal factor reports a stopped gradient');
-    await factor.fill('0.5');
+    assert.equal(await detail.getByText('Stopped', { exact: true }).count(), 0, 'Redundant status captions are absent');
+    assert.equal(await page.locator(`.react-flow__edge[data-id="${reverse.id}"] .df-gradient-edge--stopped`).count(), 1,
+        'A zero reversal factor still stops gradient analysis');
+    await commitFactor('0.5');
 
     // Native radio arrows update the value without deleting or moving graph elements.
     await radio('Flow').check();
@@ -131,21 +134,21 @@ try {
     assert.equal(await factor.getAttribute('placeholder'), 'Mixed');
     await capture('04-mixed-factors-1440');
     const beforeFactor = await history();
-    await factor.fill('0.25');
+    await commitFactor('0.25');
     assert.equal(await history(), beforeFactor + 1, 'Changing a shared factor records one undo');
     assert.ok((await graph()).edges.filter((edge) => [ordinary.id, reverse.id].includes(edge.id)).every((edge) => edge.gradientOpLambda === .25));
     await ribbon.getByRole('button', { name: 'Undo', exact: true }).click();
     assert.equal(await factor.inputValue(), '');
 
-    // A rule describes what to do; the status describes whether the path supports a derivative.
+    // A rule describes what to do. An analyzed tensor state is not repeated as a competing caption.
     await detail.getByRole('button', { name: 'Close connection settings', exact: true }).click();
     await page.getByRole('button', { name: 'Inspect Input', exact: true }).click();
     await page.getByRole('combobox', { name: 'dtype', exact: true }).selectOption('int64');
     await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
     await selectEdge(inputEdge.id);
     assert.equal(await radio('Flow').isChecked(), true);
-    assert.equal(await detail.getByText('No gradient', { exact: true }).count(), 1, 'Integer inputs have no gradient despite an unchanged Flow rule');
-    await capture('05-flow-no-gradient-1440');
+    assert.equal(await detail.getByText('No gradient', { exact: true }).count(), 0, 'Flow does not show a conflicting status caption');
+    await capture('05-flow-no-status-1440');
     await detail.getByRole('button', { name: 'Close connection settings', exact: true }).click();
     await ribbon.getByRole('button', { name: 'Undo', exact: true }).click();
     assert.equal((await graph()).nodes[node('Input').id].parameters.dtype, 'float32');
@@ -158,7 +161,23 @@ try {
         await capture(`06-compact-${width}`);
         await detail.getByRole('button', { name: 'Close connection settings', exact: true }).click();
     }
+    await selectEdge(reverse.id);
+    await page.evaluate(() => window.__deepflow.architectureStore.getState().addGlobalParameter({ name: 'lambda', type: 'float', default: 0.75 }));
+    await factor.fill('$la');
+    await page.getByRole('option', { name: /\$lambda/ }).click();
+    await factor.press('Tab');
+    await settle();
+    assert.equal((await graph()).edges.find((edge) => edge.id === reverse.id).gradientOpLambda, '$lambda');
+    assert.equal(await detail.getByText('= 0.75', { exact: true }).count(), 1);
+    await capture('07-variable-factor-820');
+    await factor.fill('$missing');
+    await factor.press('Tab');
+    assert.equal(await detail.getByRole('alert').count(), 1, 'Invalid references show an inline error');
+    assert.equal((await graph()).edges.find((edge) => edge.id === reverse.id).gradientOpLambda, '$lambda', 'Invalid references are not stored');
+    await factor.fill('$lambda');
+    await factor.press('Tab');
+    assert.equal(await detail.getByRole('alert').count(), 0);
     assert.deepEqual(errors, []);
     await writeFile(`${directory}/measurements.json`, `${JSON.stringify(measurements, null, 2)}\n`);
-    console.log(`Gradient controls checks passed: four direct choices, loaded icons, keyboard navigation, mixed rules/factors, atomic undo, analyzed statuses and compact layout at 1440/1024/820. Screenshots: ${directory}`);
+    console.log(`Gradient controls checks passed: four direct choices, loaded icons, keyboard navigation, mixed rules/factors, variable completion, atomic undo, no conflicting status caption and compact layout at 1440/1024/820. Screenshots: ${directory}`);
 } finally { await browser.close(); }

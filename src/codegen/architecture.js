@@ -5,6 +5,7 @@ import { validate } from '../validation/validator.js';
 import { getEntry } from '../domain/library/index.js';
 import { isShapeCollection } from '../domain/shapeCollections.js';
 import { effectiveTemplateId } from '../domain/architecture/instanceStructure.js';
+import { resolveGradientFactor } from '../domain/gradientFactor.js';
 import { indent, kwArgs, toPyIdent, toPyLiteral } from './python.js';
 
 /**
@@ -190,8 +191,8 @@ function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, exte
             const op = edge.gradientOp ?? 'none';
             if (op !== 'none') {
                 const wrapperId = unique(`${edge.id}_${op}`);
-                const lambda = Number(edge.gradientOpLambda ?? 1);
-                if (!Number.isFinite(lambda)) throw new Error('Gradient reversal coefficient must be finite');
+                const { value: lambda, error } = op === 'reverse' ? resolveGradientFactor(edge.gradientOpLambda ?? 1, scope) : { value: 1 };
+                if (error) throw new Error(`Gradient reversal factor on connection ${edge.id}: ${error}`);
                 if (op === 'reverse') ctx.usesGRL = true;
                 const transform = (x) => op === 'reverse' ? `_grad_reverse(${x}, ${lambda})` : `${x}.detach()`;
                 const type = typeOf(ref);

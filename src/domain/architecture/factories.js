@@ -88,7 +88,7 @@ export function createRepeatNode({
  * @param {string} [args.sourceHandle]
  * @param {string} [args.targetHandle]
  * @param {import('./types.js').GradientOp} [args.gradientOp]
- * @param {number} [args.gradientOpLambda]
+ * @param {number | string} [args.gradientOpLambda]
  * @param {string} [args.id]
  * @returns {import('./types.js').ArchEdge}
  */
