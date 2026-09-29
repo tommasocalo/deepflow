@@ -71,7 +71,7 @@ try {
     await dialog.waitFor({ state: 'detached' });
     assert.equal(await currentBlocks(), 12);
     await page.getByRole('link', { name: 'View imported Hugging Face source openai-community/gpt2' }).waitFor();
-    assert.equal(await page.getByRole('tab', { name: 'gpt2', exact: true }).count(), 1, 'Imported model names the root level');
+    assert.match(await page.locator('[data-graph-pane="main"] [data-level-trigger]').innerText(), /gpt2/, 'Imported model names the root level');
     assert.match(await page.locator('.df-import-source').first().innerText(), /openai-community\/gpt2/);
     assert.equal(await page.locator('.df-import-source').first().getAttribute('href'),
         `https://huggingface.co/openai-community/gpt2/tree/${sha}`);
@@ -88,7 +88,8 @@ try {
     await page.screenshot({ path: `${directory}/02-imported-source-1440.png` });
     await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).click();
     assert.equal(await page.locator('.df-import-source').count(), 0, 'Provenance is hidden inside component details');
-    await page.getByRole('tab', { name: 'gpt2', exact: true }).click();
+    await page.locator('[data-graph-pane="main"] [data-level-trigger]').click();
+    await page.getByRole('dialog', { name: 'Open levels' }).locator('.df-level-entry').first().click();
     assert.equal(await page.locator('.df-import-source').count(), 1, 'Provenance returns at the root');
 
     const beforeFailure = await page.evaluate(() => {
