@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { selectLevel } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/parameter-authoring';
 await mkdir(directory, { recursive: true });
@@ -33,8 +34,8 @@ try {
     await page.getByRole('group', { name: 'Example architectures' }).getByRole('button', { name: /^Multi-head attention/ }).click();
     await fit();
     await inspect('Attention heads');
-    assert.match(await page.locator('.df-repeat-auto').innerText(), /Instances\s+12\s+Auto · from input collections/);
-    assert.match(await page.locator('.df-derived-parameter[data-parameter="d_head"]').innerText(), /Head width\s+64\s+From Q/);
+    assert.match(await page.locator('.df-derived-row[data-parameter="count"]').innerText(), /Instances\s+12\s+from inputs/);
+    assert.match(await page.locator('.df-derived-row[data-parameter="d_head"]').innerText(), /Head width\s+64\s+from Q/);
     assert.equal(await page.getByLabel('d_head', { exact: true }).count(), 0, 'Derived head width is not an editable duplicate');
     await assertContained();
     await page.screenshot({ path: `${directory}/01-inferred-head-settings.png` });
@@ -52,7 +53,7 @@ try {
     assert.equal(await history(), 1, 'Changing repeat mode and materializing its count form one edit');
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     assert.deepEqual(await documentState(), beforeSequential, 'Undo restores both parallel mode and automatic count');
-    assert.match(await page.locator('.df-repeat-auto').innerText(), /Instances\s+12\s+Auto · from input collections/);
+    assert.match(await page.locator('.df-derived-row[data-parameter="count"]').innerText(), /Instances\s+12\s+from inputs/);
     const dismiss = page.getByRole('button', { name: 'Dismiss message', exact: true });
     if (await dismiss.count()) await dismiss.click();
 
@@ -70,17 +71,17 @@ try {
     assert.equal(await eye.getAttribute('aria-pressed'), 'true');
     await assertContained();
     await page.screenshot({ path: `${directory}/02-dropout-origin.png` });
-    await page.getByRole('tab', { name: 'main', exact: true }).click();
+    await selectLevel(page.locator('[data-graph-pane="main"]'), 'main');
     await fit();
     await inspect('Multi-head attention');
     await page.getByRole('complementary', { name: 'Multi-head attention inspector', exact: true }).waitFor();
-    assert.match(await page.locator('.df-derived-parameter[data-parameter="D"]').innerText(), /Width\s+768/);
-    await page.getByRole('button', { name: 'Edit template parameters', exact: true }).click();
-    const componentParameters = page.getByRole('dialog', { name: /template parameters$/ });
-    const headsParameter = componentParameters.getByRole('region', { name: 'Parameter H', exact: true });
-    await headsParameter.locator('summary').click();
+    assert.match(await page.locator('.df-derived-row[data-parameter="D"]').innerText(), /Width\s+768/);
+    await page.getByRole('button', { name: 'Edit parameters', exact: true }).click();
+    const componentParameters = page.getByRole('dialog', { name: 'Multi-head attention parameters', exact: true });
+    const headsParameter = componentParameters.locator('.df-params-item').filter({ has: page.locator('code').filter({ hasText: /^\$H$/ }) });
+    await headsParameter.locator('.df-params-uses').click();
     await headsParameter.getByRole('button', { name: 'split Q · chunks', exact: true }).click();
-    await componentParameters.getByRole('button', { name: 'Close template parameters', exact: true }).click();
+    await componentParameters.getByRole('button', { name: 'Close parameters', exact: true }).click();
     await page.getByRole('complementary', { name: 'split Q inspector', exact: true }).waitFor();
     assert.equal(await page.getByLabel('chunks', { exact: true }).inputValue(), '$H');
 
@@ -102,7 +103,7 @@ try {
     assert.deepEqual(await documentState(), beforeHide);
     await page.getByRole('button', { name: 'Redo', exact: true }).click();
     assert.deepEqual(await documentState(), hiddenState);
-    await page.getByRole('tab', { name: 'Multi-head attention', exact: true }).click();
+    await selectLevel(page.locator('[data-graph-pane="main"]'), 'Multi-head attention');
     await fit();
     await inspect('Attention heads');
     assert.equal(await page.getByLabel('dropout', { exact: true }).count(), 0, 'The hidden parameter disappears only from the parent settings');
@@ -119,40 +120,42 @@ try {
     await history(true);
     const beforeExpose = await documentState();
     await eye.click();
-    const exposedName = (await p.inputValue()).slice(1);
+    const exposedState = await documentState();
+    const exposedName = Object.values(exposedState.templates).flatMap((template) => template.freeParameters ?? [])
+        .find((parameter) => parameter.exposes?.field === 'p' && String(parameter.default) === '0.25' && !parameter.hidden)?.name;
     assert.match(exposedName, /^dropout(?:_\d+)?$/, 'First exposure uses a readable name without a separate form');
+    assert.equal(await p.inputValue(), '0.25', 'Exposing a field keeps its actual value visible in the operation');
     assert.equal(await eye.getAttribute('aria-pressed'), 'true');
     await assertContained();
     await page.screenshot({ path: `${directory}/03-expose-field.png` });
     assert.equal(await history(), 1, 'Exposing a field adds its parameter and reference in one history entry');
-    const exposedState = await documentState();
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     assert.deepEqual(await documentState(), beforeExpose, 'Undo removes both interface parameter and field reference together');
     await page.getByRole('button', { name: 'Redo', exact: true }).click();
     assert.deepEqual(await documentState(), exposedState);
 
-    await page.getByRole('tab', { name: 'Multi-head attention', exact: true }).click();
+    await selectLevel(page.locator('[data-graph-pane="main"]'), 'Multi-head attention');
     await fit();
     await inspect('Attention heads');
     await page.getByRole('complementary', { name: 'Attention heads inspector', exact: true }).waitFor();
     const exposed = page.getByLabel(exposedName, { exact: true });
     assert.equal(await exposed.getAttribute('placeholder'), '0.25');
     await exposed.fill('0.35');
+    assert.equal(await exposed.inputValue(), '0.35', 'The component instance can override the exposed parameter');
     await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
-    await page.getByRole('button', { name: 'Edit template parameters', exact: true }).click();
-    const parameters = page.getByRole('dialog', { name: /template parameters$/ });
-    assert.match(await parameters.locator('.df-template-derived').innerText(), /From inputs\s+d_head\s+Q · last dimension/);
-    assert.equal(await parameters.getByRole('combobox', { name: 'd_head type', exact: true }).count(), 0, 'Derived dimensions have no editable template type');
-    assert.equal(await parameters.getByRole('textbox', { name: 'd_head default value', exact: true }).count(), 0, 'Derived dimensions have no editable default');
-    const section = parameters.getByRole('region', { name: `Parameter ${exposedName}`, exact: true });
-    assert.equal(await section.getByRole('button', { name: `Remove parameter ${exposedName}`, exact: true }).isDisabled(), true);
-    await section.locator('summary').click();
+    await page.getByRole('button', { name: 'Edit parameters', exact: true }).click();
+    const parameters = page.getByRole('dialog', { name: 'Attention head parameters', exact: true });
+    assert.match(await parameters.locator('.df-params-derived').innerText(), /From inputs\s+d_head\s+Q · last dim/i);
+    assert.equal(await parameters.getByRole('combobox', { name: 'd_head value', exact: true }).count(), 0, 'Derived dimensions have no editable value');
+    const section = parameters.locator('.df-params-item').filter({ has: page.locator('code').filter({ hasText: new RegExp(`^\\$${exposedName}$`) }) });
+    assert.match(await section.getByRole('button', { name: `Remove parameter ${exposedName}`, exact: true }).getAttribute('title'), /keeps its value/);
+    await section.locator('.df-params-uses').click();
     await section.getByRole('button', { name: 'attention dropout · p', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${directory}/04-exposed-parameter-consumer.png` });
     await section.getByRole('button', { name: 'attention dropout · p', exact: true }).click();
-    await parameters.getByRole('button', { name: 'Close template parameters', exact: true }).click();
+    await parameters.getByRole('button', { name: 'Close parameters', exact: true }).click();
     await page.getByRole('complementary', { name: 'attention dropout inspector', exact: true }).waitFor();
-    assert.equal(await p.inputValue(), `$${exposedName}`);
+    assert.equal(await p.inputValue(), '0.25', 'The source operation continues to show its editable template value rather than an alias');
     assert.equal(await page.locator('.df-parameter-source').count(), 0);
 
     await page.setViewportSize({ width: 1024, height: 768 });
@@ -162,13 +165,13 @@ try {
     await suggestions.waitFor();
     assert.ok(await suggestions.getByRole('option').count() > 1, 'Typing $ suggests the available scoped parameters');
     assert.match(await suggestions.innerText(), /\$dropout/);
-    assert.ok((await suggestions.innerText()).includes(`$${exposedName}`));
+    assert.ok(!(await suggestions.innerText()).includes(`$${exposedName}`), 'An exposed field cannot reference its own alias');
     await assertContained();
     await page.screenshot({ path: `${directory}/05-compact-1024.png` });
-    await p.fill(`$${exposedName}`);
+    await p.fill('$dropout');
     assert.equal(await suggestions.getByRole('option').count(), 1, 'Suggestions filter dynamically as the reference is typed');
     await p.press('Enter');
-    assert.equal(await p.inputValue(), `$${exposedName}`);
+    assert.equal(await p.inputValue(), '$dropout');
     await suggestions.waitFor({ state: 'hidden' });
     assert.equal(await suggestions.count(), 0, 'Choosing a parameter closes the suggestions');
     assert.equal(await page.locator('.df-parameter-result').count(), 0);

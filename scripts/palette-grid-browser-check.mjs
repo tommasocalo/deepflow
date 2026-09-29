@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { selectLevel } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? '/tmp/deepflow-insert-menus';
 await mkdir(directory, { recursive: true });
@@ -55,9 +56,9 @@ try {
     const norm = await selected();
     assert.equal(norm.kind, 'supernode');
     assert.equal(await page.evaluate((id) => window.__deepflow.templatesStore.getState().templates[id].standardKey, norm.templateId), 'layernorm');
-    await ribbon.getByRole('button', { name: 'Edit definition', exact: true }).click();
+    await page.getByRole('button', { name: 'Open Norm', exact: true }).click();
     assert.ok(await page.getByRole('button', { name: 'Inspect mean', exact: true }).isVisible(), 'Norm exposes its primitive graph');
-    await page.getByRole('tab', { name: 'main', exact: true }).click();
+    await selectLevel(page.locator('[data-graph-pane="main"]'), 'main');
 
     // Other normalization types remain editable layer modules.
     await addComponent('GroupNorm');
@@ -105,7 +106,7 @@ try {
     await ribbon.getByRole('button', { name: 'Browse templates' }).click();
     assert.equal(await templates.getByRole('menuitem', { name: 'Add Transformer block template', exact: true }).count(), 0, 'Recursive templates are unavailable');
     await page.getByRole('button', { name: 'Close templates menu', exact: true }).click();
-    await page.getByRole('tab', { name: 'main', exact: true }).click();
+    await selectLevel(page.locator('[data-graph-pane="main"]'), 'main');
     await ribbon.getByRole('button', { name: 'Browse templates' }).click();
     assert.ok(await templates.getByRole('menuitem', { name: 'Add Transformer block template', exact: true }).isEnabled());
     assert.deepEqual(errors, []);

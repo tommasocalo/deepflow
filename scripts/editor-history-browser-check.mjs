@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { levelTrigger, selectLevel } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/editor-controls';
 await mkdir(directory, { recursive: true });
@@ -87,24 +88,25 @@ try {
     if (await dismissMessage.count()) await dismissMessage.click();
     await page.screenshot({ path: `${directory}/01-repeat-restored.png` });
 
-    // Ribbon dialogs stop bubbling keys; focused selects must still reach
-    // document history, while local text editing retains native browser Undo.
+    // The compact Parameters dialog keeps document Undo on its controls,
+    // while text typed into the new-name draft retains native browser Undo.
     await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
-    await ribbon.getByRole('button', { name: 'Edit template parameters', exact: true }).click();
-    const parameters = page.getByRole('dialog', { name: /template parameters$/ });
-    const parameterType = parameters.getByRole('combobox', { name: 'd_model type', exact: true });
+    await ribbon.getByRole('button', { name: 'Edit parameters', exact: true }).click();
+    const parameters = page.getByRole('dialog', { name: 'Transformer block parameters', exact: true });
+    const parameterValue = parameters.getByRole('combobox', { name: 'norm_eps value', exact: true });
+    const componentTab = parameters.getByRole('tab', { name: 'Component', exact: true });
     await history(true);
-    assert.equal(await parameterType.inputValue(), 'int');
-    await parameterType.selectOption('float');
-    await parameterType.focus();
-    assert.equal(await parameterType.evaluate((element) => element === document.activeElement), true);
+    assert.equal(await parameterValue.inputValue(), '0.00001');
+    await parameterValue.fill('0.00002');
+    await componentTab.focus();
+    assert.equal(await componentTab.evaluate((element) => element === document.activeElement), true);
     await page.keyboard.press('Control+z');
-    assert.equal(await parameterType.inputValue(), 'int', 'Undo reaches a focused select inside the ribbon parameter popup');
+    assert.equal(await parameterValue.inputValue(), '0.00001', 'Undo reaches a focused control inside the Parameters dialog');
     await page.keyboard.press('Control+Shift+z');
-    assert.equal(await parameterType.inputValue(), 'float');
+    assert.equal(await parameterValue.inputValue(), '0.00002');
     const beforeDraft = await document();
     const beforeDraftHistory = await history();
-    const draft = parameters.getByRole('textbox', { name: 'New parameter', exact: true });
+    const draft = parameters.getByRole('textbox', { name: 'New parameter name', exact: true });
     await draft.pressSequentially('draft_parameter');
     assert.equal(await draft.inputValue(), 'draft_parameter');
     const nativeUndo = await page.evaluate(() => /Mac/.test(navigator.platform) ? 'Meta+z' : 'Control+z');
@@ -112,10 +114,10 @@ try {
     assert.notEqual(await draft.inputValue(), 'draft_parameter', 'A text field receives native browser Undo');
     assert.deepEqual(await document(), beforeDraft, 'Native text Undo does not undo the prior document edit');
     assert.deepEqual(await history(), beforeDraftHistory, 'Text draft Undo leaves document history untouched');
-    await parameterType.focus();
+    await componentTab.focus();
     await page.keyboard.press('Control+z');
-    assert.equal(await parameterType.inputValue(), 'int');
-    await parameters.getByRole('button', { name: 'Close template parameters', exact: true }).click();
+    assert.equal(await parameterValue.inputValue(), '0.00001');
+    await parameters.getByRole('button', { name: 'Close parameters', exact: true }).click();
 
     // A real operation variant inside a shared template uses the same history.
     await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).click();
@@ -155,7 +157,7 @@ try {
     await undo.click();
 
     // Display controls never mutate graph/template content or document history.
-    await main.getByRole('tab', { name: 'main', exact: true }).click();
+    await selectLevel(main, 'main');
     await main.getByRole('button', { name: 'Open positional embedding', exact: true }).click();
     await main.getByRole('button', { name: 'Open position table', exact: true }).click();
     await inspect(main, 'embedding table').waitFor();
@@ -185,34 +187,39 @@ try {
     assert.equal(await labels(side).count(), 0);
     assert.equal(await side.locator('.df-gradient-edge--flow').count(), 2, 'Hiding shape labels does not hide gradient paths');
     await dimensions.click();
-    await main.getByRole('tab', { selected: true }).click();
+    await levelTrigger(main).focus();
     assert.equal(await dimensions.getAttribute('aria-pressed'), 'false');
     assert.equal(await gradients.getAttribute('aria-pressed'), 'true');
     assert.deepEqual(await document(), beforeDisplay);
     assert.equal((await history()).canUndo, false);
 
     // Undo a nested parameter change made in the side pane and confirm both
-    // visible instances of the shared template update together.
+    // visible views of the shared template update together.
     await inspect(side, 'embedding table').click();
-    const trainable = side.getByRole('checkbox', { name: 'requires_grad', exact: true });
-    await trainable.uncheck();
+    const sideScale = side.getByRole('combobox', { name: 'scale', exact: true });
+    await sideScale.fill('2');
     await settle();
-    for (const pane of [main, side]) assert.equal(await pane.locator('.df-gradient-edge--flow').count(), 0);
-    assert.equal((await history()).undoCount, 1);
-    await undo.click();
+    await inspect(main, 'embedding table').click();
+    const mainScale = main.getByRole('combobox', { name: 'scale', exact: true });
+    assert.equal(await mainScale.inputValue(), '2', 'Both panes show the same edited template value');
+    const scaleEdits = (await history()).undoCount;
+    assert.ok(scaleEdits >= 1, 'Editing a shared parameter records document history');
+    for (let index = 0; index < scaleEdits; index++) await undo.click();
     await settle();
-    assert.equal(await trainable.isChecked(), true);
-    for (const pane of [main, side]) assert.equal(await pane.locator('.df-gradient-edge--flow').count(), 2, 'Undo refreshes gradient paths in both visible panes');
-    await redo.click();
-    assert.equal(await trainable.isChecked(), false);
-    await undo.click();
+    assert.equal(await sideScale.inputValue(), '1');
+    assert.equal(await mainScale.inputValue(), '1');
+    for (const pane of [main, side]) assert.equal(await pane.locator('.df-gradient-edge--flow').count(), 2, 'Undo leaves gradient paths visible in both panes');
+    for (let index = 0; index < scaleEdits; index++) await redo.click();
+    assert.equal(await sideScale.inputValue(), '2');
+    assert.equal(await mainScale.inputValue(), '2');
+    for (let index = 0; index < scaleEdits; index++) await undo.click();
     assert.deepEqual(await document(), beforeDisplay);
     assert.equal(await labels(main).count(), 0, 'Undo preserves display preferences');
     assert.ok(await labels(side).count() > 0);
     await settle();
     await page.screenshot({ path: `${directory}/02-pane-dimensions-gradients.png` });
     assert.deepEqual(errors, []);
-    console.log('Editor controls passed: fresh-session history, ribbon structure toggles and focused inspector/ribbon select Ctrl/Cmd undo and redo, native text Undo, toolbar actions, nested operation variants, single-step dragging, shared-template parameter restoration across panes, and independent dimensions/gradients without graph or history changes.');
+    console.log('Editor controls passed: fresh-session history, ribbon structure toggles and focused inspector/parameter-dialog Ctrl/Cmd undo and redo, native text Undo, toolbar actions, nested operation variants, single-step dragging, shared-template parameter restoration across panes, and independent dimensions/gradients without graph or history changes.');
 } finally {
     await browser.close();
 }

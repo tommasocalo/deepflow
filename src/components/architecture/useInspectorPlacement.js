@@ -35,7 +35,8 @@ function attachPlacement(panel, canvas, flowStore, anchorFor) {
         panel.style.maxHeight = `${Math.min(460, Math.max(120, origin.height - 24))}px`;
         const target = anchorFor(origin, [...canvas.querySelectorAll('.react-flow__node')]);
         if (!target) return;
-        const obstacles = [...canvas.querySelectorAll('.df-library, .react-flow__controls, [aria-label^="Graph checks:"], .df-inspector')]
+        const paneControls = canvas.closest('.df-architecture-body')?.querySelectorAll('.df-level-trigger, .df-side-close') ?? [];
+        const obstacles = [...canvas.querySelectorAll('.df-library, .react-flow__controls, [aria-label^="Graph checks:"], .df-inspector'), ...paneControls]
             .filter((element) => element !== panel)
             .map((element) => relativeRect(element, origin));
         const placement = placeInspector({
@@ -62,6 +63,7 @@ function attachPlacement(panel, canvas, flowStore, anchorFor) {
     resizeObserver.observe(panel);
     const palette = canvas.querySelector('.df-library');
     if (palette) resizeObserver.observe(palette);
+    for (const control of canvas.closest('.df-architecture-body')?.querySelectorAll('.df-level-trigger, .df-side-close') ?? []) resizeObserver.observe(control);
     // Palette collapse and parameter disclosures change available space.
     const mutationObserver = new window.MutationObserver(schedule);
     mutationObserver.observe(canvas, { childList: true, subtree: true });

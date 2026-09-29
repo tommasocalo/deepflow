@@ -159,10 +159,15 @@ try {
     assert.equal(await ribbon.getByRole('button', { name: 'Show gradient flow' }).getAttribute('aria-pressed'), 'false', 'Gradient visibility is local to each pane');
     await levelTrigger(side).focus();
     await page.screenshot({ path: `${directory}/split-ribbon.png` });
-    const mainViewport = await main.locator('.react-flow__viewport').getAttribute('style');
+    const viewport = (pane) => pane.locator('.react-flow__viewport').evaluate((element) => {
+        const matrix = new DOMMatrix(getComputedStyle(element).transform);
+        return { x: matrix.m41, y: matrix.m42, zoom: matrix.a };
+    });
+    const mainViewport = await viewport(main);
     await ribbon.getByRole('button', { name: 'Fit active graph', exact: true }).click();
     await settle();
-    assert.equal(await main.locator('.react-flow__viewport').getAttribute('style'), mainViewport);
+    const afterSideFit = await viewport(main);
+    for (const key of ['x', 'y', 'zoom']) assert.ok(Math.abs(afterSideFit[key] - mainViewport[key]) < 0.01, `Fitting the side pane leaves main ${key} unchanged`);
     await page.reload();
     await page.setViewportSize({ width: 1024, height: 900 });
     assert.equal(await ribbon.evaluate((element) => element.scrollWidth <= element.clientWidth), true, 'Insert catalog fits at laptop width');

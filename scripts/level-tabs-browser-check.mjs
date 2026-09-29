@@ -44,7 +44,7 @@ try {
     assert.equal(await menu.isVisible(), true, 'Keyboard Tab can reach actions inside the level menu');
     await page.keyboard.press('Escape');
     assert.equal(await menu.count(), 0);
-    assert.equal(await trigger.evaluate((element) => element === document.activeElement), true, 'Escape restores trigger focus');
+    await page.waitForFunction(() => document.activeElement === document.querySelector('[data-graph-pane="main"] [data-level-trigger]'));
     menu = await openLevelMenu(main);
 
     await levelEntry(menu, 'Transformer blocks').click();
@@ -104,6 +104,18 @@ try {
         'The compact level control does not cover graph status in the narrow pane');
     await settle();
     await page.screenshot({ path: `${directory}/04-narrow-side-menu-820.png` });
+    await menu.getByRole('button', { name: 'Close levels menu', exact: true }).click();
+    await side.getByRole('button', { name: 'Inspect MLP projection', exact: true }).click();
+    await settle();
+    const overlap = await side.locator('.df-inspector').evaluate((panel) => {
+        const a = panel.getBoundingClientRect();
+        const b = panel.closest('.df-architecture-body').querySelector('.df-level-trigger').getBoundingClientRect();
+        return Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left))
+            * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+    });
+    assert.equal(overlap, 0, 'The inspector avoids the level control in a 30% side pane');
+    await page.screenshot({ path: `${directory}/04b-inspector-narrow-side-820.png` });
+    await side.getByRole('button', { name: 'Close inspector', exact: true }).click();
     await divider.focus();
     await divider.press('Home');
     menu = await openLevelMenu(main);
