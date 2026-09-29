@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Redo2, Ruler, Search, Undo2, Variable, X } from 'lucide-react';
+import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, FileUp, GitBranch, Group, Maximize, Redo2, Ruler, Search, Undo2, Variable, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { importHuggingFaceArchitecture } from '../../domain/huggingFace/index.js';
+import { buildEditableOnnxArchitecture } from '../../domain/onnx/editable.js';
 import { effectiveTemplateId, inspectedInstanceIndex } from '../../domain/architecture/instanceStructure.js';
 import { resolveComponentContext } from '../../domain/componentContext.js';
 import { useValidation, useValidationContext } from '../../hooks/useValidation.js';
@@ -10,6 +11,7 @@ import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { useTrainingStore } from '../../stores/trainingStore.js';
 import { recordArchitectureEdit, startArchitectureSession, useArchitectureHistory } from '../../stores/architectureHistory.js';
 import HuggingFaceImport from '../HuggingFaceImport.jsx';
+import OnnxImport from '../OnnxImport.jsx';
 import { useOpenToSide } from './OpenToSideContext.jsx';
 import BlockPalette from './BlockPalette.jsx';
 import OptimizationPanel from './OptimizationPanel.jsx';
@@ -51,6 +53,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const openToSide = useOpenToSide();
     const [popup, setPopup] = useState(null);
     const [hfOpen, setHfOpen] = useState(false);
+    const [onnxOpen, setOnnxOpen] = useState(false);
     const [optimizationOpen, setOptimizationOpen] = useState(false);
     const [popupPosition, setPopupPosition] = useState({ left: 8, top: 56, width: 310 });
     const [parameterScope, setParameterScope] = useState('global');
@@ -75,6 +78,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
         if (restoreFocus) triggerRef.current?.focus({ preventScroll: true });
     }, []);
     const closeHf = useCallback(() => setHfOpen(false), []);
+    const closeOnnx = useCallback(() => setOnnxOpen(false), []);
     const closeOptimization = useCallback(() => setOptimizationOpen(false), []);
     const importHf = useCallback((preview) => {
         const previous = {
@@ -101,6 +105,39 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
         });
         const blocks = source.configuration?.nLayers;
         setNotice(`Imported ${source.repoId}${blocks ? ` · ${blocks} blocks` : ''} · config only`);
+        requestAnimationFrame(() => requestAnimationFrame(() => onFitView?.()));
+        return source;
+    }, [architectureStore, onFitView]);
+    const importOnnx = useCallback((operatorGraph, fileName) => {
+        const mapped = buildEditableOnnxArchitecture(operatorGraph, { fileName });
+        const previous = {
+            architecture: useArchitectureStore.getState(),
+            templates: useTemplatesStore.getState(),
+            training: useTrainingStore.getState(),
+            pane: architectureStore.getState(),
+        };
+        const source = startArchitectureSession(() => {
+            try {
+                architectureStore.getState().goToLevel(0);
+                useArchitectureStore.setState({
+                    graph: mapped.graph, currentPath: [], openPaths: [], selectedNodeIds: [],
+                    expandedNodeId: null, inspectedIterations: {}, repeatSelections: {}, repeatEditModes: {}, repeatEditError: null,
+                });
+                if (architectureStore !== useArchitectureStore) architectureStore.setState({
+                    currentPath: [], openPaths: [], selectedNodeIds: [], expandedNodeId: null,
+                    inspectedIterations: {}, repeatSelections: {}, repeatEditModes: {}, repeatEditError: null,
+                });
+                useTrainingStore.getState().resetGraph();
+                return mapped.source;
+            } catch (error) {
+                useTemplatesStore.setState(previous.templates, true);
+                useArchitectureStore.setState(previous.architecture, true);
+                useTrainingStore.setState(previous.training, true);
+                architectureStore.setState(previous.pane, true);
+                throw error;
+            }
+        });
+        setNotice(`Imported ${source.modelName} · ${source.opCount} ONNX operators mapped`);
         requestAnimationFrame(() => requestAnimationFrame(() => onFitView?.()));
         return source;
     }, [architectureStore, onFitView]);
@@ -223,6 +260,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 </button>
                 <RibbonButton icon={Copy} aria-label="Browse templates" aria-expanded={popup === 'templates'} aria-haspopup="menu" onClick={(event) => togglePopup('templates', event)} title="Insert a saved project template">Templates <ChevronDown size={10} /></RibbonButton>
                 <RibbonButton icon={Search} aria-label="Import from Hugging Face" onClick={() => { closePopup(); setHfOpen(true); }} title="Search Hugging Face model configs and import a supported architecture">Hugging Face</RibbonButton>
+                <RibbonButton icon={FileUp} aria-label="Import ONNX file" onClick={() => { closePopup(); setOnnxOpen(true); }} title="Inspect a local ONNX operator graph and import a fully mapped architecture">ONNX</RibbonButton>
             </RibbonGroup>
             <RibbonGroup label="Structure">
                 <RibbonButton icon={Group} disabled={selection.length < 2} aria-label="Group selection into component" aria-expanded={popup === 'group' && selection.length > 1} onClick={(event) => { setGroupName('Component'); togglePopup('group', event); }} title={selection.length > 1 ? 'Group selected blocks into a reusable component' : 'Select at least two blocks to group'}>Group</RibbonButton>
@@ -275,6 +313,8 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             nHeads: graph.parameters?.find((parameter) => parameter.name === 'n_heads')?.default,
             source: graph.importSource?.repoId,
         }} />
+        <OnnxImport open={onnxOpen} onClose={closeOnnx} onImport={importOnnx}
+            currentSource={graph.importSource?.provider === 'onnx' ? graph.importSource : null} />
         {(notice || (error && popup !== 'group')) && <div className={`df-ribbon-notice${error ? ' is-error' : ''}`} role={error ? 'alert' : 'status'}>{!error && <Check size={12} />}<span>{error || notice}</span><button type="button" aria-label="Dismiss message" onClick={() => { setNotice(''); setError(''); }}><X size={12} /></button></div>}
     </div>;
 }
