@@ -71,6 +71,7 @@ try {
     await dialog.waitFor({ state: 'detached' });
     assert.equal(await currentBlocks(), 12);
     await page.getByRole('link', { name: 'View imported Hugging Face source openai-community/gpt2' }).waitFor();
+    assert.equal(await page.getByRole('tab', { name: 'gpt2', exact: true }).count(), 1, 'Imported model names the root level');
     assert.match(await page.locator('.df-import-source').first().innerText(), /openai-community\/gpt2/);
     assert.equal(await page.locator('.df-import-source').first().getAttribute('href'),
         `https://huggingface.co/openai-community/gpt2/tree/${sha}`);
@@ -85,6 +86,10 @@ try {
         && sourcePlacement.bottomGap >= 0 && sourcePlacement.bottomGap <= 16 && sourcePlacement.width >= 170,
         `Source sits quietly at the lower right of the canvas: ${JSON.stringify(sourcePlacement)}`);
     await page.screenshot({ path: `${directory}/02-imported-source-1440.png` });
+    await page.getByRole('button', { name: 'Open Transformer blocks', exact: true }).click();
+    assert.equal(await page.locator('.df-import-source').count(), 0, 'Provenance is hidden inside component details');
+    await page.getByRole('tab', { name: 'gpt2', exact: true }).click();
+    assert.equal(await page.locator('.df-import-source').count(), 1, 'Provenance returns at the root');
 
     const beforeFailure = await page.evaluate(() => {
         const store = window.__deepflow.architectureStore;
@@ -141,18 +146,19 @@ try {
     await dialog.getByRole('button', { name: 'Import architecture' }).click();
     await dialog.waitFor({ state: 'detached' });
     assert.equal(await currentBlocks(), 12);
-    assert.equal(await page.locator('.df-import-source').count(), 2, 'Both panes show the imported source');
+    assert.equal(await page.locator('.df-import-source').count(), 1, 'Only the main root shows the imported source');
+    assert.equal(await page.locator('[data-graph-pane="side"] .df-import-source').count(), 0);
     assert.match(await page.locator('.df-import-source').first().getAttribute('title'), /openai-community\/gpt2/);
-    const paneSourceBounds = await page.locator('.df-graph-pane').evaluateAll((panes) => panes.map((pane) => {
+    const paneSourceBounds = await page.locator('[data-graph-pane="main"]').evaluate((pane) => {
         const canvas = pane.querySelector('.df-architecture-body').getBoundingClientRect();
         const source = pane.querySelector('.df-import-source').getBoundingClientRect();
         return { rightGap: canvas.right - source.right, bottomGap: canvas.bottom - source.bottom,
             sourceWidth: source.width, sourceLeft: source.left, canvasLeft: canvas.left };
-    }));
-    assert.equal(paneSourceBounds.every((bounds) => bounds.sourceLeft >= bounds.canvasLeft
-        && bounds.rightGap >= 0 && bounds.rightGap <= 12
-        && bounds.bottomGap >= 0 && bounds.bottomGap <= 12 && bounds.sourceWidth >= 60), true,
-    `Source links fit at the bottom right of both split canvases: ${JSON.stringify(paneSourceBounds)}`);
+    });
+    assert.equal(paneSourceBounds.sourceLeft >= paneSourceBounds.canvasLeft
+        && paneSourceBounds.rightGap >= 0 && paneSourceBounds.rightGap <= 12
+        && paneSourceBounds.bottomGap >= 0 && paneSourceBounds.bottomGap <= 12 && paneSourceBounds.sourceWidth >= 60, true,
+    `Source link fits at the bottom right of the main canvas: ${JSON.stringify(paneSourceBounds)}`);
     await page.screenshot({ path: `${directory}/06-side-import-820.png` });
     await page.getByRole('button', { name: 'Import from Hugging Face' }).click();
     dialog = page.getByRole('dialog', { name: 'Import from Hugging Face' });

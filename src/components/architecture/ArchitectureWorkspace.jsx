@@ -50,6 +50,7 @@ function CanvasCommandBridge({ paneId, register }) {
 
 function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
     const importSource = useArchitectureStore((state) => state.graph.importSource);
+    const atRoot = useArchitectureStore((state) => state.currentPath.length === 0);
     return (
         <section className={`df-graph-pane${active ? ' is-active' : ''}`} data-graph-pane={id}
             aria-label={id === 'main' ? 'Main graph pane' : 'Side graph pane'}
@@ -67,7 +68,7 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
                         <CanvasCommandBridge paneId={id} register={registerCommands} />
                     </>
                 )} />
-                {importSource?.provider === 'huggingface' && <a className="df-import-source"
+                {id === 'main' && atRoot && importSource?.provider === 'huggingface' && <a className="df-import-source"
                     href={`https://huggingface.co/${importSource.repoId}/tree/${encodeURIComponent(importSource.commit)}`}
                     target="_blank" rel="noopener noreferrer"
                     aria-label={`View imported Hugging Face source ${importSource.repoId}`}

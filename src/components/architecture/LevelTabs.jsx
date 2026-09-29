@@ -57,7 +57,10 @@ export default function LevelTabs() {
 
     const activeKey = JSON.stringify(currentPath);
     const cards = useMemo(() => {
-        const views = [{ key: '[]', path: [], label: 'main', kind: 'root', title: 'Top level' }];
+        const rootLabel = rootGraph.importSource?.displayName
+            || rootGraph.importSource?.repoId?.split('/').at(-1)
+            || 'main';
+        const views = [{ key: '[]', path: [], label: rootLabel, kind: 'root', title: `Top level · ${rootLabel}` }];
         for (const path of openPaths ?? []) {
             const level = resolveGraphLevel(rootGraph, path, templates, inspectedIterations);
             if (level.isRoot) continue;
@@ -68,7 +71,7 @@ export default function LevelTabs() {
                 : null;
             views.push({
                 key: JSON.stringify(path), path, label: level.label, kind: node.kind, count,
-                title: ['main', ...level.segments.map((segment) => segment.label)].join(' / '),
+                title: [rootLabel, ...level.segments.map((segment) => segment.label)].join(' / '),
             });
         }
         return views;
