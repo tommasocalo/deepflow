@@ -120,8 +120,8 @@ function OnnxSourceDetails({ source, operatorGraph }) {
     const operations = source.nodeIds.map((id) => operatorGraph.nodes.find((item) => item.id === id)).filter(Boolean);
     if (!operations.length) return null;
     return <details className="df-inspector-options df-inspector-onnx-source">
-        <summary title="Original ONNX operations represented by this DeepFlow block">
-            ONNX source <span>{operations.map((item) => item.opType).join(' → ')}</span>
+        <summary title="ONNX operations that produced this block at import">
+            Imported ONNX <span>{operations.map((item) => item.opType).join(' → ')}</span>
         </summary>
         <ul>{operations.map((item) => <li key={item.id}>
             <strong>{item.opType}</strong>
@@ -130,7 +130,7 @@ function OnnxSourceDetails({ source, operatorGraph }) {
                 {item.inputs.filter(Boolean).join(', ') || '∅'} → {item.outputs.filter(Boolean).join(', ') || '∅'}
             </small>
         </li>)}</ul>
-        <p>Structural mapping · weights stay in the ONNX file.</p>
+        <p>Import snapshot · later edits do not change the ONNX file.</p>
     </details>;
 }
 
