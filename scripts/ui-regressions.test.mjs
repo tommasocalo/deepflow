@@ -684,7 +684,7 @@ test('inline inspector feedback respects resolved template parameters', async ()
 });
 
 
-test('open level tabs survive main navigation and close independently of selection', async () => {
+test('compact level menu preserves open views and closes them independently of selection', async () => {
     const template = createTemplate({ id: 'shared', name: 'Shared block', graph: emptyGraph() });
     const first = createSuperNodeInstance({ id: 'first', templateId: template.id, label: 'Encoder' });
     const second = createSuperNodeInstance({ id: 'second', templateId: template.id, label: 'Decoder' });
@@ -692,28 +692,34 @@ test('open level tabs survive main navigation and close independently of selecti
     useTemplatesStore.setState({ templates: { [template.id]: template } });
     useArchitectureStore.setState({ graph });
     await render(h(LevelTabs));
-    const tab = (name) => [...container.querySelectorAll('[role="tab"]')].find((el) => el.textContent === name);
+    const trigger = () => container.querySelector('[data-level-trigger]');
+    const view = (name) => [...container.querySelectorAll('.df-level-entry')].find((el) => el.querySelector('strong')?.textContent === name);
+    const show = () => click(trigger());
+    const openView = async (name) => { await show(); await click(view(name)); };
     const state = useArchitectureStore.getState();
 
     await act(() => state.enterSupernode('first'));
-    await click(tab('main'));
-    assert.ok(tab('Encoder'), 'Returning to main keeps the supernode tab open');
-    assert.equal(tab('main').getAttribute('aria-selected'), 'true');
-    assert.equal(tab('Encoder').getAttribute('aria-selected'), 'false');
-    assert.equal(container.querySelector('.df-levels-hint'), null);
+    await openView('main');
+    await show();
+    assert.ok(view('Encoder'), 'Returning to main keeps the supernode view open');
+    assert.equal(view('main').getAttribute('aria-current'), 'page');
+    assert.equal(view('Encoder').getAttribute('aria-current'), null);
+    await click(byAria('Close levels menu'));
 
     await act(() => state.enterSupernode('second'));
-    await click(tab('Encoder'));
+    await openView('Encoder');
     assert.deepEqual(useArchitectureStore.getState().currentPath, ['first']);
-    assert.equal(container.querySelectorAll('[role="tab"]').length, 3);
+    await show();
+    assert.equal(container.querySelectorAll('.df-level-entry').length, 3);
     await click(byAria('Close Decoder'));
-    assert.equal(tab('Decoder'), undefined);
-    assert.equal(tab('Encoder').getAttribute('aria-selected'), 'true', 'Closing an inactive tab leaves the current view alone');
+    assert.equal(view('Decoder'), undefined);
+    assert.equal(view('Encoder').getAttribute('aria-current'), 'page', 'Closing an inactive view leaves the current view alone');
 
     await click(byAria('Close Encoder'));
-    assert.equal(container.querySelectorAll('[role="tab"]').length, 1);
-    assert.equal(tab('main').getAttribute('aria-selected'), 'true');
-    assert.equal(useArchitectureStore.getState().graph, graph, 'Closing tabs never deletes architecture nodes');
+    await show();
+    assert.equal(container.querySelectorAll('.df-level-entry').length, 1);
+    assert.equal(view('main').getAttribute('aria-current'), 'page');
+    assert.equal(useArchitectureStore.getState().graph, graph, 'Closing views never deletes architecture nodes');
 });
 
 function EdgeHarness({ selected, tensorFlow = false, shape = [null, 1024, 768] }) {

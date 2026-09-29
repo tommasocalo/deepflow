@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { levelEntry, levelTrigger, openLevelMenu, selectLevel } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? '/tmp/deepflow-ribbon';
 await mkdir(directory, { recursive: true });
@@ -121,10 +122,9 @@ try {
     const component = await selected();
     await main.locator(`.react-flow__node[data-id="${component.id}"]`).getByRole('button', { name: `Open ${component.label}`, exact: true }).click();
     assert.deepEqual(await page.evaluate(() => window.__deepflow.architectureStore.getState().currentPath), [component.id]);
-    const activeTab = main.getByRole('tab', { selected: true });
-    assert.equal(await activeTab.locator('..').evaluate((element) => getComputedStyle(element).borderRadius), '0px');
-    await activeTab.focus();
-    await page.keyboard.press('ArrowLeft');
+    const levelMenu = await openLevelMenu(main);
+    assert.equal(await levelEntry(levelMenu, 'Ribbon component').getAttribute('aria-current'), 'page');
+    await levelMenu.locator('.df-level-breadcrumb button').first().click();
     assert.deepEqual(await page.evaluate(() => window.__deepflow.architectureStore.getState().currentPath), []);
     await main.locator(`.react-flow__node[data-id="${component.id}"] .df-repeat-face`).click();
     await ribbon.getByRole('button', { name: 'Open to the side', exact: true }).click();
@@ -140,7 +140,7 @@ try {
     const addedComponent = Object.values((await templateGraph()).nodes).find((node) => !beforeTemplate.nodes[node.id]);
     assert.equal(addedComponent.kind, 'supernode', 'Common ribbon blocks insert editable component definitions');
     assert.deepEqual(await root(), originalRoot, 'Side insertion leaves the root graph untouched');
-    await main.getByRole('tab', { name: 'main', exact: true }).click();
+    await selectLevel(main, 'main');
     await ribbon.getByRole('button', { name: 'Browse components', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: 'Customize pinned components', exact: true }).count(), 0);
     const beforeDrop = Object.keys((await templateGraph()).nodes).length;
@@ -155,9 +155,9 @@ try {
     assert.equal(await ribbon.getByRole('button', { name: 'Insert operations' }).evaluate((element) => element === document.activeElement), true);
     await ribbon.getByRole('button', { name: 'Show gradient flow', exact: true }).click();
     assert.equal(await ribbon.getByRole('button', { name: 'Show gradient flow' }).getAttribute('aria-pressed'), 'true');
-    await main.getByRole('tab', { name: 'main', exact: true }).click();
+    await selectLevel(main, 'main');
     assert.equal(await ribbon.getByRole('button', { name: 'Show gradient flow' }).getAttribute('aria-pressed'), 'false', 'Gradient visibility is local to each pane');
-    await side.getByRole('tab', { selected: true }).click();
+    await levelTrigger(side).focus();
     await page.screenshot({ path: `${directory}/split-ribbon.png` });
     const mainViewport = await main.locator('.react-flow__viewport').getAttribute('style');
     await ribbon.getByRole('button', { name: 'Fit active graph', exact: true }).click();
@@ -167,7 +167,7 @@ try {
     await page.setViewportSize({ width: 1024, height: 900 });
     assert.equal(await ribbon.evaluate((element) => element.scrollWidth <= element.clientWidth), true, 'Insert catalog fits at laptop width');
     assert.deepEqual(errors, []);
-    console.log(`Ribbon checks passed: flat tabs, anchored distinct menus, editable components, repeat modes, parameters, pane-aware insert/gradient/fit, cross-pane drag, and keyboard search. Screenshots: ${directory}`);
+    console.log(`Ribbon checks passed: compact level navigation, anchored distinct menus, editable components, repeat modes, parameters, pane-aware insert/gradient/fit, cross-pane drag, and keyboard search. Screenshots: ${directory}`);
 } finally {
     await browser.close();
 }

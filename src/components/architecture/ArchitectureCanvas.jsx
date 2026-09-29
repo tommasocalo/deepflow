@@ -229,7 +229,19 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
         try {
             const saved = JSON.parse(localStorage.getItem(key));
             if (saved && [saved.x, saved.y, saved.zoom].every(Number.isFinite) && saved.zoom > 0) {
-                setViewport({ ...saved, zoom: Math.max(0.2, Math.min(2, saved.zoom)) }, { duration: 0 });
+                if (!graphIsEmpty && (!Number.isFinite(saved.width) || saved.width <= 0 || !Number.isFinite(saved.height) || saved.height <= 0)) {
+                    // Older entries have no canvas dimensions, so their pixel
+                    // translation cannot be restored safely at a new size.
+                    fitView({ padding: 0.2, minZoom: 0.2, maxZoom: 1, duration: 0 });
+                    return;
+                }
+                const bounds = wrapperRef.current?.getBoundingClientRect();
+                // A saved translation belongs to the canvas size where it was
+                // made. Keep the same graph point centred after a resize or
+                // when opening that level in a split pane.
+                const dx = bounds && Number.isFinite(saved.width) && saved.width > 0 ? (bounds.width - saved.width) / 2 : 0;
+                const dy = bounds && Number.isFinite(saved.height) && saved.height > 0 ? (bounds.height - saved.height) / 2 : 0;
+                setViewport({ x: saved.x + dx, y: saved.y + dy, zoom: Math.max(0.2, Math.min(2, saved.zoom)) }, { duration: 0 });
                 return;
             }
         } catch {
@@ -246,7 +258,8 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
         (_event, vp) => {
             const key = viewportKey(currentPath, paneId);
             try {
-                localStorage.setItem(key, JSON.stringify(vp));
+                const bounds = wrapperRef.current?.getBoundingClientRect();
+                localStorage.setItem(key, JSON.stringify({ ...vp, width: bounds?.width, height: bounds?.height }));
             } catch {
                 // Viewport persistence is optional when storage is unavailable.
             }

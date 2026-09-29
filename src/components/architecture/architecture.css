@@ -1,21 +1,8 @@
-/* ---------- Architecture pane: level cards over the canvas ---------- */
+/* ---------- Architecture canvas ---------- */
 .df-tab-pane { position: absolute; inset: 0; z-index: 0; animation: tabFade 220ms ease; }
 @keyframes tabFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .df-architecture-pane { display: flex; flex-direction: column; width: 100%; height: 100%; }
 .df-architecture-body { position: relative; flex: 1; min-height: 0; }
-
-/* Open levels read as document tabs attached to the canvas. */
-.df-levels { display: flex; align-items: flex-end; gap: 4px; flex-shrink: 0; height: 38px; padding: 4px 16px 0; background: #f5f5f3; border-bottom: 1px solid #d4d4d0; overflow-x: auto; }
-.df-level-card { position: relative; display: inline-flex; align-items: center; height: 30px; min-width: 76px; border: 1px solid #d4d4d0; border-bottom: 0; border-radius: 4px 4px 0 0; background: #eeeee9; color: #666; overflow: hidden; flex-shrink: 0; }
-.df-level-card.is-active { background: #fff; color: #111; border-color: #111; box-shadow: inset 0 2px 0 #111; }
-.df-level-card.is-active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: #fff; pointer-events: none; }
-.df-level-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 100%; flex: 1; min-width: 0; padding: 0 11px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-.df-level-card:not(.is-active):hover { background: #fafaf8; color: #111; }
-.df-level-tab:focus-visible, .df-level-close:focus-visible { outline: 2px solid #2563eb; outline-offset: -3px; }
-.df-level-count { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; padding-left: 3px; color: #777; }
-.df-level-close { display: grid; place-items: center; width: 22px; height: 22px; margin-right: 4px; border-radius: 3px; color: #777; flex-shrink: 0; }
-.df-level-close:hover { background: #f3f3f0; color: #111; }
-.df-levels-hint { align-self: center; margin-left: 10px; font-size: 10px; color: #888; white-space: nowrap; }
 
 /* ---------- Compact node language ---------- */
 .df-block { position: relative; display: flex; align-items: center; gap: 7px; width: max-content; max-width: 240px; height: 36px; padding: 4px 8px; border: 2px solid #111; border-radius: 6px; box-shadow: 3px 3px 0 #111; cursor: grab; }

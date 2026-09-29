@@ -56,10 +56,6 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
             aria-label={id === 'main' ? 'Main graph pane' : 'Side graph pane'}
             tabIndex={-1} onPointerDownCapture={onActivate} onFocusCapture={onActivate}
             onDropCapture={(event) => { onActivate(); event.currentTarget.focus({ preventScroll: true }); }}>
-            <div className="df-graph-pane-header">
-                <LevelTabs />
-                {onClose && <button type="button" className="df-side-close" onClick={onClose} aria-label="Close side view" title="Close side view"><X size={13} strokeWidth={3} /></button>}
-            </div>
             <RepeatIterationBar />
             <div className="df-architecture-body">
                 <ArchitectureCanvas paneId={id} keyboardActive={active} overlay={(
@@ -68,6 +64,8 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
                         <CanvasCommandBridge paneId={id} register={registerCommands} />
                     </>
                 )} />
+                <LevelTabs />
+                {onClose && <button type="button" className="df-side-close" onClick={onClose} aria-label="Close side view" title="Close side view"><X size={13} strokeWidth={3} /></button>}
                 {id === 'main' && atRoot && importSource?.provider === 'huggingface' && <a className="df-import-source"
                     href={`https://huggingface.co/${importSource.repoId}/tree/${encodeURIComponent(importSource.commit)}`}
                     target="_blank" rel="noopener noreferrer"
@@ -101,7 +99,7 @@ export default function ArchitectureWorkspace() {
 
     useEffect(() => () => sideStore?.dispose(), [sideStore]);
     useEffect(() => {
-        if (sideStore) workspaceRef.current?.querySelector('[data-graph-pane="side"] [role="tab"][aria-selected="true"]')?.focus({ preventScroll: true });
+        if (sideStore) workspaceRef.current?.querySelector('[data-graph-pane="side"] [data-level-trigger]')?.focus({ preventScroll: true });
     }, [sideStore, sideFocusRequest]);
 
     const openToSide = useCallback((path) => {

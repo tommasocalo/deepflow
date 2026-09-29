@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { levelEntry, openLevelMenu, selectLevel } from './level-navigation-browser-helper.mjs';
 
 const browser = await chromium.launch();
 try {
@@ -51,25 +52,57 @@ try {
     await main.locator('.react-flow__controls-zoomout').click();
     await settle();
     const secondView = await view(main);
-    await main.getByRole('tab', { name: /Transformer blocks/ }).click();
+    await selectLevel(main, 'Transformer blocks');
     await waitView('main', firstView);
-    await main.getByRole('tab', { name: 'Second instance', exact: true }).click();
+    await selectLevel(main, 'Second instance');
     await waitView('main', secondView);
 
-    await main.getByRole('tab', { name: /Transformer blocks/ }).click({ button: 'right' });
+    await levelEntry(await openLevelMenu(main), 'Transformer blocks').click({ button: 'right' });
     await page.getByRole('menuitem', { name: /Open to the side/ }).click();
     await side.getByRole('button', { name: 'Inspect mlp fc', exact: true }).waitFor();
     await side.locator('.react-flow__controls-zoomin').click();
     await settle();
     const sideView = await view(side);
     const untouchedMain = await view(main);
-    await side.getByRole('tab', { name: 'main', exact: true }).click();
+    await selectLevel(side, 'main');
     await side.getByRole('button', { name: 'Open Transformer blocks', exact: true }).waitFor();
-    await side.getByRole('tab', { name: /Transformer blocks/ }).click();
+    await selectLevel(side, 'Transformer blocks');
     await waitView('side', sideView);
     assert.equal(await view(main), untouchedMain, 'Restoring a side-pane viewport preserves the main pane viewport');
+    await side.getByRole('button', { name: 'Close side view', exact: true }).click();
+    const firstKey = `deepflow:architecture-viewport:${ids.first}`;
+    const savedFirst = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), firstKey);
+    assert.ok(savedFirst.width > 0 && savedFirst.height > 0, 'Viewport records include the canvas size');
+    await page.setViewportSize({ width: 820, height: 900 });
+    await selectLevel(main, 'Transformer blocks');
+    const resized = await main.locator('[data-architecture-canvas]').boundingBox();
+    const expectedX = savedFirst.x + (resized.width - savedFirst.width) / 2;
+    await page.waitForFunction((x) => {
+        const viewport = document.querySelector('[data-graph-pane="main"] .react-flow__viewport');
+        return viewport && Math.abs(new DOMMatrix(getComputedStyle(viewport).transform).m41 - x) < 2;
+    }, expectedX);
+    const visible = await main.locator('.react-flow__node').evaluateAll((nodes) => {
+        const canvas = document.querySelector('[data-graph-pane="main"] [data-architecture-canvas]').getBoundingClientRect();
+        return nodes.filter((node) => {
+            const box = node.getBoundingClientRect();
+            return box.right > canvas.left && box.left < canvas.right && box.bottom > canvas.top && box.top < canvas.bottom;
+        }).length;
+    });
+    assert.ok(visible > 2, 'A level saved at desktop width remains visible after reopening at 820px');
+
+    await selectLevel(main, 'Second instance');
+    await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({ x: 99999, y: 99999, zoom: 1 })), firstKey);
+    await selectLevel(main, 'Transformer blocks');
+    await page.waitForFunction(() => {
+        const pane = document.querySelector('[data-graph-pane="main"]');
+        const canvas = pane.querySelector('[data-architecture-canvas]').getBoundingClientRect();
+        return [...pane.querySelectorAll('.react-flow__node')].some((node) => {
+            const box = node.getBoundingClientRect();
+            return box.right > canvas.left && box.left < canvas.right && box.bottom > canvas.top && box.top < canvas.bottom;
+        });
+    });
     assert.deepEqual(errors, []);
-    console.log('Level viewport checks passed: first-visit framing, distinct saved views for two instances with shared node IDs, and independent side-pane restoration.');
+    console.log('Level viewport checks passed: first-visit framing, independent panes, resized restores and legacy viewport fallback.');
 } finally {
     await browser.close();
 }

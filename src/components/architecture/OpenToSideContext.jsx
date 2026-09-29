@@ -76,9 +76,9 @@ export function OpenToSideProvider({ value, children }) {
     const [menu, setMenu] = useState(null);
     const openMenu = useCallback((path, event) => {
         const target = event.currentTarget;
-        const origin = target.matches?.('.react-flow__node, .df-level-tab')
+        const origin = target.matches?.('.react-flow__node, .df-level-entry, .df-level-trigger')
             ? target
-            : target.closest?.('.react-flow__node') ?? target.querySelector?.('.df-level-tab') ?? target;
+            : target.closest?.('.react-flow__node, .df-level-entry, .df-level-trigger') ?? target;
         const rect = origin.getBoundingClientRect();
         const keyboard = event.type === 'keydown' || (!event.clientX && !event.clientY);
         setMenu({

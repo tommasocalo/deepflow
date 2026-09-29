@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { levelTrigger, selectLevel } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/open-to-side';
 await mkdir(directory, { recursive: true });
@@ -32,8 +33,8 @@ try {
     await page.getByRole('menuitem', { name: /Open to the side/ }).click();
     await side.getByRole('button', { name: 'Inspect mlp fc', exact: true }).waitFor();
     await settle();
-    assert.equal(await main.locator('.react-flow__node').count(), 9);
-    assert.equal(await side.locator('.react-flow__node').count(), 11);
+    assert.equal(await main.locator('.react-flow__node').count(), Object.keys((await root()).nodes).length);
+    assert.equal(await side.locator('.react-flow__node').count(), Object.keys((await template()).nodes).length);
     assert.equal(await focusedPane(), 'side', 'The opened pane receives keyboard focus');
     assert.deepEqual(await page.evaluate(() => window.__deepflow.architectureStore.getState().currentPath), []);
     await page.screenshot({ path: `${directory}/02-two-panes.png` });
@@ -74,7 +75,7 @@ try {
     assert.ok((await root()).nodes[repeat.id], 'Inactive main selection is not deleted');
 
     // Cards can open the same level in both views; data remains shared.
-    await main.getByRole('tab', { name: 'main', exact: true }).click({ button: 'right' });
+    await levelTrigger(main).click({ button: 'right' });
     await page.getByRole('menuitem', { name: /Open to the side/ }).click();
     await side.getByRole('button', { name: 'Inspect tokens', exact: true }).click();
     await side.getByRole('textbox', { name: 'Block name', exact: true }).fill('shared tokens');
@@ -83,18 +84,20 @@ try {
     await side.locator('.react-flow__controls-zoomin').click();
     await settle();
     assert.equal(await main.locator('.react-flow__viewport').getAttribute('style'), mainViewport, 'Zoom stays independent');
-    await side.getByRole('tab', { name: /Transformer blocks/ }).click();
+    await selectLevel(side, 'Transformer blocks');
     await settle();
 
     // A cross-pane drop activates its destination and rejects recursive templates.
-    await main.getByRole('tab', { name: 'main', exact: true }).click();
+    await selectLevel(main, 'main');
     await ribbon.getByRole('button', { name: 'Browse templates', exact: true }).click();
     const countBeforeDrop = Object.keys((await template()).nodes).length;
     const canvas = side.locator('.react-flow__pane');
     await page.getByRole('menuitem', { name: 'Add Transformer block template', exact: true }).dragTo(canvas, { targetPosition: { x: 140, y: 160 } });
     await settle();
     assert.equal(Object.keys((await template()).nodes).length, countBeforeDrop, 'A template cannot be dropped inside itself from the other pane');
-    await ribbon.getByRole('button', { name: 'Add Linear', exact: true }).dragTo(canvas, { targetPosition: { x: 140, y: 160 } });
+    await ribbon.getByRole('button', { name: 'Browse components', exact: true }).click();
+    await page.getByRole('menu', { name: 'Insert components', exact: true }).getByRole('menuitem', { name: 'Add Linear', exact: true })
+        .dragTo(canvas, { targetPosition: { x: 140, y: 160 } });
     await settle();
     assert.equal(Object.keys((await template()).nodes).length, countBeforeDrop + 1);
     assert.equal(await focusedPane(), 'side');

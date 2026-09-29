@@ -23,7 +23,7 @@ function LibraryItem({ entry, onAdd, onDragEnd, template = false }) {
 }
 
 /** An anchored ribbon menu: each trigger has one purpose and one catalog. */
-export default function BlockPalette({ onAdd, onClose, section = 'operations' }) {
+export default function BlockPalette({ onAdd, onClose, onDragEnd = onClose, section = 'operations' }) {
     const [query, setQuery] = useState('');
     const panelRef = useRef(null);
     const searchRef = useRef(null);
@@ -68,7 +68,7 @@ export default function BlockPalette({ onAdd, onClose, section = 'operations' })
         </div>
         <div className="df-insert-menu-scroll" role="menu" aria-label={`Insert ${label}`}>
             {groups.filter(({ items }) => items.length).map(({ name, items, template }) => <section key={name} className="df-insert-section" aria-label={name}>
-                <h3>{name}</h3><div className="df-insert-items">{items.map((entry) => <LibraryItem key={entry.key} entry={entry} onAdd={onAdd} onDragEnd={onClose} template={template} />)}</div>
+                <h3>{name}</h3><div className="df-insert-items">{items.map((entry) => <LibraryItem key={entry.key} entry={entry} onAdd={onAdd} onDragEnd={onDragEnd} template={template} />)}</div>
             </section>)}
             {!visibleEntries.length && <p className="df-insert-empty">{section === 'templates' && !query ? 'Group blocks to create a reusable template.' : 'No matches.'}</p>}
         </div>
