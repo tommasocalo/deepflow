@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { levelEntry, levelTrigger, openLevelMenu, selectLevel } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/parameter-flow';
 await mkdir(directory, { recursive: true });
@@ -44,21 +45,27 @@ try {
     assert.match(await page.locator('.df-parallel .df-port-shape--output').innerText(), /200 tensors \[B × 128 × 4\]/);
     await page.screenshot({ path: `${directory}/02-two-hundred-heads.png` });
     await page.getByRole('button', { name: 'Open Attention heads instance 200', exact: true }).click();
+    const ribbon = page.getByRole('region', { name: /Architecture ribbon/ });
+    await ribbon.getByRole('button', { name: 'Inspect Head 200 of 200', exact: true }).click();
     const instance = page.getByRole('spinbutton', { name: 'Inspected instance number', exact: true });
     assert.equal(await instance.inputValue(), '200');
     await instance.fill('137');
-    assert.equal(await page.getByRole('tab', { name: 'Attention heads × 200', exact: true }).count(), 1, 'Open tabs show the resolved automatic count');
+    assert.equal(await ribbon.getByRole('button', { name: 'Inspect Head 137 of 200', exact: true }).count(), 1);
+    const main = page.locator('[data-graph-pane="main"]');
+    assert.match(await levelTrigger(main).innerText(), /Attention heads\s*×\s*200/, 'The current level shows the resolved automatic count');
     assert.equal(await page.evaluate(() => Object.values(window.__deepflow.architectureStore.getState().inspectedIterations).at(-1)), 136);
     await fit();
     await page.screenshot({ path: `${directory}/03-inspect-instance-137.png` });
 
-    await page.getByRole('tab', { name: 'Multi-head attention', exact: true }).click();
-    assert.equal(await page.getByRole('tab', { name: 'Attention heads × 200', exact: true }).count(), 1, 'The resolved count remains visible on inactive tabs');
+    await selectLevel(main, 'Multi-head attention');
+    const levels = await openLevelMenu(main);
+    assert.match(await levelEntry(levels, 'Attention heads').innerText(), /×\s*200/, 'The resolved count remains visible for an inactive level');
+    await levels.getByRole('button', { name: 'Close levels menu', exact: true }).click();
     await page.getByRole('button', { name: 'Open Q projection', exact: true }).click();
     await fit();
     await page.getByRole('button', { name: 'Inspect weight', exact: true }).click();
-    const first = page.getByRole('textbox', { name: 'shape dimension 1', exact: true });
-    const second = page.getByRole('textbox', { name: 'shape dimension 2', exact: true });
+    const first = page.getByRole('combobox', { name: 'shape dimension 1', exact: true });
+    const second = page.getByRole('combobox', { name: 'shape dimension 2', exact: true });
     assert.equal(await first.inputValue(), '$out_features');
     assert.equal(await second.inputValue(), '$in_features');
     const assertContained = async () => {
@@ -73,7 +80,7 @@ try {
     await assertContained();
     await page.screenshot({ path: `${directory}/04-weight-dimensions.png` });
     await page.getByRole('button', { name: 'Add shape dimension', exact: true }).click();
-    await page.getByRole('textbox', { name: 'shape dimension 3', exact: true }).fill('2 * 4');
+    await page.getByRole('combobox', { name: 'shape dimension 3', exact: true }).fill('2 * 4');
     await page.getByRole('button', { name: 'Remove shape dimension 2', exact: true }).click();
     assert.equal(await second.inputValue(), '2 * 4');
     const saved = await page.evaluate(() => Object.values(window.__deepflow.architectureStore.getState().getViewGraph().nodes).find((node) => node.label === 'weight').parameters.shape);

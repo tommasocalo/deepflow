@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, FileUp, GitBranch, Group, Maximize, Redo2, Ruler, Search, Undo2, Variable, X } from 'lucide-react';
+import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, FileUp, GitBranch, Group, Layers, Maximize, Redo2, Ruler, Search, Undo2, Variable, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { importHuggingFaceArchitecture } from '../../domain/huggingFace/index.js';
 import { buildEditableOnnxArchitecture } from '../../domain/onnx/editable.js';
@@ -15,10 +15,12 @@ import OnnxImport from '../OnnxImport.jsx';
 import { useOpenToSide } from './OpenToSideContext.jsx';
 import BlockPalette from './BlockPalette.jsx';
 import OptimizationPanel from './OptimizationPanel.jsx';
+import RepeatIterationBar from './RepeatIterationBar.jsx';
+import { instanceNoun } from './repeatLabels.js';
 import TemplateInspector, { GlobalParameters } from './TemplateInspector.jsx';
 import './ribbon.css';
 
-const MENU_WIDTHS = { operations: 350, components: 360, templates: 310, parameters: 350, group: 280 };
+const MENU_WIDTHS = { operations: 350, components: 360, templates: 310, parameters: 350, group: 280, instances: 350 };
 function RepeatIcon({ parallel }) {
     return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" aria-hidden="true">
         {parallel ? <><path d="M12 2v3H4v4m8-4h8v4M4 15v4h16v-4m-8 4v3" /><rect x="1" y="9" width="6" height="6" rx="1" /><rect x="17" y="9" width="6" height="6" rx="1" /></>
@@ -50,6 +52,10 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const templates = useTemplatesStore((s) => s.templates);
     const validation = useValidation();
     const validationContext = useValidationContext();
+    const repeat = validationContext?.repeat;
+    const repeatNoun = repeat ? instanceNoun(repeat.label, repeat.mode) : null;
+    const RepeatNoun = repeatNoun ? `${repeatNoun[0].toUpperCase()}${repeatNoun.slice(1)}` : null;
+    const repeatEditError = useArchitectureStore((s) => s.repeatEditError);
     const openToSide = useOpenToSide();
     const [popup, setPopup] = useState(null);
     const [hfOpen, setHfOpen] = useState(false);
@@ -266,6 +272,13 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 <RibbonButton icon={Group} disabled={selection.length < 2} aria-label="Group selection into component" aria-expanded={popup === 'group' && selection.length > 1} onClick={(event) => { setGroupName('Component'); togglePopup('group', event); }} title={selection.length > 1 ? 'Group selected blocks into a reusable component' : 'Select at least two blocks to group'}>Group</RibbonButton>
                 <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection sequentially" aria-pressed={selectedRepeatMode === 'sequential'} onClick={() => repeatSelection('sequential')} title={selectedRepeatMode === 'sequential' ? 'Return to a single instance' : 'Repeat in sequence; each output feeds the next'}><RepeatIcon /><span>Sequential</span></button>
                 <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection in parallel" aria-pressed={selectedRepeatMode === 'parallel'} onClick={() => repeatSelection('parallel')} title={selectedRepeatMode === 'parallel' ? 'Return to a single instance' : 'Repeat in parallel; combine outputs with Concat, Add or Stack'}><RepeatIcon parallel /><span>Parallel</span></button>
+                {repeat && <button type="button" className={`df-ribbon-button df-ribbon-instance-button${validationContext?.levels?.at(-1)?.instance?.structureOverrides?.[String(repeat.index)]?.enabled ? ' is-local' : ''}`}
+                    aria-label={`Inspect ${RepeatNoun} ${repeat.index + 1} of ${repeat.count}`}
+                    aria-expanded={popup === 'instances'} aria-haspopup="dialog" onClick={(event) => togglePopup('instances', event)}
+                    title={`Inspect ${repeat.label}: ${RepeatNoun} ${repeat.index + 1} of ${repeat.count}`}>
+                    <Layers size={19} strokeWidth={1.8} aria-hidden="true" />
+                    <span>{RepeatNoun} {repeat.index + 1}/{repeat.count} <ChevronDown size={10} aria-hidden="true" />{repeatEditError?.pathKey === JSON.stringify(repeat.path) && <b className="df-iteration-button-error" aria-label="Instance edit error">!</b>}</span>
+                </button>}
             </RibbonGroup>
             <RibbonGroup label="Parameters" className="df-ribbon-component">
                 <RibbonButton icon={Variable} aria-label="Edit parameters" aria-expanded={popup === 'parameters'} aria-haspopup="dialog" onClick={(event) => togglePopup('parameters', event)} title="Edit global parameters or parameters of the current component">Parameters <ChevronDown size={10} /></RibbonButton>
@@ -288,7 +301,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             {split && <span className="df-ribbon-pane-cue" aria-live="polite"><ArrowUpRight size={11} />{targetLabel}</span>}
         </div>
         {menu && <div className="df-ribbon-dropdown" style={popoverStyle} data-ribbon-menu={popup} onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation(); }}>
-            <BlockPalette key={popup} section={popup} onAdd={addEntry} onClose={() => closePopup(true)} />
+            <BlockPalette key={popup} section={popup} onAdd={addEntry} onClose={() => closePopup(true)} onDragEnd={() => closePopup(false)} />
         </div>}
         {popup === 'group' && selection.length > 1 && <div className="df-ribbon-popover df-ribbon-popover-group" style={popoverStyle} role="dialog" aria-label="Create component">
             <header><strong>Group {selection.length} {selection.length === 1 ? 'block' : 'blocks'}</strong><button type="button" onClick={() => closePopup(true)} aria-label="Close group editor"><X size={14} /></button></header>
@@ -305,6 +318,9 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 <button type="button" className="df-ribbon-parameter-close" onClick={() => closePopup(true)} aria-label="Close parameters"><X size={14} /></button>
             </div>
             {activeParameterScope === 'component' ? <TemplateInspector templateId={templateId} /> : <GlobalParameters />}
+        </div>}
+        {popup === 'instances' && repeat && <div className="df-ribbon-popover df-iteration-popover" style={popoverStyle}>
+            <RepeatIterationBar onClose={() => closePopup(true)} />
         </div>}
         <OptimizationPanel open={optimizationOpen} onClose={closeOptimization} />
         <HuggingFaceImport open={hfOpen} onClose={closeHf} onImport={importHf} currentArchitecture={{

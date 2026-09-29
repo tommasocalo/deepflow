@@ -24,6 +24,12 @@
     "content": 820
   },
   {
+    "name": "03-side-pane-scope-1440",
+    "viewport": 1440,
+    "width": 1440,
+    "content": 1440
+  },
+  {
     "name": "03-independent-pane-scopes-1440",
     "viewport": 1440,
     "width": 1440,

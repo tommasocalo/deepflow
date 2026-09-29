@@ -82,7 +82,7 @@ try {
     assert.equal(await page.evaluate(() => Object.keys(window.__deepflow.templatesStore.getState().templates.body.graph.nodes).length), 2);
     assert.equal(await ribbon.getAttribute('data-active-pane'), 'side');
     assert.equal(await ribbon.getByRole('button', { name: 'Make copy', exact: true }).count(), 0);
-    assert.deepEqual(await ribbon.locator('.df-ribbon-group').evaluateAll((elements) => elements.map((element) => element.getAttribute('aria-label'))), ['Insert', 'Structure', 'Component', 'View', 'History']);
+    assert.deepEqual(await ribbon.locator('.df-ribbon-group').evaluateAll((elements) => elements.map((element) => element.getAttribute('aria-label'))), ['Insert', 'Structure', 'Parameters', 'Optimization', 'View', 'History']);
 
     for (const width of [1440, 1024]) {
         await page.setViewportSize({ width, height: 1000 });

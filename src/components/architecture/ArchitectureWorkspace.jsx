@@ -6,7 +6,6 @@ import ArchitectureCanvas from './ArchitectureCanvas.jsx';
 import ArchitectureRibbon from './ArchitectureRibbon.jsx';
 import LevelTabs from './LevelTabs.jsx';
 import NodeInspector from './NodeInspector.jsx';
-import RepeatIterationBar from './RepeatIterationBar.jsx';
 import { OpenToSideProvider } from './OpenToSideContext.jsx';
 import { useArchitectureHistoryKeys } from '../../hooks/useArchitectureHistoryKeys.js';
 import './workspace.css';
@@ -56,7 +55,6 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
             aria-label={id === 'main' ? 'Main graph pane' : 'Side graph pane'}
             tabIndex={-1} onPointerDownCapture={onActivate} onFocusCapture={onActivate}
             onDropCapture={(event) => { onActivate(); event.currentTarget.focus({ preventScroll: true }); }}>
-            <RepeatIterationBar />
             <div className="df-architecture-body">
                 <ArchitectureCanvas paneId={id} keyboardActive={active} overlay={(
                     <>

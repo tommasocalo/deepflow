@@ -1,18 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { useValidationContext } from '../../hooks/useValidation.js';
 import { repeatRuleSuggestions, selectRepeatInstances } from '../../domain/architecture/repeatRule.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
+import { instanceNoun, pluralOf } from './repeatLabels.js';
 import './repeat-iteration.css';
-
-/** "Attention heads" → head, "Transformer blocks" → block; otherwise instance/step. */
-function instanceNoun(label, mode) {
-    const word = String(label ?? '').trim().split(/\s+/).at(-1)?.toLowerCase() ?? '';
-    if (/^[a-z]{3,}ies$/.test(word)) return `${word.slice(0, -3)}y`;
-    if (/^[a-z]{3,}s$/.test(word) && !/ss$/.test(word)) return word.slice(0, -1);
-    return mode === 'parallel' ? 'instance' : 'step';
-}
-const pluralOf = (noun) => (noun.endsWith('y') ? `${noun.slice(0, -1)}ies` : `${noun}s`);
 
 /** Every instance when few; otherwise both ends and the neighbourhood of the current one. */
 function stripIndices(count, index) {
@@ -22,7 +15,7 @@ function stripIndices(count, index) {
     return [...picked].sort((a, b) => a - b);
 }
 
-export default function RepeatIterationBar() {
+export default function RepeatIterationBar({ onClose }) {
     const context = useValidationContext();
     const graph = useArchitectureStore((s) => s.graph);
     const templates = useTemplatesStore((s) => s.templates);
@@ -86,30 +79,46 @@ export default function RepeatIterationBar() {
         setCaret(start + name.length);
         inputRef.current?.focus();
     };
-    return (
-        <div className={`df-iteration-bar${scope.local ? ' is-local' : ''}`}>
-            <div className="df-iteration-counter">
-                <button type="button" aria-label="Previous instance" disabled={repeat.index === 0} onClick={() => select(repeat.index - 1)}>‹</button>
-                <label className="df-iteration-title">{Noun}
-                    <input aria-label="Inspected instance number" type="number" min="1" max={Math.max(1, repeat.count)} value={number} onChange={(event) => select(Number(event.target.value) - 1)} />
-                    <span>of {repeat.count}</span>
-                </label>
-                <button type="button" aria-label="Next instance" disabled={repeat.index >= repeat.count - 1} onClick={() => select(repeat.index + 1)}>›</button>
-            </div>
-            <div className="df-iteration-strip" role="group" aria-label={`${plural} of ${repeat.label}`}>
-                {indices.map((i, at) => <span key={i} className="df-iteration-slot">
-                    {at > 0 && i - indices[at - 1] > 1 && <span className="df-iteration-gap" aria-hidden="true">…</span>}
-                    <button type="button" aria-label={`${Noun} ${i + 1}${highlighted.has(i) ? ', selected by rule' : ''}${own(i) ? ', own structure' : ''}`}
-                        aria-current={i === repeat.index ? 'true' : undefined}
-                        className={`${i === repeat.index ? 'is-current' : ''}${own(i) ? ' is-own' : ''}${highlighted.has(i) ? ' is-selected' : ''}`}
-                        title={`${Noun} ${i + 1}${highlighted.has(i) ? ' · selected by rule' : ''}${own(i) ? ' · has its own structure' : ''}`} onClick={() => select(i)} />
-                </span>)}
-            </div>
-            <div className="df-iteration-rule-anchor">
+    return <div className={`df-iteration-panel${scope.local ? ' is-local' : ''}`} role="dialog" aria-label={`${repeat.label} instances`}>
+        <header className="df-iteration-heading">
+            <div><span>Inspecting {repeat.mode === 'parallel' ? 'parallel instances' : 'sequence'}</span><strong>{repeat.label}</strong></div>
+            <button type="button" onClick={onClose} aria-label="Close instance controls"><X size={15} /></button>
+        </header>
+        <div className="df-iteration-body">
+            <section className="df-iteration-section df-iteration-navigation" aria-label="Current instance">
+                <div className="df-iteration-counter">
+                    <button type="button" aria-label="Previous instance" disabled={repeat.index === 0} onClick={() => select(repeat.index - 1)}>‹</button>
+                    <label className="df-iteration-title">{Noun}
+                        <input aria-label="Inspected instance number" type="number" min="1" max={Math.max(1, repeat.count)} value={number} onChange={(event) => select(Number(event.target.value) - 1)} />
+                        <span>of {repeat.count}</span>
+                    </label>
+                    <button type="button" aria-label="Next instance" disabled={repeat.index >= repeat.count - 1} onClick={() => select(repeat.index + 1)}>›</button>
+                </div>
+                <div className="df-iteration-strip" role="group" aria-label={`${plural} of ${repeat.label}`}>
+                    {indices.map((i, at) => <span key={i} className="df-iteration-slot">
+                        {at > 0 && i - indices[at - 1] > 1 && <span className="df-iteration-gap" aria-hidden="true">…</span>}
+                        <button type="button" aria-label={`${Noun} ${i + 1}${highlighted.has(i) ? ', selected by rule' : ''}${own(i) ? ', own structure' : ''}`}
+                            aria-current={i === repeat.index ? 'true' : undefined}
+                            className={`${i === repeat.index ? 'is-current' : ''}${own(i) ? ' is-own' : ''}${highlighted.has(i) ? ' is-selected' : ''}`}
+                            title={`${Noun} ${i + 1}${highlighted.has(i) ? ' · selected by rule' : ''}${own(i) ? ' · has its own structure' : ''}`} onClick={() => select(i)} />
+                    </span>)}
+                </div>
+                <div className="df-iteration-structure">
+                    <button type="button" role="switch" aria-checked={!scope.local} className="df-iteration-toggle"
+                        onClick={() => setStructureScope(scope.local ? 'shared' : 'local', repeat.path)}
+                        title={scope.local
+                            ? `${noun} ${number} has its own structure. Switch to the shared definition; the private copy is saved.`
+                            : `${noun} ${number} uses the shared structure. Switch to a private definition for this instance.`}>
+                        <span className="df-iteration-switch" aria-hidden="true" />Shared structure
+                    </button>
+                    <span className="df-iteration-structure-status">{scope.local ? 'Only this instance' : `All ${plural}`}</span>
+                </div>
+            </section>
+            <section className="df-iteration-section">
                 <button type="button" className={`df-iteration-rule-trigger${selected.size ? ' has-selection' : ''}`} aria-expanded={ruleOpen}
-                    onClick={() => setRuleOpen((open) => !open)}>Select by rule{selected.size ? ` · ${selected.size}` : ''}</button>
+                    onClick={() => setRuleOpen((open) => !open)}>Select by rule{selected.size ? ` · ${selected.size}` : ''}<span aria-hidden="true">{ruleOpen ? '−' : '+'}</span></button>
                 {ruleOpen && <div className="df-iteration-rule-panel" role="group" aria-label="Select instances by rule">
-                    <label htmlFor="df-repeat-rule">Select by rule</label>
+                    <label htmlFor="df-repeat-rule">Rule</label>
                     <input id="df-repeat-rule" ref={inputRef} aria-label="Instance selection rule" value={rule}
                         placeholder="position % 2 == 0" spellCheck={false}
                         onChange={(event) => { setRule(event.target.value); setCaret(event.target.selectionStart ?? event.target.value.length); }}
@@ -124,7 +133,7 @@ export default function RepeatIterationBar() {
                         {completions.map((name) => <button key={name} type="button" role="option" aria-selected="false"
                             onMouseDown={(event) => event.preventDefault()} onClick={() => complete(name)}>{name}</button>)}
                     </div>}
-                    <p className="df-iteration-rule-help">position starts at 1. Use numeric local.* or global.* values.</p>
+                    <p className="df-iteration-rule-help">position starts at 1 · use numeric local.* or global.* values</p>
                     <div className="df-iteration-rule-footer">
                         <strong className={preview.error ? 'is-error' : ''}>{preview.error ?? `${preview.indices.length} of ${repeat.count} in preview`}</strong>
                         <button type="button" disabled={!!preview.error || !preview.indices.length} onClick={() => {
@@ -133,22 +142,17 @@ export default function RepeatIterationBar() {
                         {!!selection?.indices.length && <button type="button" onClick={() => { setRepeatSelection(repeat.path, [], ''); setRule(''); }}>Clear</button>}
                     </div>
                 </div>}
-            </div>
-            <label className="df-iteration-apply">Parameter changes
-                <select aria-label="Apply parameter changes to" value={mode} onChange={(event) => setRepeatEditMode(repeat.path, event.target.value)}>
-                    <option value="current">Current</option>
-                    <option value="selected" disabled={!selected.size}>Selected ({selected.size})</option>
-                    <option value="all">All</option>
-                </select>
-            </label>
-            <button type="button" role="switch" aria-checked={!scope.local} className="df-iteration-toggle"
-                onClick={() => setStructureScope(scope.local ? 'shared' : 'local', repeat.path)}
-                title={scope.local
-                    ? `${noun} ${number} has its own structure. Switch to the shared definition; the private copy is saved.`
-                    : `${noun} ${number} uses the shared structure. Switch to a private definition for this instance.`}>
-                <span className="df-iteration-switch" aria-hidden="true" />Shared structure
-            </button>
-            {editError?.pathKey === pathKey && <span className="df-iteration-edit-error" role="alert">{editError.message}</span>}
+            </section>
+            <section className="df-iteration-section df-iteration-editing">
+                <label className="df-iteration-apply">Parameter changes
+                    <select aria-label="Apply parameter changes to" value={mode} onChange={(event) => setRepeatEditMode(repeat.path, event.target.value)}>
+                        <option value="current">Current</option>
+                        <option value="selected" disabled={!selected.size}>Selected ({selected.size})</option>
+                        <option value="all">All</option>
+                    </select>
+                </label>
+            </section>
+            {editError?.pathKey === pathKey && <p className="df-iteration-edit-error" role="alert">{editError.message}</p>}
         </div>
-    );
+    </div>;
 }

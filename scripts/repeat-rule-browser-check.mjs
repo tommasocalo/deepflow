@@ -16,6 +16,9 @@ try {
         if (!repeat) throw new Error('Default Transformer blocks repeat is missing');
         store.openLevel([repeat.id]);
     });
+    const ribbon = page.getByRole('region', { name: /Architecture ribbon/ });
+    await ribbon.getByRole('button', { name: 'Inspect Block 1 of 12', exact: true }).click();
+    assert.equal(await page.locator('.df-iteration-bar').count(), 0, 'Repeat inspection reserves no row above the canvas');
     const ruleButton = page.getByRole('button', { name: /Select by rule/ });
     await ruleButton.waitFor();
     await ruleButton.click();
@@ -37,8 +40,9 @@ try {
     });
     assert.deepEqual(selected, [1, 3, 5, 7, 9, 11]);
     assert.equal(await page.locator('.df-iteration-strip button.is-selected').count(), 6);
-    assert.ok((await page.locator('.df-iteration-bar').boundingBox()).height < 50,
-        'The complete selected-instance toolbar fits on one row at 820px');
+    const menu = page.getByRole('dialog', { name: 'Transformer blocks instances', exact: true });
+    const bounds = await menu.boundingBox();
+    assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 820, 'Instance controls fit at 820px');
     await page.screenshot({ path: `${directory}/02-selected-820.png` });
     assert.deepEqual(errors, []);
     console.log(`Repeat rule menu, six selected instances and 1440/1024/820 screenshots passed: ${directory}`);
