@@ -115,6 +115,25 @@ function Issues({ errors, warnings }) {
     );
 }
 
+function OnnxSourceDetails({ source, operatorGraph }) {
+    if (!source?.nodeIds?.length || !operatorGraph?.nodes?.length) return null;
+    const operations = source.nodeIds.map((id) => operatorGraph.nodes.find((item) => item.id === id)).filter(Boolean);
+    if (!operations.length) return null;
+    return <details className="df-inspector-options df-inspector-onnx-source">
+        <summary title="Original ONNX operations represented by this DeepFlow block">
+            ONNX source <span>{operations.map((item) => item.opType).join(' → ')}</span>
+        </summary>
+        <ul>{operations.map((item) => <li key={item.id}>
+            <strong>{item.opType}</strong>
+            <span title={item.name}>{item.name}</span>
+            <small title={`${item.inputs.join(', ')} → ${item.outputs.join(', ')}`}>
+                {item.inputs.filter(Boolean).join(', ') || '∅'} → {item.outputs.filter(Boolean).join(', ') || '∅'}
+            </small>
+        </li>)}</ul>
+        <p>Structural mapping · weights stay in the ONNX file.</p>
+    </details>;
+}
+
 function LayerBody({ id, node, fieldErrors }) {
     const entry = getEntry(node.libraryKey);
     const patchNode = useArchitectureStore((s) => s.patchNode);
@@ -278,6 +297,8 @@ export default function NodeInspector() {
                 {node.kind === 'supernode' && <SupernodeBody id={id} node={node} />}
                 {node.kind === 'repeat' && <RepeatBody id={id} node={node} />}
                 <Issues errors={nodeErrors} warnings={warnings} />
+                {rootGraph.importSource?.provider === 'onnx' && <OnnxSourceDetails source={node.onnxSource}
+                    operatorGraph={rootGraph.importSource.operatorGraph} />}
             </div></ParameterBindingsProvider>
         </aside>
     );

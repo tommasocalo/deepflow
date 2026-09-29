@@ -146,6 +146,15 @@
 }
 .df-inspector .df-inspector-options[open] > summary::before { transform: rotate(45deg); }
 .df-inspector .df-inspector-options[open] > .df-inspector-fields { padding-top: 5px; }
+.df-inspector .df-inspector-onnx-source { margin-top: 7px; padding-top: 3px; border-top: 1px solid #e5e5e5; max-width: 100%; }
+.df-inspector .df-inspector-onnx-source > summary { cursor: pointer; white-space: nowrap; }
+.df-inspector .df-inspector-onnx-source > summary span { min-width: 0; overflow: hidden; color: #111; font-weight: 700; text-overflow: ellipsis; }
+.df-inspector .df-inspector-onnx-source > ul { display: grid; gap: 5px; margin: 5px 0 0; padding: 0; list-style: none; }
+.df-inspector .df-inspector-onnx-source li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1px 5px; min-width: 0; font-size: 9px; line-height: 12px; }
+.df-inspector .df-inspector-onnx-source li strong { font-weight: 750; }
+.df-inspector .df-inspector-onnx-source li span { min-width: 0; overflow: hidden; color: #666; text-overflow: ellipsis; white-space: nowrap; }
+.df-inspector .df-inspector-onnx-source li small { grid-column: 1 / -1; min-width: 0; overflow: hidden; color: #555; font: 9px/12px ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.df-inspector .df-inspector-onnx-source p { margin: 5px 0 0; color: #777; font-size: 9px; line-height: 12px; }
 .df-inspector .df-inspector-note { margin: 0 0 6px; font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
 .df-inspector .df-inspector-fields + .df-inspector-note { margin-top: 6px; margin-bottom: 0; font-size: 9px; }
 .df-inspector .df-inspector-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-bottom: 7px; }
