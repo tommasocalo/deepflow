@@ -72,6 +72,10 @@ try {
     assert.match(await dialog.locator('.df-onnx-operator-list').innerText(), /Gemm.*Relu/s);
     await page.screenshot({ path: `${directory}/06-saved-source-820.png` });
     await dialog.getByRole('button', { name: 'Close ONNX import' }).click();
+    await page.reload();
+    await page.waitForFunction(() => window.__deepflow?.architectureStore.getState().graph.importSource?.provider === 'onnx');
+    assert.deepEqual(await page.evaluate(() => window.__deepflow.architectureStore.getState().graph.importSource.operatorGraph.nodes.map((node) => node.opType)),
+        ['Gemm', 'Relu'], 'The original operator map survives reload');
 
     const beforeFailure = await page.evaluate(() => {
         const { architectureStore, architectureHistory, trainingStore } = window.__deepflow;
