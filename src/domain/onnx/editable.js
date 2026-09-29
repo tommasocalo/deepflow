@@ -6,7 +6,9 @@ const ACTIVATIONS = {
     Sigmoid: 'torch.nn.Sigmoid',
     Tanh: 'torch.nn.Tanh',
 };
-const ALLOWED_DTYPES = new Set(['float32', 'float16', 'bfloat16', 'float64']);
+// The generated Linear layers initialize float32 parameters; other ONNX input
+// dtypes need an explicit model dtype conversion before claiming executability.
+const ALLOWED_DTYPES = new Set(['float32']);
 const positiveDimension = (value) => Number.isSafeInteger(value) && value > 0;
 
 function sourceFor(nodes, values, initializers = []) {

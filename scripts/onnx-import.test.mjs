@@ -99,6 +99,16 @@ test('external initializer metadata can define topology without loading weights'
     assert.equal(buildEditableOnnxArchitecture(source).source.weightsLoaded, false);
 });
 
+test('float16 input is previewable but not claimed runnable through float32 Linear layers', () => {
+    const codec = protobuf.parse(ONNX_SCHEMA).root.lookupType('onnx.ModelProto');
+    const model = codec.decode(fixture('tiny-linear-relu.onnx'));
+    model.graph.input[0].type.tensorType.elemType = 10;
+    const source = readOnnxModel(codec.encode(model).finish());
+    assert.equal(source.inputs[0].dtype, 'float16');
+    assert.equal(recognizeOnnxComponents(source).supported, false);
+    assert.match(recognizeOnnxComponents(source).issues[0].message, /floating-point tensor input/);
+});
+
 test('missing optional graph name uses producer name and malformed bytes fail clearly', () => {
     const codec = protobuf.parse(ONNX_SCHEMA).root.lookupType('onnx.ModelProto');
     const model = codec.decode(fixture('tiny-linear-relu.onnx'));
