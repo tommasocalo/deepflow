@@ -66,6 +66,7 @@ try {
     await page.getByRole('button', { name: 'Import ONNX file' }).click();
     dialog = page.getByRole('dialog', { name: 'Import ONNX' });
     await dialog.getByRole('button', { name: /Inspect imported ONNX source/ }).click();
+    dialog = page.getByRole('dialog', { name: 'ONNX source' });
     await dialog.getByText('Original imported source', { exact: false }).waitFor();
     assert.equal(await dialog.getByRole('button', { name: 'Import editable graph' }).isDisabled(), true);
     assert.match(await dialog.locator('.df-onnx-operator-list').innerText(), /Gemm.*Relu/s);

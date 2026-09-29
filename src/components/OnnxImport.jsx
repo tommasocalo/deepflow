@@ -120,8 +120,9 @@ export default function OnnxImport({ open, onClose, onImport, currentSource = nu
         <div className="df-onnx-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
             <section className="df-onnx-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
                 <header className="df-onnx-header">
-                    <div><span className="df-onnx-kicker">OPERATOR GRAPH</span><h2 id={titleId}>Import ONNX</h2>
-                        <p>Inspect the real operators and their editable DeepFlow mapping before importing.</p></div>
+                    <div><span className="df-onnx-kicker">OPERATOR GRAPH</span><h2 id={titleId}>{viewingSavedSource ? 'ONNX source' : 'Import ONNX'}</h2>
+                        <p>{viewingSavedSource ? 'Original operators and the components recognized at import.'
+                            : 'Inspect the real operators and their editable DeepFlow mapping before importing.'}</p></div>
                     <button type="button" className="df-onnx-close" aria-label="Close ONNX import" onClick={onClose}><X size={17} /></button>
                 </header>
 
