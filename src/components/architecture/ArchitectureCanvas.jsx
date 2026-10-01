@@ -102,6 +102,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     const wrapperRef = useRef(null);
     const completedMarqueeRef = useRef(false);
     const lastViewportKeyRef = useRef(null);
+    const lastImportSourceRef = useRef(rootGraph.importSource);
     const mountedRef = useRef(false);
     const connectionContextRef = useRef(null);
     const reconnectRef = useRef(null);
@@ -223,6 +224,19 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
         // level until the destination's own measured nodes reach ReactFlow.
         if (!levelNodesReady) return;
         const key = viewportKey(currentPath, paneId);
+        if (lastImportSourceRef.current !== rootGraph.importSource) {
+            // Loading a model replaces the graph even when its root path and
+            // node count match the previous document. Frame the new nodes
+            // after ReactFlow has applied their positions and measurements.
+            let frame = requestAnimationFrame(() => {
+                frame = requestAnimationFrame(() => {
+                    lastImportSourceRef.current = rootGraph.importSource;
+                    lastViewportKeyRef.current = key;
+                    fitView({ padding: 0.2, minZoom: 0.2, maxZoom: 1, duration: 0 });
+                });
+            });
+            return () => cancelAnimationFrame(frame);
+        }
         if (lastViewportKeyRef.current === key) return;
         lastViewportKeyRef.current = key;
 
@@ -252,7 +266,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
         } else {
             fitView({ padding: 0.2, minZoom: 0.2, maxZoom: 1, duration: 0 });
         }
-    }, [currentPath, paneId, levelNodesReady, graphIsEmpty, setViewport, fitView]);
+    }, [currentPath, paneId, levelNodesReady, graphIsEmpty, rootGraph.importSource, setViewport, fitView]);
 
     const handleMoveEnd = useCallback(
         (_event, vp) => {

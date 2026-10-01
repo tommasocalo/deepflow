@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Code2, FolderOpen, RotateCcw, Save } from 'lucide-react';
 import { useArchitectureStore } from '../stores/architectureStore.js';
 import { useArchitectureHistory } from '../stores/architectureHistory.js';
 import { useTemplatesStore } from '../stores/templatesStore.js';
 import { useTrainingStore } from '../stores/trainingStore.js';
+import { importEditableArchitecture } from '../stores/importArchitecture.js';
+import { buildEditableOnnxArchitecture } from '../domain/onnx/editable.js';
+import OnnxImport from './OnnxImport.jsx';
 
 const TABS = [
     { id: 'architecture', label: 'Architecture' },
@@ -27,6 +30,7 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
     const trainingGraph = useTrainingStore((s) => s.graph);
     const trainingReset = useTrainingStore((s) => s.resetGraph);
     const templates = useTemplatesStore((s) => s.templates);
+    const [onnxFile, setOnnxFile] = useState(null);
 
     const handleSave = () => {
         const payload = { version: 'deepflow-v2', architecture: archGraph, templates, training: trainingGraph };
@@ -35,10 +39,14 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
     const handleLoad = () => {
         const inp = document.createElement('input');
         inp.type = 'file';
-        inp.accept = 'application/json';
+        inp.accept = '.json,.onnx,application/json';
         inp.onchange = async () => {
             const file = inp.files?.[0];
             if (!file) return;
+            if (/\.onnx$/i.test(file.name)) {
+                setOnnxFile(file);
+                return;
+            }
             try {
                 const data = JSON.parse(await file.text());
                 goToLevel(0);
@@ -50,6 +58,11 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
             }
         };
         inp.click();
+    };
+    const handleOnnxImport = (operatorGraph, fileName) => {
+        const source = importEditableArchitecture(buildEditableOnnxArchitecture(operatorGraph, { fileName }));
+        onChange('architecture');
+        return source;
     };
     const handleReset = () => {
         if (!window.confirm('Reset architecture and training graphs to empty?')) return;
@@ -79,10 +92,11 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
                 <div className="df-action-group" role="group" aria-label="Project actions">
                     <ActionSegment icon={Code2}      label="Code"  onClick={onShowCode}  title="Generated PyTorch source" />
                     <ActionSegment icon={Save}       label="Save"  onClick={handleSave}  title="Download graph as JSON" />
-                    <ActionSegment icon={FolderOpen} label="Load"  onClick={handleLoad}  title="Load a graph JSON" />
+                    <ActionSegment icon={FolderOpen} label="Load"  onClick={handleLoad}  title="Load a DeepFlow JSON or ONNX model" />
                     <ActionSegment icon={RotateCcw}  label="Reset" onClick={handleReset} title="Clear both graphs" />
                 </div>
             </div>
+            <OnnxImport open={!!onnxFile} initialFile={onnxFile} onClose={() => setOnnxFile(null)} onImport={handleOnnxImport} />
         </div>
     );
 };

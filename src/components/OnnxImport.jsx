@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, ArrowRight, Check, FileUp, LoaderCircle, X } from 'lucide-react';
 import { recognizeOnnxComponents } from '../domain/onnx/editable.js';
@@ -11,7 +11,7 @@ function countLabel(count, singular, plural = `${singular}s`) {
 }
 
 /** Inspect an operator graph before replacing the current architecture. */
-export default function OnnxImport({ open, onClose, onImport, currentSource = null }) {
+export default function OnnxImport({ open, onClose, onImport, currentSource = null, initialFile = null }) {
     const titleId = useId();
     const inputRef = useRef(null);
     const browseRef = useRef(null);
@@ -30,36 +30,7 @@ export default function OnnxImport({ open, onClose, onImport, currentSource = nu
     const [visibleOps, setVisibleOps] = useState(60);
     const [visibleIssues, setVisibleIssues] = useState(20);
 
-    useEffect(() => {
-        if (!open) return undefined;
-        const previousFocus = document.activeElement;
-        loadId.current += 1;
-        setFileName('');
-        setOperatorGraph(null);
-        setRecognition(null);
-        setReadBusy(false);
-        setImportBusy(false);
-        setReadError('');
-        setImportError('');
-        setDragging(false);
-        setViewingSavedSource(false);
-        setVisibleOps(60);
-        setVisibleIssues(20);
-        requestAnimationFrame(() => browseRef.current?.focus());
-        const onKeyDown = (event) => {
-            if (event.key === 'Escape') { event.preventDefault(); onCloseRef.current(); }
-        };
-        document.addEventListener('keydown', onKeyDown);
-        return () => {
-            loadId.current += 1;
-            document.removeEventListener('keydown', onKeyDown);
-            previousFocus?.focus?.();
-        };
-    }, [open]);
-
-    if (!open) return null;
-
-    const loadFile = async (file) => {
+    const loadFile = useCallback(async (file) => {
         if (!file) return;
         const request = ++loadId.current;
         setFileName(file.name);
@@ -91,7 +62,37 @@ export default function OnnxImport({ open, onClose, onImport, currentSource = nu
         } finally {
             if (request === loadId.current) setReadBusy(false);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        if (!open) return undefined;
+        const previousFocus = document.activeElement;
+        loadId.current += 1;
+        setFileName('');
+        setOperatorGraph(null);
+        setRecognition(null);
+        setReadBusy(false);
+        setImportBusy(false);
+        setReadError('');
+        setImportError('');
+        setDragging(false);
+        setViewingSavedSource(false);
+        setVisibleOps(60);
+        setVisibleIssues(20);
+        if (initialFile) void loadFile(initialFile);
+        requestAnimationFrame(() => browseRef.current?.focus());
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') { event.preventDefault(); onCloseRef.current(); }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            loadId.current += 1;
+            document.removeEventListener('keydown', onKeyDown);
+            previousFocus?.focus?.();
+        };
+    }, [open, initialFile, loadFile]);
+
+    if (!open) return null;
 
     const confirmImport = async () => {
         if (!operatorGraph || !recognition?.supported || importBusy || viewingSavedSource) return;

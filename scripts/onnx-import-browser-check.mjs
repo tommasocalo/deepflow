@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
@@ -13,25 +13,28 @@ try {
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(process.env.URL ?? 'http://127.0.0.1:4183/');
-    await page.getByRole('button', { name: 'Import ONNX file' }).waitFor();
+    await page.getByRole('button', { name: 'Load', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Import ONNX file' }).count(), 0, 'ONNX is a Load format, not an Insert item');
+    const loadFile = async (file) => {
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Load', exact: true }).click();
+        await (await chooser).setFiles(file);
+    };
     const before = await page.evaluate(() => JSON.stringify(window.__deepflow.architectureStore.getState().graph));
-    await page.getByRole('button', { name: 'Import ONNX file' }).click();
+    await page.screenshot({ path: `${directory}/01-load-in-toolbar-1440.png` });
+    await loadFile(fixture('tiny-unsupported.onnx'));
     let dialog = page.getByRole('dialog', { name: 'Import ONNX' });
-    await dialog.getByText('Two views of the same model').waitFor();
-    await page.screenshot({ path: `${directory}/01-empty-1440.png` });
-
-    await dialog.getByLabel('Choose an ONNX file').setInputFiles(fixture('tiny-conv.onnx'));
     await dialog.getByText('Operator view only').waitFor();
     assert.equal(await dialog.getByRole('button', { name: 'Import editable graph' }).isDisabled(), true);
-    assert.match(await dialog.innerText(), /Conv.*no editable mapping/s);
+    assert.match(await dialog.innerText(), /Abs.*no editable mapping/s);
     assert.equal(await page.evaluate(() => JSON.stringify(window.__deepflow.architectureStore.getState().graph)), before);
-    await page.screenshot({ path: `${directory}/02-unmapped-conv-1440.png` });
+    await page.screenshot({ path: `${directory}/02-unmapped-abs-1440.png` });
 
     await dialog.getByLabel('Choose an ONNX file').setInputFiles(fixture('tiny-linear-relu.onnx'));
     await dialog.getByText('Editable mapping complete').waitFor();
     assert.equal(await dialog.getByRole('button', { name: 'Import editable graph' }).isEnabled(), true);
     assert.match(await dialog.locator('.df-onnx-operator-list').innerText(), /Gemm.*Relu/s);
-    assert.match(await dialog.locator('.df-onnx-component-list').innerText(), /Linear.*Relu/s);
+    assert.match(await dialog.locator('.df-onnx-component-list').innerText(), /Linear.*ReLU/s);
     assert.match(await dialog.innerText(), /All 2 operators mapped/);
     await page.screenshot({ path: `${directory}/03-mapped-preview-1440.png` });
     await page.setViewportSize({ width: 820, height: 900 });
@@ -55,6 +58,10 @@ try {
     assert.deepEqual(imported.keys, ['deepflow.io.Input', 'torch.nn.Linear', 'torch.nn.ReLU', 'deepflow.io.Output']);
     assert.equal(imported.edges, 3);
     assert.equal(imported.trainingNodes, 0);
+    await page.waitForFunction(() => [...document.querySelectorAll('.react-flow__node')].every((node) => {
+        const bounds = node.getBoundingClientRect();
+        return bounds.left >= 0 && bounds.right <= window.innerWidth && bounds.top >= 0 && bounds.bottom <= window.innerHeight;
+    }));
     await page.getByRole('button', { name: 'Inspect dense' }).click();
     const sourceDetails = page.locator('details.df-inspector-onnx-source');
     await sourceDetails.waitFor();
@@ -63,19 +70,14 @@ try {
     assert.match(await sourceDetails.innerText(), /dense.*x, W, b/s);
     await page.screenshot({ path: `${directory}/05-imported-node-820.png` });
 
-    await page.getByRole('button', { name: 'Import ONNX file' }).click();
-    dialog = page.getByRole('dialog', { name: 'Import ONNX' });
-    await dialog.getByRole('button', { name: /Inspect imported ONNX source/ }).click();
-    dialog = page.getByRole('dialog', { name: 'ONNX source' });
-    await dialog.getByText('Original imported source', { exact: false }).waitFor();
-    assert.equal(await dialog.getByRole('button', { name: 'Import editable graph' }).isDisabled(), true);
-    assert.match(await dialog.locator('.df-onnx-operator-list').innerText(), /Gemm.*Relu/s);
-    await page.screenshot({ path: `${directory}/06-saved-source-820.png` });
-    await dialog.getByRole('button', { name: 'Close ONNX import' }).click();
     await page.reload();
     await page.waitForFunction(() => window.__deepflow?.architectureStore.getState().graph.importSource?.provider === 'onnx');
     assert.deepEqual(await page.evaluate(() => window.__deepflow.architectureStore.getState().graph.importSource.operatorGraph.nodes.map((node) => node.opType)),
         ['Gemm', 'Relu'], 'The original operator map survives reload');
+    await page.getByRole('button', { name: 'Inspect dense' }).click();
+    await sourceDetails.locator('summary').click();
+    assert.match(await sourceDetails.innerText(), /dense.*x, W, b/s);
+    await page.screenshot({ path: `${directory}/06-source-after-reload-820.png` });
 
     const beforeFailure = await page.evaluate(() => {
         const { architectureStore, architectureHistory, trainingStore } = window.__deepflow;
@@ -86,9 +88,8 @@ try {
         return { graph: JSON.stringify(architectureStore.getState().graph), canUndo: architectureHistory.getState().canUndo };
     });
     assert.equal(beforeFailure.canUndo, true);
-    await page.getByRole('button', { name: 'Import ONNX file' }).click();
+    await loadFile(fixture('tiny-linear-relu.onnx'));
     dialog = page.getByRole('dialog', { name: 'Import ONNX' });
-    await dialog.getByLabel('Choose an ONNX file').setInputFiles(fixture('tiny-linear-relu.onnx'));
     await dialog.getByText('Editable mapping complete').waitFor();
     await dialog.getByRole('button', { name: 'Import editable graph' }).click();
     await dialog.getByText(/Injected ONNX import failure/).waitFor();
@@ -100,6 +101,31 @@ try {
         delete window.__onnxOriginalTrainingReset;
     });
     await dialog.getByRole('button', { name: 'Close ONNX import' }).click();
+
+    // Save/Load still round-trips DeepFlow projects through the same button.
+    const saved = await page.evaluate(() => ({
+        architecture: window.__deepflow.architectureStore.getState().graph,
+        templates: window.__deepflow.templatesStore.getState().templates,
+        training: window.__deepflow.trainingStore.getState().graph,
+    }));
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    const download = await downloadPromise;
+    const downloadPath = await download.path();
+    await page.evaluate(() => {
+        const state = window.__deepflow.architectureStore.getState();
+        state.moveNode('onnx-mapped:1', { x: -2000, y: 3000 });
+    });
+    await loadFile({ name: 'deepflow-graph.json', mimeType: 'application/json', buffer: await readFile(downloadPath) });
+    await page.waitForFunction((expected) => JSON.stringify(window.__deepflow.architectureStore.getState().graph) === expected, JSON.stringify(saved.architecture));
+    assert.deepEqual(await page.evaluate(() => ({
+        architecture: window.__deepflow.architectureStore.getState().graph,
+        templates: window.__deepflow.templatesStore.getState().templates,
+        training: window.__deepflow.trainingStore.getState().graph,
+    })), saved, 'DeepFlow JSON still restores architecture, templates and training');
+    assert.equal(await page.evaluate(() => window.__deepflow.architectureHistory.getState().canUndo), false);
+    assert.equal(await page.getByRole('dialog', { name: 'Import ONNX' }).count(), 0);
+    await page.screenshot({ path: `${directory}/08-json-loaded-820.png` });
 
     assert.deepEqual(errors, [], `Browser errors: ${errors.join('\n')}`);
     process.stdout.write('ONNX import browser check passed.\n');
