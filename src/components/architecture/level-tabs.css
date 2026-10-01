@@ -1,42 +1,14 @@
-.df-level-control { position: absolute; top: 12px; right: 12px; z-index: 45; max-width: min(230px, calc(100% - 135px)); color: #171717; font-size: 11px; }
-.df-level-trigger { display: flex; align-items: center; gap: 6px; width: max-content; max-width: 100%; min-height: 28px; padding: 4px 6px 4px 7px; border: 1px solid #777; border-radius: 3px; background: rgb(255 255 255 / 96%); font-size: 11px; font-weight: 700; box-shadow: 1px 1px 0 #111; }
-.df-level-trigger:hover, .df-level-trigger[aria-expanded="true"] { border-color: #111; background: #fff8db; }
-.df-level-trigger:focus-visible, .df-level-control button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-.df-level-trigger-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.df-level-trigger > svg { flex: none; }
-.df-level-trigger > svg:last-child { margin-left: 2px; transition: transform 120ms ease; }
-.df-level-trigger > svg:last-child.is-open { transform: rotate(180deg); }
-.df-level-count { flex: none; color: #666; font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.df-level-panel { position: absolute; top: calc(100% + 5px); right: 0; width: min(325px, calc(100cqw - 24px)); max-height: min(450px, calc(100dvh - 210px)); overflow: auto; border: 1.5px solid #111; border-radius: 3px; background: #fff; box-shadow: 3px 3px 0 #111; }
-.df-level-panel-header { display: flex; align-items: center; justify-content: space-between; min-height: 29px; padding: 4px 7px 4px 10px; border-bottom: 1px solid #deded8; color: #555; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-.df-level-panel-header button { display: grid; place-items: center; width: 20px; height: 20px; }
-.df-level-panel-header button:hover { background: #f0f0ea; }
-.df-level-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 8px 9px; border-bottom: 1px solid #deded8; font-size: 11px; }
-.df-level-crumb { display: inline-flex; align-items: center; gap: 3px; min-width: 0; }
-.df-level-crumb > span { color: #999; }
-.df-level-crumb button { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; }
-.df-level-crumb button:hover { text-decoration: underline; color: #111; }
-.df-level-crumb button[aria-current="page"] { color: #111; font-weight: 800; }
-.df-level-panel-subtitle { display: flex; justify-content: space-between; padding: 7px 10px 4px; color: #777; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-.df-level-row { display: flex; align-items: stretch; min-height: 43px; margin: 0 5px 3px; border: 1px solid transparent; border-radius: 2px; }
-.df-level-row:hover { border-color: #deded8; background: #fafaf7; }
-.df-level-row.is-active { border-color: #111; background: #fff9e4; }
-.df-level-entry { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 5px 6px; text-align: left; }
-.df-level-entry > svg { flex: none; }
-.df-level-entry-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
-.df-level-entry-text strong, .df-level-entry-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.df-level-entry-text strong { font-size: 11px; font-weight: 700; }
-.df-level-entry-text small { color: #777; font-size: 9px; }
-.df-level-row-action { display: grid; place-items: center; align-self: center; flex: none; width: 25px; height: 25px; color: #555; }
-.df-level-row-action:hover { background: #eaeae4; color: #111; }
-.df-level-row-close:hover { color: #b91c1c; }
-.df-architecture-split.is-split .df-level-control { right: 8px; max-width: min(190px, calc(100% - 120px)); }
-.df-architecture-split.is-split .df-level-panel { width: min(310px, calc(100cqw - 20px)); }
-.df-architecture-split.is-split [data-graph-pane="side"] .df-level-control { right: 42px; max-width: min(180px, calc(100% - 130px)); }
-@media (max-width: 700px) { .df-level-control { top: 8px; right: 8px; max-width: min(185px, calc(100% - 118px)); } .df-level-panel { width: min(300px, calc(100cqw - 16px)); } }
-.df-architecture-split.is-split [data-graph-pane="side"] .df-level-panel { width: min(310px, calc(100cqw - 52px)); }
-@container (max-width: 350px) {
-    .df-level-control { top: 46px; max-width: calc(100cqw - 20px); }
-    .df-architecture-split.is-split .df-level-control { max-width: calc(100cqw - 20px); }
-    .df-architecture-split.is-split [data-graph-pane="side"] .df-level-control { max-width: calc(100cqw - 52px); }
-}
+/* Open level cards stay attached to the canvas, independently of selection. */
+.df-levels { display: flex; align-items: stretch; flex-shrink: 0; gap: 5px; height: 32px; padding: 0 12px; background: #fff; border-bottom: 1px solid #e3e3dc; overflow-x: auto; scrollbar-width: thin; }
+.df-level-card { position: relative; display: inline-flex; align-items: stretch; flex-shrink: 0; height: 31px; min-width: 64px; border: 0; border-radius: 0; background: transparent; color: #777; }
+.df-level-card.is-active { color: #111; }
+.df-level-card.is-active::after { content: ''; position: absolute; left: 7px; right: 7px; bottom: -1px; height: 2px; background: #111; pointer-events: none; }
+.df-level-card:not(.is-active):hover { background: #f8f8f4; color: #111; }
+.df-level-tab { display: inline-flex; align-items: center; justify-content: flex-start; flex: 1; min-width: 0; height: 31px; padding: 0 9px; gap: 5px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+.df-level-card.is-active .df-level-tab { font-weight: 700; }
+.df-level-tab > svg { flex: none; }
+.df-level-label { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.df-level-count { padding-left: 2px; color: #777; font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.df-level-close { display: grid; place-items: center; align-self: center; flex-shrink: 0; width: 19px; height: 19px; margin: 0 4px 0 -3px; border-radius: 1px; color: #777; opacity: .55; }
+.df-level-close:hover, .df-level-close:focus-visible { opacity: 1; background: #edede8; color: #111; }
+.df-level-tab:focus-visible, .df-level-close:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }

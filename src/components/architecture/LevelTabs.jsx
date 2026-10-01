@@ -1,32 +1,51 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Boxes, ChevronDown, Columns2, Home, Repeat, X } from 'lucide-react';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Boxes, Home, Repeat, X } from 'lucide-react';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { resolveLevelContext } from '../../hooks/useValidation.js';
-import { useOpenToSide, useOpenToSideMenu } from './OpenToSideContext.jsx';
+import { useOpenToSideMenu } from './OpenToSideContext.jsx';
 import './level-tabs.css';
 
-function LevelRow({ card, active, onOpen, onClose, onOpenToSide }) {
-    const sideMenu = useOpenToSideMenu(card.path);
+function LevelCard({ card, active, onOpen, onClose }) {
+    const menuProps = useOpenToSideMenu(card.path);
     const Icon = card.kind === 'root' ? Home : card.kind === 'repeat' ? Repeat : Boxes;
-    return <div className={`df-level-row${active ? ' is-active' : ''}`}>
-        <button type="button" className="df-level-entry" aria-current={active ? 'page' : undefined}
-            aria-keyshortcuts={sideMenu['aria-keyshortcuts']} onClick={() => onOpen(card.path)}
-            onContextMenu={sideMenu.onContextMenu} onKeyDown={sideMenu.onKeyDown}
-            title={card.title}>
-            <Icon size={14} strokeWidth={2.2} aria-hidden="true" />
-            <span className="df-level-entry-text"><strong>{card.label}</strong><small>{card.title}</small></span>
-            {card.count != null && <span className="df-level-count">× {card.count}</span>}
-        </button>
-        {onOpenToSide && <button type="button" className="df-level-row-action" onClick={() => onOpenToSide(card.path)}
-            aria-label={`Open ${card.label} to the side`} title="Open to the side"><Columns2 size={14} aria-hidden="true" /></button>}
-        {onClose && <button type="button" className="df-level-row-action df-level-row-close" onClick={() => onClose(card.path)}
-            aria-label={`Close ${card.label}`} title="Close level"><X size={14} aria-hidden="true" /></button>}
-    </div>;
+    return (
+        <div className={`df-level-card${active ? ' is-active' : ''}`} onContextMenu={menuProps.onContextMenu}>
+            <button
+                type="button"
+                role="tab"
+                aria-selected={active}
+                tabIndex={active ? 0 : -1}
+                aria-keyshortcuts={menuProps['aria-keyshortcuts']}
+                className="df-level-tab"
+                onClick={() => onOpen(card.path)}
+                onKeyDown={menuProps.onKeyDown}
+                title={card.title}
+            >
+                <Icon size={12} strokeWidth={2.5} aria-hidden="true" />
+                <span className="df-level-label">{card.label}</span>
+                {card.count != null && <span className="df-level-count">× {card.count}</span>}
+            </button>
+            {onClose && (
+                <button
+                    type="button"
+                    className="df-level-close"
+                    onClick={() => onClose(card.path)}
+                    aria-label={`Close ${card.label}`}
+                    title="Close"
+                >
+                    <X size={11} strokeWidth={3} />
+                </button>
+            )}
+        </div>
+    );
 }
 
-/** A compact per-pane switcher; open graph levels remain independent of the active view. */
+/**
+ * Open graph views stay in the strip independently of the active view.
+ * Selecting main or another supernode does not close any cards.
+ */
 export default function LevelTabs() {
     const rootGraph = useArchitectureStore((s) => s.graph);
     const currentPath = useArchitectureStore((s) => s.currentPath);
@@ -35,19 +54,14 @@ export default function LevelTabs() {
     const templates = useTemplatesStore((s) => s.templates);
     const openLevel = useArchitectureStore((s) => s.openLevel);
     const closeLevel = useArchitectureStore((s) => s.closeLevel);
-    const openToSide = useOpenToSide();
-    const sideMenu = useOpenToSideMenu(currentPath);
-    const [expanded, setExpanded] = useState(false);
-    const controlRef = useRef(null);
-    const triggerRef = useRef(null);
-    const panelId = useId();
+    const stripRef = useRef(null);
 
     const activeKey = JSON.stringify(currentPath);
     const cards = useMemo(() => {
         const rootLabel = rootGraph.importSource?.displayName
             || rootGraph.importSource?.repoId?.split('/').at(-1)
             || 'main';
-        const views = [{ key: '[]', path: [], label: rootLabel, kind: 'root', title: rootLabel }];
+        const views = [{ key: '[]', path: [], label: rootLabel, kind: 'root', title: `Top level · ${rootLabel}` }];
         for (const path of openPaths ?? []) {
             const level = resolveGraphLevel(rootGraph, path, templates, inspectedIterations);
             if (level.isRoot) continue;
@@ -63,71 +77,29 @@ export default function LevelTabs() {
         }
         return views;
     }, [rootGraph, openPaths, templates, inspectedIterations]);
-    const current = cards.find((card) => card.key === activeKey) ?? cards[0];
-    const currentLevel = resolveGraphLevel(rootGraph, currentPath, templates, inspectedIterations);
-    const crumbs = [cards[0], ...currentLevel.segments.map((segment, index) => ({
-        key: JSON.stringify(currentPath.slice(0, index + 1)),
-        path: currentPath.slice(0, index + 1),
-        label: segment.label,
-    }))];
 
     useEffect(() => {
-        if (!expanded) return undefined;
-        const dismiss = (event) => { if (!controlRef.current?.contains(event.target)) setExpanded(false); };
-        document.addEventListener('pointerdown', dismiss, true);
-        return () => document.removeEventListener('pointerdown', dismiss, true);
-    }, [expanded]);
+        stripRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }, [activeKey]);
 
-    const show = (focusFirst = false) => {
-        setExpanded(true);
-        if (focusFirst) requestAnimationFrame(() => controlRef.current?.querySelector('.df-level-entry')?.focus({ preventScroll: true }));
-    };
-    const hide = (restoreFocus = false) => {
-        setExpanded(false);
-        if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
-    };
-    const navigate = (path) => { openLevel(path); hide(true); };
-    const closeView = (path) => {
-        const wasCurrent = JSON.stringify(path) === activeKey;
+    const closeCard = (path) => {
         closeLevel(path);
-        if (wasCurrent) hide(true);
+        requestAnimationFrame(() => stripRef.current?.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true }));
     };
-    const openSide = (path) => { openToSide?.(path); hide(); };
 
-    return <div ref={controlRef} className="df-level-control nodrag nopan nowheel" data-level-control
-        onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setExpanded(false); }}
-        onKeyDown={(event) => {
-            if (event.key === 'Escape' && expanded) { event.preventDefault(); event.stopPropagation(); hide(true); }
+    return (
+        <div ref={stripRef} className="df-levels" role="tablist" aria-label="Open levels" onKeyDown={(event) => {
+            if (event.target.getAttribute('role') !== 'tab' || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')];
+            const index = tabs.indexOf(event.target);
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+            tabs[next]?.focus();
+            tabs[next]?.click();
         }}>
-        <button ref={triggerRef} type="button" className="df-level-trigger" data-level-trigger
-            aria-label={`Current level: ${current.title}. Show open levels`}
-            aria-haspopup="dialog" aria-expanded={expanded} aria-controls={expanded ? panelId : undefined}
-            title={current.title} onClick={() => setExpanded((value) => !value)}
-            onContextMenu={sideMenu.onContextMenu} onKeyDown={(event) => {
-                sideMenu.onKeyDown(event);
-                if (!event.defaultPrevented && event.key === 'ArrowDown') { event.preventDefault(); show(true); }
-            }}>
-            {current.kind === 'root' ? <Home size={13} strokeWidth={2.4} aria-hidden="true" />
-                : current.kind === 'repeat' ? <Repeat size={13} strokeWidth={2.4} aria-hidden="true" />
-                    : <Boxes size={13} strokeWidth={2.4} aria-hidden="true" />}
-            <span className="df-level-trigger-name">{current.label}</span>
-            {current.count != null && <span className="df-level-count">× {current.count}</span>}
-            <ChevronDown size={12} strokeWidth={2.4} className={expanded ? 'is-open' : ''} aria-hidden="true" />
-        </button>
-        {expanded && <div id={panelId} className="df-level-panel" role="dialog" aria-label="Open levels">
-            <div className="df-level-panel-header"><span>Current level</span><button type="button" aria-label="Close levels menu" onClick={() => hide(true)}><X size={13} aria-hidden="true" /></button></div>
-            <div className="df-level-breadcrumb" aria-label="Current level path">
-                {crumbs.map((crumb, index) => <span key={crumb.key} className="df-level-crumb">
-                    {index > 0 && <span aria-hidden="true">/</span>}
-                    <button type="button" aria-current={index === crumbs.length - 1 ? 'page' : undefined}
-                        onClick={() => navigate(crumb.path)}>{crumb.label}</button>
-                </span>)}
-            </div>
-            <div className="df-level-panel-list" aria-label="Open views">
-                <div className="df-level-panel-subtitle">Open views <span>{cards.length}</span></div>
-                {cards.map((card, index) => <LevelRow key={card.key} card={card} active={card.key === activeKey}
-                    onOpen={navigate} onClose={index ? closeView : null} onOpenToSide={openToSide ? openSide : null} />)}
-            </div>
-        </div>}
-    </div>;
+            {cards.map((card, i) => (
+                <LevelCard key={card.key} card={card} active={card.key === activeKey} onOpen={openLevel} onClose={i > 0 ? closeCard : null} />
+            ))}
+        </div>
+    );
 }
