@@ -1,7 +1,8 @@
-/** Read-only Hugging Face Hub client. Only JSON metadata and config are fetched. */
+/** Read-only Hugging Face Hub client for metadata, config and bounded ONNX graphs. */
 const HUB = 'https://huggingface.co';
 const REPO_PART = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const SHA = /^[a-f0-9]{40,64}$/i;
+export const MAX_HUB_ONNX_BYTES = 64 * 1024 * 1024;
 
 export class HubRequestError extends Error {
     constructor(message, status = null) {
@@ -45,7 +46,7 @@ async function jsonRequest(url, { signal, fetchImpl = fetch } = {}) {
         throw new HubRequestError('Hugging Face is unreachable. Check the connection and try again.');
     }
     if (!response.ok) {
-        const message = response.status === 404 ? 'Model or config.json not found on Hugging Face.'
+        const message = response.status === 404 ? 'Model or requested file not found on Hugging Face.'
             : [401, 403].includes(response.status) ? 'This repository is private or gated. Public access is required.'
                 : response.status === 429 ? 'Hugging Face rate limit reached. Try again shortly.'
                     : `Hugging Face returned HTTP ${response.status}.`;
@@ -91,8 +92,8 @@ export async function searchHubModels(query, { cursor = null, limit = 20, signal
     };
 }
 
-/** Resolve the requested ref to a commit before loading its config.json. */
-export async function fetchHubModelConfig(reference, { signal, fetchImpl } = {}) {
+/** Resolve the requested ref once; all subsequent downloads use this commit. */
+export async function fetchHubModelMetadata(reference, { signal, fetchImpl } = {}) {
     const ref = typeof reference === 'string' ? parseModelReference(reference) : reference;
     if (!ref || !validModelId(ref.repoId)) throw new HubRequestError('Enter a valid Hugging Face model ID or URL.');
     const revision = ref.revision || 'main';
@@ -102,14 +103,14 @@ export async function fetchHubModelConfig(reference, { signal, fetchImpl } = {})
     const { value: metadata } = await jsonRequest(detailUrl, { signal, fetchImpl });
     if (!metadata || !SHA.test(metadata.sha)) throw new HubRequestError('The model revision could not be pinned to a commit.');
     if (metadata.private || metadata.gated) throw new HubRequestError('This repository is private or gated. Public access is required.');
-    const configUrl = `${HUB}/${idPath}/resolve/${metadata.sha}/config.json`;
-    const { value: config } = await jsonRequest(configUrl, { signal, fetchImpl });
-    if (!config || typeof config !== 'object' || Array.isArray(config)) throw new HubRequestError('This config.json is not a model configuration.');
     return {
-        repoId: metadata.id || ref.repoId,
+        repoId: validModelId(metadata.id) ? metadata.id : ref.repoId,
         requestedRevision: revision,
         commit: metadata.sha,
-        config,
+        files: (Array.isArray(metadata.siblings) ? metadata.siblings : []).filter((file) => validHubFilePath(file.rfilename)).map((file) => ({
+            path: file.rfilename, size: Number.isSafeInteger(file.size) && file.size >= 0 ? file.size
+                : Number.isSafeInteger(file.lfs?.size) && file.lfs.size >= 0 ? file.lfs.size : null,
+        })),
         metadata: {
             downloads: Number.isFinite(metadata.downloads) ? metadata.downloads : null,
             pipelineTag: metadata.pipeline_tag ?? null,
@@ -118,4 +119,79 @@ export async function fetchHubModelConfig(reference, { signal, fetchImpl } = {})
         },
         url: `${HUB}/${idPath}/tree/${metadata.sha}`,
     };
+}
+
+function validHubFilePath(path) {
+    return typeof path === 'string' && path.length > 0 && !path.includes('\\')
+        && [...path].every((char) => char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127)
+        && path.split('/').every((part) => part && part !== '.' && part !== '..');
+}
+
+function pinnedFileUrl(preview, path) {
+    if (!validModelId(preview?.repoId) || !SHA.test(preview?.commit) || !validHubFilePath(path)) {
+        throw new HubRequestError('The file must belong to a pinned Hugging Face revision.');
+    }
+    const repo = preview.repoId.split('/').map(encodeURIComponent).join('/');
+    return `${HUB}/${repo}/resolve/${preview.commit}/${path.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+/** Missing config is allowed only for the architecture bridge (ONNX-only repos). */
+export async function fetchHubModelConfig(reference, { signal, fetchImpl, allowMissingConfig = false } = {}) {
+    const preview = await fetchHubModelMetadata(reference, { signal, fetchImpl });
+    let config;
+    try { ({ value: config } = await jsonRequest(pinnedFileUrl(preview, 'config.json'), { signal, fetchImpl })); }
+    catch (error) {
+        if (allowMissingConfig && error.status === 404) return { ...preview, config: null };
+        throw error;
+    }
+    if (!config || typeof config !== 'object' || Array.isArray(config)) throw new HubRequestError('This config.json is not a model configuration.');
+    return { ...preview, config };
+}
+
+/** Download only a listed ONNX graph, cancelling the stream at the byte limit. */
+export async function fetchHubOnnxFile(preview, path, { signal, fetchImpl = fetch } = {}) {
+    const file = preview?.files?.find((item) => item.path === path && /\.onnx$/i.test(item.path));
+    if (!file) throw new HubRequestError('Choose an ONNX file listed in this model revision.');
+    const sizeError = () => new HubRequestError('This ONNX graph exceeds the 64 MiB browser import limit. Export the graph with external tensor data, then load that smaller .onnx file.');
+    if (file.size > MAX_HUB_ONNX_BYTES) throw sizeError();
+    const url = pinnedFileUrl(preview, path);
+    let response;
+    try { response = await fetchImpl(url, { signal, headers: { Accept: 'application/octet-stream' } }); }
+    catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        throw new HubRequestError('The ONNX graph could not be downloaded from Hugging Face. Check the connection and try again.');
+    }
+    if (!response.ok) {
+        throw new HubRequestError([401, 403].includes(response.status)
+            ? 'This ONNX file is private or gated. Public access is required.'
+            : `The ONNX download returned HTTP ${response.status}.`, response.status);
+    }
+    const length = Number(response.headers?.get('Content-Length'));
+    if (length > MAX_HUB_ONNX_BYTES) {
+        await response.body?.cancel?.();
+        throw sizeError();
+    }
+    if (!response.body?.getReader) throw new HubRequestError('The ONNX download did not provide a readable file.');
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+    try {
+        while (true) {
+            if (signal?.aborted) throw new DOMException('The ONNX download was cancelled.', 'AbortError');
+            const { value, done } = await reader.read();
+            if (done) break;
+            total += value.byteLength;
+            if (total > MAX_HUB_ONNX_BYTES) throw sizeError();
+            chunks.push(value);
+        }
+    } catch (error) {
+        await reader.cancel().catch(() => {});
+        if (error?.name === 'AbortError' || error instanceof HubRequestError) throw error;
+        throw new HubRequestError('The ONNX download was interrupted. Try again.');
+    } finally { reader.releaseLock(); }
+    if (!total) throw new HubRequestError('The ONNX file is empty.');
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return bytes;
 }
