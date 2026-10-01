@@ -1,6 +1,6 @@
 /* Repeat controls live in Structure and consume no canvas height. */
 .df-ribbon-instance-button { flex: 0 0 124px; width: 124px; min-width: 124px; }
-.df-ribbon-instance-button > span { max-width: 100%; min-width: 0; font: 800 10px/1.1 ui-monospace, monospace; }
+.df-ribbon-instance-button > span { max-width: 100%; min-width: 0; }
 .df-ribbon-instance-label { overflow: hidden; text-overflow: ellipsis; }
 .df-ribbon-instance-button > span > svg, .df-ribbon-instance-button .df-iteration-button-error { flex-shrink: 0; }
 .df-ribbon-instance-button.is-local { background: #fff6cf; }

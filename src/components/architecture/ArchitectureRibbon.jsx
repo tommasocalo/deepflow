@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Layers, Maximize, Redo2, Ruler, Search, Undo2, Variable, X } from 'lucide-react';
+import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Redo2, Ruler, Search, Undo2, Variable, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { importHuggingFaceArchitecture } from '../../domain/huggingFace/index.js';
 import { effectiveTemplateId, inspectedInstanceIndex } from '../../domain/architecture/instanceStructure.js';
@@ -23,6 +23,14 @@ function RepeatIcon({ parallel }) {
     return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" aria-hidden="true">
         {parallel ? <><path d="M12 2v3H4v4m8-4h8v4M4 15v4h16v-4m-8 4v3" /><rect x="1" y="9" width="6" height="6" rx="1" /><rect x="17" y="9" width="6" height="6" rx="1" /></>
             : <><rect x="7" y="1" width="10" height="6" rx="1" /><rect x="7" y="17" width="10" height="6" rx="1" /><path d="M12 8v7m-3-3 3 3 3-3" /></>}
+    </svg>;
+}
+function InstancesIcon() {
+    return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" aria-hidden="true">
+        <rect x="3" y="3" width="6" height="6" rx="1" fill="currentColor" />
+        <rect x="15" y="3" width="6" height="6" rx="1" />
+        <rect x="3" y="15" width="6" height="6" rx="1" />
+        <rect x="15" y="15" width="6" height="6" rx="1" />
     </svg>;
 }
 function RibbonButton({ icon: Icon, children, className = '', ...props }) {
@@ -240,7 +248,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                     disabled={!repeat} aria-label={repeat ? `Inspect ${RepeatNoun} ${repeat.index + 1} of ${repeat.count}` : 'Inspect instances'}
                     aria-expanded={!!repeat && popup === 'instances'} aria-haspopup="dialog" onClick={(event) => togglePopup('instances', event)}
                     title={repeat ? `Inspect ${repeat.label}: ${RepeatNoun} ${repeat.index + 1} of ${repeat.count}` : 'Open a sequential or parallel component to inspect its instances'}>
-                    <Layers size={19} strokeWidth={1.8} aria-hidden="true" />
+                    <InstancesIcon />
                     <span><span className="df-ribbon-instance-label">{repeat ? `${RepeatNoun} ${repeat.index + 1}/${repeat.count}` : 'Instances'}</span><ChevronDown size={10} aria-hidden="true" />{repeat && repeatEditError?.pathKey === JSON.stringify(repeat.path) && <b className="df-iteration-button-error" aria-label="Instance edit error">!</b>}</span>
                 </button>
             </RibbonGroup>
