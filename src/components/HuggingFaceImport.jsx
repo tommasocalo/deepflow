@@ -193,6 +193,8 @@ export default function HuggingFaceImport({ open, onClose, onImport, currentArch
                         onClick={() => openDirect({ repoId: 'google-bert/bert-base-uncased' }, 'google-bert/bert-base-uncased')}>
                         BERT masked LM <ArrowRight size={12} aria-hidden="true" />
                     </button>
+                    <button type="button" aria-pressed={selectedId === 'vtemplier/LeNet_MNIST'}
+                        onClick={() => openDirect({ repoId: 'vtemplier/LeNet_MNIST' }, 'vtemplier/LeNet_MNIST')}>LeNet vision</button>
                 </div>
 
                 <div className="df-hf-body">

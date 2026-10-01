@@ -34,7 +34,7 @@ try {
     await dialog.getByText('Editable mapping complete').waitFor();
     assert.equal(await dialog.getByRole('button', { name: 'Import editable graph' }).isEnabled(), true);
     assert.match(await dialog.locator('.df-onnx-operator-list').innerText(), /Gemm.*Relu/s);
-    assert.match(await dialog.locator('.df-onnx-component-list').innerText(), /Linear.*ReLU/s);
+    assert.match(await dialog.locator('.df-onnx-component-list').innerText(), /Linear.*Relu/s);
     assert.match(await dialog.innerText(), /All 2 operators mapped/);
     await page.screenshot({ path: `${directory}/03-mapped-preview-1440.png` });
     await page.setViewportSize({ width: 820, height: 900 });
