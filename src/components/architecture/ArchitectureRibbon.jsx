@@ -217,6 +217,8 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const targetLabel = split ? `${paneId === 'side' ? 'Right' : 'Left'} pane` : 'Current graph';
     const menu = ['operations', 'components', 'templates'].includes(popup);
     const popoverStyle = popupPosition;
+    // A removed repeat context must not leave a popup waiting to reopen later.
+    if (popup === 'instances' && !repeat) setPopup(null);
 
     return <div ref={ribbonRef} className="df-architecture-ribbon" role="region" aria-label={`Architecture ribbon — ${targetLabel}`} data-active-pane={paneId}
         onKeyDown={(event) => { if (event.key === 'Escape' && popup) { event.preventDefault(); event.stopPropagation(); closePopup(true); } }}>
@@ -234,13 +236,13 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 <RibbonButton icon={Group} disabled={selection.length < 2} aria-label="Group selection into component" aria-expanded={popup === 'group' && selection.length > 1} onClick={(event) => { setGroupName('Component'); togglePopup('group', event); }} title={selection.length > 1 ? 'Group selected blocks into a reusable component' : 'Select at least two blocks to group'}>Group</RibbonButton>
                 <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection sequentially" aria-pressed={selectedRepeatMode === 'sequential'} onClick={() => repeatSelection('sequential')} title={selectedRepeatMode === 'sequential' ? 'Return to a single instance' : 'Repeat in sequence; each output feeds the next'}><RepeatIcon /><span>Sequential</span></button>
                 <button type="button" className="df-ribbon-button" disabled={!selection.length} aria-label="Repeat selection in parallel" aria-pressed={selectedRepeatMode === 'parallel'} onClick={() => repeatSelection('parallel')} title={selectedRepeatMode === 'parallel' ? 'Return to a single instance' : 'Repeat in parallel; combine outputs with Concat, Add or Stack'}><RepeatIcon parallel /><span>Parallel</span></button>
-                {repeat && <button type="button" className={`df-ribbon-button df-ribbon-instance-button${validationContext?.levels?.at(-1)?.instance?.structureOverrides?.[String(repeat.index)]?.enabled ? ' is-local' : ''}`}
-                    aria-label={`Inspect ${RepeatNoun} ${repeat.index + 1} of ${repeat.count}`}
-                    aria-expanded={popup === 'instances'} aria-haspopup="dialog" onClick={(event) => togglePopup('instances', event)}
-                    title={`Inspect ${repeat.label}: ${RepeatNoun} ${repeat.index + 1} of ${repeat.count}`}>
+                <button type="button" className={`df-ribbon-button df-ribbon-instance-button${repeat && validationContext?.levels?.at(-1)?.instance?.structureOverrides?.[String(repeat.index)]?.enabled ? ' is-local' : ''}`}
+                    disabled={!repeat} aria-label={repeat ? `Inspect ${RepeatNoun} ${repeat.index + 1} of ${repeat.count}` : 'Inspect instances'}
+                    aria-expanded={!!repeat && popup === 'instances'} aria-haspopup="dialog" onClick={(event) => togglePopup('instances', event)}
+                    title={repeat ? `Inspect ${repeat.label}: ${RepeatNoun} ${repeat.index + 1} of ${repeat.count}` : 'Open a sequential or parallel component to inspect its instances'}>
                     <Layers size={19} strokeWidth={1.8} aria-hidden="true" />
-                    <span>{RepeatNoun} {repeat.index + 1}/{repeat.count} <ChevronDown size={10} aria-hidden="true" />{repeatEditError?.pathKey === JSON.stringify(repeat.path) && <b className="df-iteration-button-error" aria-label="Instance edit error">!</b>}</span>
-                </button>}
+                    <span><span className="df-ribbon-instance-label">{repeat ? `${RepeatNoun} ${repeat.index + 1}/${repeat.count}` : 'Instances'}</span><ChevronDown size={10} aria-hidden="true" />{repeat && repeatEditError?.pathKey === JSON.stringify(repeat.path) && <b className="df-iteration-button-error" aria-label="Instance edit error">!</b>}</span>
+                </button>
             </RibbonGroup>
             <RibbonGroup label="Parameters" className="df-ribbon-component">
                 <RibbonButton icon={Variable} aria-label="Edit parameters" aria-expanded={popup === 'parameters'} aria-haspopup="dialog" onClick={(event) => togglePopup('parameters', event)} title="Edit global parameters or parameters of the current component">Parameters <ChevronDown size={10} /></RibbonButton>

@@ -1,0 +1,53 @@
+[
+  {
+    "viewport": 1440,
+    "disabled": {
+      "x": 531,
+      "width": 124,
+      "parametersX": 676,
+      "labelWidth": 54,
+      "labelContentWidth": 54
+    },
+    "active": {
+      "x": 531,
+      "width": 124,
+      "parametersX": 676,
+      "labelWidth": 60,
+      "labelContentWidth": 60
+    }
+  },
+  {
+    "viewport": 1024,
+    "disabled": {
+      "x": 449.828125,
+      "width": 124,
+      "parametersX": 586.828125,
+      "labelWidth": 54,
+      "labelContentWidth": 54
+    },
+    "active": {
+      "x": 449.828125,
+      "width": 124,
+      "parametersX": 586.828125,
+      "labelWidth": 60,
+      "labelContentWidth": 60
+    }
+  },
+  {
+    "viewport": 820,
+    "disabled": {
+      "x": 449.828125,
+      "width": 124,
+      "parametersX": 586.828125,
+      "labelWidth": 54,
+      "labelContentWidth": 54
+    },
+    "active": {
+      "x": 449.828125,
+      "width": 124,
+      "parametersX": 586.828125,
+      "labelWidth": 60,
+      "labelContentWidth": 60
+    }
+  }
+]

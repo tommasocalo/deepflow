@@ -1,6 +1,8 @@
 /* Repeat controls live in Structure and consume no canvas height. */
-.df-ribbon-instance-button { min-width: 86px; }
-.df-ribbon-instance-button > span { font: 800 10px/1.1 ui-monospace, monospace; }
+.df-ribbon-instance-button { flex: 0 0 124px; width: 124px; min-width: 124px; }
+.df-ribbon-instance-button > span { max-width: 100%; min-width: 0; font: 800 10px/1.1 ui-monospace, monospace; }
+.df-ribbon-instance-label { overflow: hidden; text-overflow: ellipsis; }
+.df-ribbon-instance-button > span > svg, .df-ribbon-instance-button .df-iteration-button-error { flex-shrink: 0; }
 .df-ribbon-instance-button.is-local { background: #fff6cf; }
 .df-ribbon-instance-button .df-iteration-button-error { color: #aa1d14; }
 .df-iteration-popover { overflow-y: auto; }
@@ -68,4 +70,3 @@
 .df-iteration-apply select { box-sizing: border-box; min-height: 27px; min-width: 100px; max-width: 145px; padding: 2px 19px 2px 6px; border: 1px solid #111; border-radius: 2px; background: #fff; font-size: 10px; font-weight: 800; }
 .df-iteration-apply select:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
 .df-iteration-edit-error { margin: 0; padding-top: 7px; color: #aa1d14; font-size: 10px; font-weight: 800; }
-@media (max-width: 930px) { .df-ribbon-instance-button { min-width: 70px; } }
