@@ -297,7 +297,7 @@ export default function NodeInspector() {
                 {node.kind === 'supernode' && <SupernodeBody id={id} node={node} />}
                 {node.kind === 'repeat' && <RepeatBody id={id} node={node} />}
                 <Issues errors={nodeErrors} warnings={warnings} />
-                {rootGraph.importSource?.provider === 'onnx' && <OnnxSourceDetails source={node.onnxSource}
+                {rootGraph.importSource?.operatorGraph && <OnnxSourceDetails source={node.onnxSource}
                     operatorGraph={rootGraph.importSource.operatorGraph} />}
             </div></ParameterBindingsProvider>
         </aside>

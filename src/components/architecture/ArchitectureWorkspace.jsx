@@ -68,7 +68,7 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
                     href={`https://huggingface.co/${importSource.repoId}/tree/${encodeURIComponent(importSource.commit)}`}
                     target="_blank" rel="noopener noreferrer"
                     aria-label={`View imported Hugging Face source ${importSource.repoId}`}
-                    title={`Imported from ${importSource.repoId} at ${importSource.commit}. Configuration only; weights were not loaded.`}>
+                    title={`Imported from ${importSource.repoId} at ${importSource.commit}${importSource.fileName ? ` · ${importSource.fileName}` : ''}. Architecture only; weights were not loaded.`}>
                     <span>Architecture from Hugging Face · </span>
                     <strong className="df-import-source-full">{importSource.repoId}</strong>
                     <strong className="df-import-source-short">{importSource.repoId.split('/').at(-1)}</strong>
