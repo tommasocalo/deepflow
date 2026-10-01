@@ -83,9 +83,11 @@ export function generateArchitectureModule(graph, { templates = {}, className = 
     const outputRefs = plan.outputRefs ?? [];
     const finalExpr = outputRefs.length > 1
         ? outputRefs.map((id) => exprFor(id)).join(', ')
-        : plan.finalId
-            ? exprFor(plan.finalId)
-            : (plan.items.length ? exprFor(plan.items[plan.items.length - 1].id) : 'x');
+        : outputRefs.length === 1
+            ? exprFor(outputRefs[0])
+            : plan.finalId
+                ? exprFor(plan.finalId)
+                : (plan.items.length ? exprFor(plan.items[plan.items.length - 1].id) : 'x');
 
     const init = initLines.length
         ? initLines.join('\n')
@@ -380,12 +382,15 @@ function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, exte
         outRef[nodeId] = id;
     }
     let finalId = null;
-    const outputRefs = [];
+    // Root output order is part of the model interface, independent of the
+    // scheduling order of branches in the graph.
+    const outputRefs = Object.values(graph.nodes)
+        .filter((node) => node.kind === 'layer' && node.libraryKey === 'deepflow.io.Output')
+        .map((node) => outRef[node.id] ?? unique(node.id));
     for (const nodeId of order) {
         const node = graph.nodes[nodeId];
         if (!node) continue;
         if ((adjacency.out[nodeId]?.length ?? 0) === 0) finalId = outRef[nodeId] ?? unique(nodeId);
-        if (node.kind === 'layer' && node.libraryKey === 'deepflow.io.Output') outputRefs.push(outRef[nodeId] ?? unique(nodeId));
         if (node.kind === 'layer' && node.libraryKey === 'deepflow.template.Output') finalId = outRef[nodeId] ?? unique(nodeId);
     }
     const output = Object.values(graph.nodes).filter((node) => node.libraryKey === 'deepflow.template.Output').at(-1);
