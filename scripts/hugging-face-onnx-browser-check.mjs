@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile, mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { activeLevelCard } from './level-navigation-browser-helper.mjs';
 
 const directory = 'screenshots/hugging-face-onnx';
 await mkdir(directory, { recursive: true });
@@ -65,7 +66,7 @@ try {
     assert.equal(imported.fanOut, true);
     await page.getByRole('button', { name: 'Fit active graph', exact: true }).click();
     await page.waitForTimeout(350);
-    assert.match(await page.locator('[data-level-trigger]').innerText(), /residual-cnn/);
+    assert.match(await activeLevelCard(page.locator('[data-graph-pane="main"]')).innerText(), /residual-cnn/);
     await page.screenshot({ path: `${directory}/02-imported-cnn-1440.png` });
     await page.reload();
     await page.waitForFunction(() => window.__deepflow?.architectureStore.getState().graph.importSource?.intermediateFormat === 'onnx');

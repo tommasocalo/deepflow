@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { levelTrigger, selectLevel } from './level-navigation-browser-helper.mjs';
+import { activeLevelCard, selectLevel } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/editor-controls';
 await mkdir(directory, { recursive: true });
@@ -187,7 +187,7 @@ try {
     assert.equal(await labels(side).count(), 0);
     assert.equal(await side.locator('.df-gradient-edge--flow').count(), 2, 'Hiding shape labels does not hide gradient paths');
     await dimensions.click();
-    await levelTrigger(main).focus();
+    await activeLevelCard(main).focus();
     assert.equal(await dimensions.getAttribute('aria-pressed'), 'false');
     assert.equal(await gradients.getAttribute('aria-pressed'), 'true');
     assert.deepEqual(await document(), beforeDisplay);

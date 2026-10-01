@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { levelTrigger, selectLevel } from './level-navigation-browser-helper.mjs';
+import { activeLevelCard, selectLevel } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/open-to-side';
 await mkdir(directory, { recursive: true });
@@ -75,7 +75,7 @@ try {
     assert.ok((await root()).nodes[repeat.id], 'Inactive main selection is not deleted');
 
     // Cards can open the same level in both views; data remains shared.
-    await levelTrigger(main).click({ button: 'right' });
+    await activeLevelCard(main).click({ button: 'right' });
     await page.getByRole('menuitem', { name: /Open to the side/ }).click();
     await side.getByRole('button', { name: 'Inspect tokens', exact: true }).click();
     await side.getByRole('textbox', { name: 'Block name', exact: true }).fill('shared tokens');

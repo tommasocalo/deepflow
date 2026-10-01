@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { levelTrigger } from './level-navigation-browser-helper.mjs';
+import { activeLevelCard } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/structure-scope';
 await mkdir(directory, { recursive: true });
@@ -21,7 +21,7 @@ try {
     const graph = () => page.evaluate(() => window.__deepflow.architectureStore.getState().getViewGraph());
     const currentScope = () => page.evaluate(() => window.__deepflow.architectureStore.getState().getStructureScope());
     const openInstances = async (pane = main) => {
-        await levelTrigger(pane).focus();
+        await activeLevelCard(pane).focus();
         const trigger = ribbon.locator('.df-ribbon-instance-button');
         if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
     };
@@ -113,7 +113,7 @@ try {
     assert.equal(await ribbon.getByRole('spinbutton', { name: 'Inspected instance number', exact: true }).inputValue(), '1');
     await checked(true, side);
     assert.equal(await ribbon.getByRole('spinbutton', { name: 'Inspected instance number', exact: true }).inputValue(), '2');
-    await levelTrigger(main).focus();
+    await activeLevelCard(main).focus();
     await checked(false);
     assert.equal(await ribbon.getAttribute('data-active-pane'), 'main');
     await screenshot('03-independent-pane-scopes-1440');

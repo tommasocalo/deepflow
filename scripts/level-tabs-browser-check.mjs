@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { levelEntry, levelTrigger, openLevelMenu, selectLevel } from './level-navigation-browser-helper.mjs';
+import { activeLevelCard, levelCard, levelCards, selectLevel } from './level-navigation-browser-helper.mjs';
 
-const directory = 'screenshots/compact-level-navigation';
+const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/restored-level-cards';
 await mkdir(directory, { recursive: true });
 const browser = await chromium.launch();
 try {
@@ -15,130 +15,105 @@ try {
 
     const main = page.locator('[data-graph-pane="main"]');
     const open = main.getByRole('button', { name: 'Open Transformer blocks', exact: true });
-    const trigger = levelTrigger(main);
+    const cards = levelCards(main);
     const settle = async () => {
         await page.evaluate(() => document.fonts.ready);
         await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     };
+    const assertHeaderFits = async (pane) => {
+        const bounds = await Promise.all([pane.boundingBox(), pane.locator('.df-graph-pane-header').boundingBox()]);
+        assert.ok(bounds[1].x >= bounds[0].x && bounds[1].x + bounds[1].width <= bounds[0].x + bounds[0].width + 1,
+            'The persistent card strip fits inside its pane');
+        assert.equal(await pane.locator('.df-iteration-panel, .df-iteration-bar').count(), 0,
+            'Instance controls do not reserve a row beside the level cards or canvas');
+    };
 
-    assert.equal(await main.locator('.df-graph-pane-header, .df-levels').count(), 0, 'The full-width level strip is gone');
-    assert.match(await trigger.getAttribute('aria-label'), /Current level: main/);
+    await open.waitFor();
+    assert.equal(await main.locator('.df-graph-pane-header').count(), 1, 'Level cards have their own persistent strip');
+    assert.equal(await cards.getByRole('tab').count(), 1);
+    assert.equal(await levelCard(main, 'main').getAttribute('aria-selected'), 'true');
     await open.click();
     await main.getByRole('button', { name: 'Inspect mlp fc', exact: true }).waitFor();
-    assert.match(await trigger.getAttribute('aria-label'), /Transformer blocks/);
+    assert.match(await activeLevelCard(main).innerText(), /Transformer blocks/);
     await selectLevel(main, 'main');
     await open.waitFor();
-    let menu = await openLevelMenu(main);
-    assert.equal(await levelEntry(menu, 'Transformer blocks').count(), 1, 'Returning to main retains the open level');
-    assert.equal(await levelEntry(menu, 'main').getAttribute('aria-current'), 'page');
-    assert.equal(await levelEntry(menu, 'Transformer blocks').getAttribute('aria-current'), null);
+    assert.equal(await levelCard(main, 'Transformer blocks').count(), 1, 'Returning to main retains the open card');
+    assert.equal(await levelCard(main, 'main').getAttribute('aria-selected'), 'true');
+    assert.equal(await levelCard(main, 'Transformer blocks').getAttribute('aria-selected'), 'false');
+    await assertHeaderFits(main);
     await settle();
-    await page.screenshot({ path: `${directory}/01-main-menu-1440.png` });
-    await menu.getByRole('button', { name: 'Close levels menu', exact: true }).click();
-    await trigger.focus();
-    await trigger.press('ArrowDown');
-    menu = main.getByRole('dialog', { name: 'Open levels', exact: true });
-    assert.equal(await levelEntry(menu, 'main').evaluate((element) => element === document.activeElement), true,
-        'ArrowDown opens the menu and focuses its first level');
-    await page.keyboard.press('Tab');
-    assert.equal(await menu.isVisible(), true, 'Keyboard Tab can reach actions inside the level menu');
-    await page.keyboard.press('Escape');
-    assert.equal(await menu.count(), 0);
-    await page.waitForFunction(() => document.activeElement === document.querySelector('[data-graph-pane="main"] [data-level-trigger]'));
-    menu = await openLevelMenu(main);
+    await page.screenshot({ path: `${directory}/01-main-cards-1440.png` });
 
-    await levelEntry(menu, 'Transformer blocks').click();
+    await activeLevelCard(main).focus();
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await levelCard(main, 'Transformer blocks').getAttribute('aria-selected'), 'true', 'Arrow keys navigate the cards');
+    assert.equal(await activeLevelCard(main).evaluate((element) => element === document.activeElement), true);
+    await page.keyboard.press('Home');
+    assert.equal(await levelCard(main, 'main').getAttribute('aria-selected'), 'true', 'Home selects the root card');
+    await page.keyboard.press('End');
     await main.getByRole('button', { name: 'Inspect mlp fc', exact: true }).click();
     await page.getByRole('textbox', { name: 'Block name', exact: true }).fill('MLP projection');
     await page.getByRole('button', { name: 'Close inspector', exact: true }).click();
     await selectLevel(main, 'main');
     await page.getByRole('button', { name: 'Training', exact: true }).click();
     await page.getByRole('button', { name: 'Architecture', exact: true }).click();
-    menu = await openLevelMenu(main);
-    assert.equal(await levelEntry(menu, 'Transformer blocks').count(), 1, 'Changing workspaces preserves the open level');
+    assert.equal(await levelCard(main, 'Transformer blocks').count(), 1, 'Changing workspaces preserves the open card');
     await page.setViewportSize({ width: 820, height: 900 });
+    await assertHeaderFits(main);
     await settle();
-    await page.screenshot({ path: `${directory}/02-main-menu-820.png` });
-    await menu.getByRole('button', { name: 'Close levels menu', exact: true }).click();
+    await page.screenshot({ path: `${directory}/02-main-cards-820.png` });
 
     await page.reload();
     await open.waitFor();
-    menu = await openLevelMenu(main);
-    assert.equal(await levelEntry(menu, 'Transformer blocks').count(), 1, 'Open levels persist across reloads');
-    await levelEntry(menu, 'Transformer blocks').click();
+    assert.equal(await levelCard(main, 'Transformer blocks').count(), 1, 'Open cards persist across reloads');
+    await selectLevel(main, 'Transformer blocks');
     await main.getByRole('button', { name: 'Inspect MLP projection', exact: true }).waitFor();
     await selectLevel(main, 'main');
-    menu = await openLevelMenu(main);
-    await menu.getByRole('button', { name: 'Close Transformer blocks', exact: true }).click();
-    assert.equal(await levelEntry(menu, 'Transformer blocks').count(), 0);
-    assert.equal(await levelEntry(menu, 'main').getAttribute('aria-current'), 'page', 'Closing an inactive level leaves the view alone');
-    await menu.getByRole('button', { name: 'Close levels menu', exact: true }).click();
+    await cards.getByRole('button', { name: 'Close Transformer blocks', exact: true }).click();
+    assert.equal(await levelCard(main, 'Transformer blocks').count(), 0);
+    assert.equal(await levelCard(main, 'main').getAttribute('aria-selected'), 'true', 'Closing an inactive card leaves the current view alone');
 
     await open.click();
     await selectLevel(main, 'main');
     await open.click();
-    menu = await openLevelMenu(main);
-    assert.equal(await levelEntry(menu, 'Transformer blocks').count(), 1, 'Reopening does not duplicate an existing level');
-    await menu.getByRole('button', { name: 'Open Transformer blocks to the side', exact: true }).click();
+    assert.equal(await levelCard(main, 'Transformer blocks').count(), 1, 'Reopening does not duplicate a card');
+    await selectLevel(main, 'main');
+    await levelCard(main, 'Transformer blocks').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: /Open to the side/ }).click();
     const side = page.locator('[data-graph-pane="side"]');
-    await side.waitFor();
-    assert.match(await levelTrigger(side).getAttribute('aria-label'), /Transformer blocks/, 'The side pane exposes its own current level');
-    assert.match(await trigger.getAttribute('aria-label'), /main/, 'The main pane retains its own current level');
-    menu = await openLevelMenu(side);
-    const bounds = await Promise.all([side.boundingBox(), menu.boundingBox()]);
-    assert.ok(bounds[1].x >= bounds[0].x && bounds[1].x + bounds[1].width <= bounds[0].x + bounds[0].width,
-        'The level menu fits inside a narrow side pane');
+    await side.getByRole('button', { name: 'Inspect MLP projection', exact: true }).waitFor();
+    assert.match(await activeLevelCard(side).innerText(), /Transformer blocks/, 'The side pane has its own active card');
+    assert.match(await activeLevelCard(main).innerText(), /^main$/, 'The main pane retains its active root card');
+    await assertHeaderFits(main);
+    await assertHeaderFits(side);
     await settle();
-    await page.screenshot({ path: `${directory}/03-split-menu-820.png` });
+    await page.screenshot({ path: `${directory}/03-split-cards-820.png` });
     const divider = page.getByRole('separator', { name: 'Resize graph panes', exact: true });
     await divider.focus();
     await divider.press('End');
-    menu = await openLevelMenu(side);
-    let paneBounds = await side.boundingBox();
-    let menuBounds = await menu.boundingBox();
-    assert.ok(menuBounds.x >= paneBounds.x && menuBounds.x + menuBounds.width <= paneBounds.x + paneBounds.width,
-        'The menu fits when the side pane is 30% wide');
-    const statusBounds = await side.locator('.df-graph-status-trigger').boundingBox();
-    const triggerBounds = await levelTrigger(side).boundingBox();
-    assert.ok(triggerBounds.y >= statusBounds.y + statusBounds.height || triggerBounds.x >= statusBounds.x + statusBounds.width,
-        'The compact level control does not cover graph status in the narrow pane');
+    await assertHeaderFits(side);
+    await selectLevel(side, 'main');
+    assert.match(await activeLevelCard(main).innerText(), /^main$/, 'Side navigation keeps the main card selected');
+    assert.equal(await levelCard(side, 'Transformer blocks').count(), 1, 'The side pane also retains inactive cards');
+    await selectLevel(side, 'Transformer blocks');
     await settle();
-    await page.screenshot({ path: `${directory}/04-narrow-side-menu-820.png` });
-    await menu.getByRole('button', { name: 'Close levels menu', exact: true }).click();
-    await side.getByRole('button', { name: 'Inspect MLP projection', exact: true }).click();
-    await settle();
-    const overlap = await side.locator('.df-inspector').evaluate((panel) => {
-        const a = panel.getBoundingClientRect();
-        const b = panel.closest('.df-architecture-body').querySelector('.df-level-trigger').getBoundingClientRect();
-        return Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left))
-            * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
-    });
-    assert.equal(overlap, 0, 'The inspector avoids the level control in a 30% side pane');
-    await page.screenshot({ path: `${directory}/04b-inspector-narrow-side-820.png` });
-    await side.getByRole('button', { name: 'Close inspector', exact: true }).click();
+    await page.screenshot({ path: `${directory}/04-narrow-side-cards-820.png` });
     await divider.focus();
     await divider.press('Home');
-    menu = await openLevelMenu(main);
-    paneBounds = await main.boundingBox();
-    menuBounds = await menu.boundingBox();
-    assert.ok(menuBounds.x >= paneBounds.x && menuBounds.x + menuBounds.width <= paneBounds.x + paneBounds.width,
-        'The menu fits when the main pane is 30% wide');
-    await settle();
-    await page.screenshot({ path: `${directory}/05-narrow-main-menu-820.png` });
+    await assertHeaderFits(main);
     await side.getByRole('button', { name: 'Close side view', exact: true }).click();
     await selectLevel(main, 'Transformer blocks');
     await settle();
-    await page.screenshot({ path: `${directory}/06-reopened-level-820.png` });
+    await page.screenshot({ path: `${directory}/05-reopened-level-820.png` });
 
     await page.getByRole('button', { name: 'Examples', exact: true }).click();
     await page.getByRole('button', { name: /^DANN / }).click();
     await main.getByRole('button', { name: 'Inspect feature extractor', exact: true }).waitFor();
-    menu = await openLevelMenu(main);
-    assert.equal(await menu.locator('.df-level-entry').count(), 1, 'Replacing the architecture clears old open levels');
-    assert.equal(await levelEntry(menu, 'main').getAttribute('aria-current'), 'page');
+    assert.equal(await cards.getByRole('tab').count(), 1, 'Replacing the architecture clears old open cards');
+    assert.equal(await levelCard(main, 'main').getAttribute('aria-selected'), 'true');
 
     assert.deepEqual(errors, []);
-    console.log('Compact level menu passed: persistence, editing, closing, split panes, narrow layout and architecture replacement.');
+    console.log('Level cards passed: persistence, keyboard navigation, editing, closing, independent panes, narrow layout and architecture replacement.');
 } finally {
     await browser.close();
 }

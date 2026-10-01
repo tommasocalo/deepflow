@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { levelEntry, levelTrigger, openLevelMenu, selectLevel } from './level-navigation-browser-helper.mjs';
+import { levelCard, activeLevelCard, selectLevel } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? '/tmp/deepflow-ribbon';
 await mkdir(directory, { recursive: true });
@@ -122,9 +122,8 @@ try {
     const component = await selected();
     await main.locator(`.react-flow__node[data-id="${component.id}"]`).getByRole('button', { name: `Open ${component.label}`, exact: true }).click();
     assert.deepEqual(await page.evaluate(() => window.__deepflow.architectureStore.getState().currentPath), [component.id]);
-    const levelMenu = await openLevelMenu(main);
-    assert.equal(await levelEntry(levelMenu, 'Ribbon component').getAttribute('aria-current'), 'page');
-    await levelMenu.locator('.df-level-breadcrumb button').first().click();
+    assert.equal(await levelCard(main, 'Ribbon component').getAttribute('aria-selected'), 'true');
+    await selectLevel(main, 'main');
     assert.deepEqual(await page.evaluate(() => window.__deepflow.architectureStore.getState().currentPath), []);
     await main.locator(`.react-flow__node[data-id="${component.id}"] .df-repeat-face`).click();
     await ribbon.getByRole('button', { name: 'Open to the side', exact: true }).click();
@@ -157,7 +156,7 @@ try {
     assert.equal(await ribbon.getByRole('button', { name: 'Show gradient flow' }).getAttribute('aria-pressed'), 'true');
     await selectLevel(main, 'main');
     assert.equal(await ribbon.getByRole('button', { name: 'Show gradient flow' }).getAttribute('aria-pressed'), 'false', 'Gradient visibility is local to each pane');
-    await levelTrigger(side).focus();
+    await activeLevelCard(side).focus();
     await page.screenshot({ path: `${directory}/split-ribbon.png` });
     const viewport = (pane) => pane.locator('.react-flow__viewport').evaluate((element) => {
         const matrix = new DOMMatrix(getComputedStyle(element).transform);
@@ -172,7 +171,7 @@ try {
     await page.setViewportSize({ width: 1024, height: 900 });
     assert.equal(await ribbon.evaluate((element) => element.scrollWidth <= element.clientWidth), true, 'Insert catalog fits at laptop width');
     assert.deepEqual(errors, []);
-    console.log(`Ribbon checks passed: compact level navigation, anchored distinct menus, editable components, repeat modes, parameters, pane-aware insert/gradient/fit, cross-pane drag, and keyboard search. Screenshots: ${directory}`);
+    console.log(`Ribbon checks passed: persistent level cards, anchored distinct menus, editable components, repeat modes, parameters, pane-aware insert/gradient/fit, cross-pane drag, and keyboard search. Screenshots: ${directory}`);
 } finally {
     await browser.close();
 }

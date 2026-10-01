@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { levelEntry, levelTrigger, openLevelMenu, selectLevel } from './level-navigation-browser-helper.mjs';
+import { levelCard, activeLevelCard, selectLevel } from './level-navigation-browser-helper.mjs';
 
 const directory = process.env.SCREENSHOT_DIR ?? 'screenshots/parameter-flow';
 await mkdir(directory, { recursive: true });
@@ -52,15 +52,13 @@ try {
     await instance.fill('137');
     assert.equal(await ribbon.getByRole('button', { name: 'Inspect Head 137 of 200', exact: true }).count(), 1);
     const main = page.locator('[data-graph-pane="main"]');
-    assert.match(await levelTrigger(main).innerText(), /Attention heads\s*×\s*200/, 'The current level shows the resolved automatic count');
+    assert.match(await activeLevelCard(main).innerText(), /Attention heads\s*×\s*200/, 'The current level shows the resolved automatic count');
     assert.equal(await page.evaluate(() => Object.values(window.__deepflow.architectureStore.getState().inspectedIterations).at(-1)), 136);
     await fit();
     await page.screenshot({ path: `${directory}/03-inspect-instance-137.png` });
 
     await selectLevel(main, 'Multi-head attention');
-    const levels = await openLevelMenu(main);
-    assert.match(await levelEntry(levels, 'Attention heads').innerText(), /×\s*200/, 'The resolved count remains visible for an inactive level');
-    await levels.getByRole('button', { name: 'Close levels menu', exact: true }).click();
+    assert.match(await levelCard(main, 'Attention heads').innerText(), /×\s*200/, 'The resolved count remains visible for an inactive level');
     await page.getByRole('button', { name: 'Open Q projection', exact: true }).click();
     await fit();
     await page.getByRole('button', { name: 'Inspect weight', exact: true }).click();

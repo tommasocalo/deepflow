@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { levelEntry, openLevelMenu, selectLevel } from './level-navigation-browser-helper.mjs';
+import { levelCard, selectLevel } from './level-navigation-browser-helper.mjs';
 
 const browser = await chromium.launch();
 try {
@@ -57,7 +57,7 @@ try {
     await selectLevel(main, 'Second instance');
     await waitView('main', secondView);
 
-    await levelEntry(await openLevelMenu(main), 'Transformer blocks').click({ button: 'right' });
+    await levelCard(main, 'Transformer blocks').click({ button: 'right' });
     await page.getByRole('menuitem', { name: /Open to the side/ }).click();
     await side.getByRole('button', { name: 'Inspect mlp fc', exact: true }).waitFor();
     await side.locator('.react-flow__controls-zoomin').click();
