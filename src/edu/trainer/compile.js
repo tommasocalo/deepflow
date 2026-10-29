@@ -155,7 +155,9 @@ export function compileModel({ graph, templates = {} } = {}) {
 
 function expandLevel(graph, scope, ctx, { prefix, externalInputs, externalShapes, depth, report: givenReport, rootNode, path }) {
     const { issues, templates } = ctx;
-    const error = (code, message, extra = {}) => issues.push({ severity: 'error', code, message, ...extra });
+    const error = (code, message, extra = {}) => {
+        if (!issues.some((issue) => issue.message === message)) issues.push({ severity: 'error', code, message, ...extra });
+    };
     if (depth > MAX_DEPTH) {
         error('invalid-graph', `Components are nested more than ${MAX_DEPTH} levels deep.`);
         return { finalRef: null, finalShape: null };
