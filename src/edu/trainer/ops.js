@@ -34,29 +34,39 @@ export function matmulNN(a, b, n, k, m, out = new Float64Array(n * m)) {
     return out;
 }
 
-/** out (n×m) = a (n×k) · bᵀ, with b stored as (m×k): one transposed copy of b, then the NN kernel. */
+/**
+ * out (n×m) = a (n×k) · bᵀ, with b stored as (m×k): a transposed copy of b, then the NN kernel. The copy goes into a
+ * reused scratch buffer (matmulNN never keeps it), because large typed-array allocations are slow in browsers. A
+ * dot-product kernel over the two contiguous rows avoids the copy but is slower in V8: its sum is one serial chain.
+ */
+let scratch = new Float64Array(0);
 export function matmulNT(a, b, n, k, m, out = new Float64Array(n * m)) {
-    return matmulNN(a, transposeData(b, m, k), n, k, m, out);
+    if (scratch.length < k * m) scratch = new Float64Array(k * m);
+    const transposed = scratch;
+    for (let i = 0; i < m; i++) {
+        const row = i * k;
+        for (let j = 0; j < k; j++) transposed[j * m + i] = b[row + j];
+    }
+    return matmulNN(a, transposed, n, k, m, out);
 }
 
-/** out (n×m) += aᵀ · b, with a stored as (k×n) and b as (k×m). Four rows of a and b per pass. */
+/**
+ * out (n×m) += aᵀ · b, with a stored as (k×n) and b as (k×m). Four rows of a and b per pass, then the remaining
+ * rows. The output row is the outer loop so it stays in cache; every element still sums its terms in p order.
+ */
 export function matmulTN(a, b, k, n, m, out = new Float64Array(n * m)) {
-    let p = 0;
-    for (; p + 3 < k; p += 4) {
-        const a0 = p * n, a1 = a0 + n, a2 = a1 + n, a3 = a2 + n;
-        const b0 = p * m, b1 = b0 + m, b2 = b1 + m, b3 = b2 + m;
-        for (let i = 0; i < n; i++) {
-            const x0 = a[a0 + i], x1 = a[a1 + i], x2 = a[a2 + i], x3 = a[a3 + i];
-            const oi = i * m;
+    const tail = k - (k % 4);
+    for (let i = 0; i < n; i++) {
+        const oi = i * m;
+        let p = 0;
+        for (; p < tail; p += 4) {
+            const x0 = a[p * n + i], x1 = a[(p + 1) * n + i], x2 = a[(p + 2) * n + i], x3 = a[(p + 3) * n + i];
+            const b0 = p * m, b1 = b0 + m, b2 = b1 + m, b3 = b2 + m;
             for (let j = 0; j < m; j++) out[oi + j] += (x0 * b[b0 + j] + x1 * b[b1 + j]) + (x2 * b[b2 + j] + x3 * b[b3 + j]);
         }
-    }
-    for (; p < k; p++) {
-        const ap = p * n;
-        const bp = p * m;
-        for (let i = 0; i < n; i++) {
-            const av = a[ap + i];
-            const oi = i * m;
+        for (; p < k; p++) {
+            const av = a[p * n + i];
+            const bp = p * m;
             for (let j = 0; j < m; j++) out[oi + j] += av * b[bp + j];
         }
     }
@@ -137,27 +147,51 @@ export function transpose(x, tape) {
 
 function broadcastPlan(inputs) {
     const shape = broadcastShapes(inputs.map((t) => t.shape));
-    return { shape, size: numel(shape), maps: inputs.map((t) => broadcastIndex(t.shape, shape)) };
+    return { shape, size: numel(shape), maps: inputs.map((t) => broadcastIndex(t.shape, shape)), periods: inputs.map((t) => suffixPeriod(t.shape, shape)) };
 }
 
-/** Reduce a gradient over the broadcast axes back to the input's shape. */
-function reduceTo(g, map, size) {
+/**
+ * When `shape` matches the trailing axes of `outShape` exactly (a bias (M) against (B, M)), the broadcast index of
+ * flat position i is i % period, with period = numel(shape). Null otherwise, including equal shapes.
+ */
+function suffixPeriod(shape, outShape) {
+    if (shape.length >= outShape.length) return null;
+    const offset = outShape.length - shape.length;
+    for (let axis = 0; axis < shape.length; axis++) if (shape[axis] !== outShape[axis + offset]) return null;
+    return numel(shape);
+}
+
+/** Reduce a gradient over the broadcast axes back to the input's shape (sums in flat order, as the map loop). */
+function reduceTo(g, map, size, period = null) {
     if (!map) return Float64Array.from(g);
     const out = new Float64Array(size);
+    if (period) {
+        for (let base = 0; base < g.length; base += period) for (let c = 0; c < period; c++) out[c] += g[base + c];
+        return out;
+    }
     for (let i = 0; i < g.length; i++) out[map[i]] += g[i];
     return out;
 }
 
+/** out[i] += data[broadcast(i)] for one input of an element-wise op. */
+function accumulateInput(out, data, map, period) {
+    const size = out.length;
+    if (!map) {
+        for (let i = 0; i < size; i++) out[i] += data[i];
+    } else if (period) {
+        for (let base = 0; base < size; base += period) for (let c = 0; c < period; c++) out[base + c] += data[c];
+    } else {
+        for (let i = 0; i < size; i++) out[i] += data[map[i]];
+    }
+}
+
 /** deepflow.op.Add: n inputs, NumPy broadcasting, summed in input order. */
 export function add(inputs, tape) {
-    const { shape, size, maps } = broadcastPlan(inputs);
+    const { shape, size, maps, periods } = broadcastPlan(inputs);
     const out = new Float64Array(size);
-    inputs.forEach((t, k) => {
-        const data = t.data, map = maps[k];
-        for (let i = 0; i < size; i++) out[i] += data[map ? map[i] : i];
-    });
+    for (let k = 0; k < inputs.length; k++) accumulateInput(out, inputs[k].data, maps[k], periods[k]);
     return record(tape, new Tensor(shape, out), inputs, (g) => {
-        inputs.forEach((t, k) => { if (needs(t)) adopt(t, reduceTo(g, maps[k], t.size)); });
+        for (let k = 0; k < inputs.length; k++) if (needs(inputs[k])) adopt(inputs[k], reduceTo(g, maps[k], inputs[k].size, periods[k]));
     });
 }
 
@@ -217,7 +251,21 @@ export const addScalar = (x, value, tape) => unary(x, tape, (v) => v + value, ()
 export const pow = (x, exponent, tape) => unary(x, tape, (v) => Math.pow(v, exponent), (v) => exponent * Math.pow(v, exponent - 1));
 export const exp = (x, tape) => unary(x, tape, Math.exp, (_v, y) => y);
 export const rsqrt = (x, tape) => unary(x, tape, (v) => 1 / Math.sqrt(v), (_v, y) => -0.5 * y * y * y);
-export const relu = (x, tape) => unary(x, tape, (v) => (v > 0 ? v : 0), (v) => (v > 0 ? 1 : 0));
+/** ReLU has its own loops: it runs in almost every lesson model, and a shared `unary` call site is megamorphic. */
+export function relu(x, tape) {
+    const n = x.size;
+    const data = x.data;
+    const out = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+        const v = data[i];
+        out[i] = v > 0 ? v : 0;
+    }
+    return record(tape, new Tensor([...x.shape], out), [x], (g) => {
+        const gx = new Float64Array(n);
+        for (let i = 0; i < n; i++) gx[i] = g[i] * (data[i] > 0 ? 1 : 0);
+        adopt(x, gx);
+    });
+}
 export const leakyRelu = (x, slope, tape) => unary(x, tape, (v) => (v > 0 ? v : slope * v), (v) => (v > 0 ? 1 : slope));
 export const tanh = (x, tape) => unary(x, tape, Math.tanh, (_v, y) => 1 - y * y);
 

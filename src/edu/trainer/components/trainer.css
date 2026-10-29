@@ -1,0 +1,117 @@
+/* Trainer UI (docs/edu/SPEC.md §3.5): the TrainerPanel under the training canvas and the TrainerCard in lesson steps.
+   DeepFlow's look; every class is prefixed edu-tr- (CSS is global). The panel adapts to its own width through a
+   container query, because the lesson panel may take 320–360 px beside it. */
+.edu-tr-host { container-type: inline-size; min-height: 100%; color: #111; font-size: 12px; }
+.edu-tr-panel { display: grid; grid-template-columns: minmax(232px, 264px) repeat(3, minmax(0, 1fr)); align-items: start; gap: 14px 18px;
+    padding: 12px 16px 16px; }
+@container (max-width: 1040px) { .edu-tr-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 560px) { .edu-tr-panel { grid-template-columns: minmax(0, 1fr); } }
+
+.edu-tr-col { min-width: 0; }
+.edu-tr-col-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; margin-bottom: 6px; }
+.edu-tr-col-head h3 { margin: 0; color: #333; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.edu-tr-head-value { overflow: hidden; color: #333; font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.edu-tr-empty { margin: 6px 0 0; color: #666; font-size: 11.5px; line-height: 1.45; }
+.edu-tr-sr { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Run settings */
+.edu-tr-settings { display: grid; gap: 9px; }
+.edu-tr-facts { display: grid; gap: 3px; margin: 0; }
+.edu-tr-facts > div { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 6px; align-items: baseline; }
+.edu-tr-facts dt { color: #666; font-size: 11px; font-weight: 700; }
+.edu-tr-facts dd { margin: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; }
+.edu-tr-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 8px; }
+.edu-tr-row.is-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.edu-tr-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.edu-tr-field label { color: #555; font-size: 10.5px; font-weight: 700; }
+.edu-tr-field.is-compact { flex-direction: row; align-items: center; gap: 6px; }
+.edu-tr-input { width: 100%; min-width: 0; height: 28px; padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.edu-tr-field.is-compact .edu-tr-input { width: 92px; height: 26px; }
+.edu-tr-select { padding: 0 4px; }
+.edu-tr-input:disabled { background: #f5f5f5; color: #777; }
+
+.edu-tr-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.edu-tr-buttons .df-button { height: 30px; padding: 0 10px; font-size: 11.5px; }
+.edu-tr-buttons .df-button-primary { border: 2px solid #000; box-shadow: 2px 2px 0 #000; }
+.edu-tr-buttons .df-button:disabled { opacity: .42; box-shadow: none; }
+.edu-tr-buttons .df-button:disabled:hover { background: inherit; }
+.edu-tr-buttons .df-button-primary:disabled:hover { background: #111; }
+.edu-tr-buttons .df-button:focus-visible { outline: 2px solid #e91e63; outline-offset: 2px; }
+.edu-tr-locked { margin: 0; padding: 6px 8px; border: 1px dashed #0000004d; border-radius: 6px; color: #333; font-size: 11.5px; line-height: 1.4; }
+.edu-tr-status { min-height: 16px; margin: 0; color: #333; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+
+.edu-tr-preflight { display: grid; gap: 6px; }
+.edu-tr-issues { padding: 7px 9px; border-radius: 6px; font-size: 11.5px; line-height: 1.4; }
+.edu-tr-issues.is-error { border: 1.5px solid #b91c1c; background: #fef2f2; color: #7f1d1d; }
+.edu-tr-issues.is-warning { border: 1px solid #d9a441; background: #fffbeb; color: #713f12; }
+.edu-tr-issues-title { margin: 0 0 3px; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.edu-tr-issues ul { margin: 0; padding-left: 16px; }
+.edu-tr-link { padding: 0; border: 0; background: none; color: #111; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.edu-tr-link:focus-visible { outline: 2px solid #e91e63; outline-offset: 2px; }
+
+/* Charts */
+.edu-tr-chart-wrap { min-width: 0; }
+.edu-tr-chart-box { position: relative; }
+.edu-tr-svg { display: block; overflow: visible; }
+.edu-tr-grid line { stroke: #0000000f; }
+.edu-tr-grid text { fill: #6b6b6b; font-size: 9px; font-variant-numeric: tabular-nums; }
+.edu-tr-reference line { stroke: #777; stroke-dasharray: 2 3; }
+.edu-tr-reference text { fill: #5f5f5f; font-size: 9px; }
+.edu-tr-line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.edu-tr-line.is-train { stroke: #111; stroke-width: 2; }
+.edu-tr-line.is-val { stroke: #d55e00; stroke-width: 2; stroke-dasharray: 5 3; }
+.edu-tr-line.is-ghost { stroke: #a3a3a3; stroke-width: 1.25; }
+.edu-tr-dot.is-train { fill: #111; }
+.edu-tr-dot.is-val { fill: #fff; stroke: #d55e00; stroke-width: 1.5; }
+.edu-tr-marker { fill: #a84a00; }
+.edu-tr-end-label { font-size: 9.5px; font-weight: 700; }
+.edu-tr-end-label.is-train { fill: #111; }
+.edu-tr-end-label.is-val { fill: #a84a00; }
+.edu-tr-end-label.is-ghost { fill: #6b6b6b; font-weight: 600; }
+.edu-tr-chart-box.is-compact .edu-tr-line.is-train, .edu-tr-chart-box.is-compact .edu-tr-line.is-val { stroke-width: 1.6; }
+.edu-tr-ghosts { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 4px 0 0; padding: 0; list-style: none; color: #555; font-size: 10.5px; }
+.edu-tr-ghosts li { display: inline-flex; align-items: center; gap: 5px; }
+.edu-tr-ghost-line { display: inline-block; width: 14px; height: 0; border-top: 1.5px solid #a3a3a3; }
+
+/* Decision boundary */
+.edu-tr-boundary { margin: 0; }
+.edu-tr-boundary-plot { position: relative; overflow: hidden; border: 1px solid #0000002e; border-radius: 4px; background: #fff; }
+.edu-tr-boundary-plot canvas, .edu-tr-boundary-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.edu-tr-caption { margin-top: 5px; color: #555; font-size: 10.5px; line-height: 1.4; }
+.edu-tr-segmented { display: inline-flex; overflow: hidden; border: 1px solid #0000002e; border-radius: 6px; background: #fff; }
+.edu-tr-segmented button { height: 22px; padding: 0 8px; border: 0; background: #fff; color: #333; font-size: 10.5px; font-weight: 700; }
+.edu-tr-segmented button + button { border-left: 1px solid #0000002e; }
+.edu-tr-segmented button.is-on { background: #111; color: #fff; }
+.edu-tr-segmented button:focus-visible { outline: 2px solid #e91e63; outline-offset: -2px; }
+
+/* Confusion matrix */
+.edu-tr-confusion { max-width: 100%; overflow-x: auto; }
+.edu-tr-confusion table { border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+.edu-tr-confusion caption { padding-bottom: 5px; caption-side: top; color: #555; font-size: 10.5px; line-height: 1.35; text-align: left; }
+.edu-tr-confusion th { max-width: 74px; padding: 3px 5px; overflow: hidden; color: #333; font-size: 10.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.edu-tr-confusion thead th { text-align: center; }
+.edu-tr-confusion tbody th { text-align: right; }
+.edu-tr-confusion .edu-tr-corner { min-width: 52px; padding: 1px 4px; color: #6b6b6b; font-size: 9px; font-weight: 600; line-height: 1.25; }
+.edu-tr-corner-pred { display: block; text-align: right; }
+.edu-tr-corner-true { display: block; text-align: left; }
+.edu-tr-confusion td { min-width: 26px; height: 24px; padding: 2px 5px; border: 1px solid #fff; text-align: center; }
+.edu-tr-confusion td.is-diagonal { box-shadow: inset 0 0 0 1.5px #111; }
+.edu-tr-confusion.is-compact td { min-width: 22px; height: 20px; font-size: 10.5px; }
+
+/* TrainerCard (lesson embed) */
+.edu-tr-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; padding: 10px; border: 2px solid #111; border-radius: 8px; background: #fff; box-shadow: 3px 3px 0 #111; color: #111; font-size: 12px; }
+.edu-tr-buttons.is-compact .df-button { height: 28px; padding: 0 9px; font-size: 11px; }
+.edu-tr-card-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.edu-tr-card-epoch { color: #333; font-size: 11px; font-variant-numeric: tabular-nums; }
+.edu-tr-card-problem { margin: 0; padding: 6px 8px; border: 1.5px solid #b91c1c; border-radius: 6px; background: #fef2f2; color: #7f1d1d; font-size: 11.5px; line-height: 1.4; }
+.edu-tr-card-body { display: flex; align-items: flex-start; gap: 10px; }
+.edu-tr-card-curve { flex: 1 1 auto; min-width: 0; }
+.edu-tr-card-final { margin: 4px 0 0; font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.edu-tr-card-chance { margin: 1px 0 0; color: #666; font-size: 10.5px; }
+.edu-tr-card .edu-tr-boundary { flex: 0 0 auto; }
+.edu-tr-card-runs { padding-top: 6px; border-top: 1px solid #00000014; }
+.edu-tr-card-runs-title { margin: 0 0 3px; color: #555; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.edu-tr-card-runs ul { margin: 0; padding-left: 16px; color: #333; font-size: 11px; line-height: 1.45; }
+.edu-tr-open { justify-self: start; font-size: 11.5px; }
+
+@media (prefers-reduced-motion: reduce) { .edu-tr-svg * { transition: none !important; } }

@@ -128,9 +128,13 @@ function snapshotRecord(record, run, extra = {}) {
     };
 }
 
-/** Yield to the event loop: MessageChannel avoids setTimeout's 4 ms clamp in browsers; Node uses setTimeout. */
+/**
+ * Yield to the event loop: MessageChannel avoids setTimeout's 4 ms clamp in browsers. Node (tests, also under jsdom)
+ * uses setTimeout, because an open MessagePort would keep the process alive.
+ */
 const schedule = (() => {
-    if (typeof globalThis.MessageChannel === 'function' && typeof globalThis.document !== 'undefined') {
+    const browser = typeof globalThis.document !== 'undefined' && !globalThis.process?.versions?.node;
+    if (browser && typeof globalThis.MessageChannel === 'function') {
         const channel = new globalThis.MessageChannel();
         const queue = [];
         channel.port1.onmessage = () => { queue.shift()?.(); };
@@ -168,12 +172,13 @@ export const useTrainerStore = create((set, get) => {
         if (time - job.lastPush < PUSH_MS) return;
         job.lastPush = time;
         const { run, dataset } = job;
-        // The boundary is redrawn at most every BOUNDARY_MS, and never takes more than a fifth of the time.
+        // The boundary is redrawn at most every BOUNDARY_MS, and never takes more than about a ninth of the time
+        // (a 2-128-128-3 network needs ~80 ms for the 64 × 64 grid; a 2-8-1 network well under 1 ms).
         if (dataset.featureSize === 2 && run.history.length && time >= job.nextBoundaryAt && job.boundaryEpoch !== run.epoch) {
             const started = now();
             run.boundary = computeBoundary(run.model, dataset, run.objective.loss.type);
             job.boundaryEpoch = run.epoch;
-            job.nextBoundaryAt = now() + Math.max(BOUNDARY_MS, 4 * (now() - started));
+            job.nextBoundaryAt = now() + Math.max(BOUNDARY_MS, 8 * (now() - started));
         }
         job.record = snapshotRecord(job.record, run);
         set({ current: job.record });

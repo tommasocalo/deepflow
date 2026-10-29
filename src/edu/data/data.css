@@ -1,0 +1,121 @@
+/* Data tab (docs/edu/SPEC.md §3.4). DeepFlow's look: white panels, 1 px #0000002e borders, one 2 px black primary
+   card with a hard shadow, uppercase 10 px/800 labels. Every class is prefixed edu-data- (CSS is global). */
+.edu-data { display: flex; height: 100%; min-height: 0; background: #f5f5f5; color: #111; font-size: 13px; }
+
+.edu-data-list { flex: 0 0 248px; min-height: 0; overflow-y: auto; padding: 14px 10px 18px; background: #fff; border-right: 1px solid #00000026;
+    overscroll-behavior: contain; }
+.edu-data-list-title { margin: 0 6px 4px; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.edu-data-group { margin-top: 10px; }
+.edu-data-group-title { margin: 0 6px 6px; color: #666; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.edu-data-rows { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.edu-data-row { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 40px; padding: 6px 8px; border: 1px solid transparent; border-radius: 7px;
+    background: transparent; color: #111; text-align: left; }
+.edu-data-row:hover { background: #f3f4f6; }
+.edu-data-row.is-viewed { border-color: #111; background: #fff; box-shadow: 2px 2px 0 #111; }
+.edu-data-row:focus-visible { outline: 2px solid #e91e63; outline-offset: 2px; }
+.edu-data-dot { flex: 0 0 auto; width: 10px; height: 10px; border: 1.5px solid #111; border-radius: 50%; background: #fff; }
+.edu-data-dot.is-on { background: #111; }
+.edu-data-row-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.edu-data-row-name { overflow: hidden; font-size: 12.5px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.edu-data-row-meta { color: #666; font-size: 10.5px; }
+.edu-data-inuse { flex: 0 0 auto; padding: 1px 5px; border: 1px solid #111; border-radius: 3px; font-size: 9px; font-weight: 800; letter-spacing: .05em;
+    text-transform: uppercase; }
+
+.edu-data-detail { flex: 1 1 auto; min-width: 0; min-height: 0; overflow-y: auto; padding: 18px 24px 28px; overscroll-behavior: contain; }
+.edu-data-header { max-width: 1100px; }
+.edu-data-titlebar { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+.edu-data-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.01em; line-height: 1.25; }
+.edu-data-summary { color: #555; font-size: 14px; font-weight: 600; letter-spacing: 0; }
+.edu-data-badge { padding: 2px 7px; border: 1.5px solid #111; border-radius: 4px; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    white-space: nowrap; }
+.edu-data-badge.is-browser { background: #111; color: #fff; }
+.edu-data-badge.is-export { background: #fff; color: #111; }
+.edu-data-desc { max-width: 72ch; margin: 6px 0 12px; color: #333; line-height: 1.5; }
+.edu-data-use { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }
+.edu-data-use-button { height: 34px; padding: 0 14px; border: 2px solid #000; box-shadow: 3px 3px 0 #000; font-size: 12.5px; }
+.edu-data-use-button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
+.edu-data-use-button:focus-visible { outline: 2px solid #e91e63; outline-offset: 3px; }
+.edu-data-io { color: #333; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.edu-data-use-hint { margin: 8px 0 0; }
+.edu-data-use-status { display: flex; flex-wrap: wrap; gap: 4px 12px; min-height: 18px; margin: 4px 0 0; color: #111; font-size: 12px; font-weight: 600; }
+.edu-data-warning { color: #9a3412; }
+
+.edu-data-grid { display: grid; grid-template-columns: minmax(300px, 1.2fr) minmax(280px, 1fr); align-items: start; gap: 14px; max-width: 1100px; margin-top: 14px; }
+.edu-data-side { display: grid; gap: 14px; min-width: 0; }
+.edu-data-card { min-width: 0; padding: 12px 14px; border: 1px solid #0000002e; border-radius: 8px; background: #fff; }
+.edu-data-card p { margin: 0 0 8px; line-height: 1.5; }
+.edu-data-card p:last-child { margin-bottom: 0; }
+.edu-data-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; margin-bottom: 8px; }
+.edu-data-card-head h3 { margin: 0; color: #333; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.edu-data-preview { border: 2px solid #111; box-shadow: 4px 4px 0 #000; }
+.edu-data-note { color: #666; font-size: 11.5px; line-height: 1.45; }
+
+.edu-data-scatter { display: block; width: 100%; max-width: 460px; height: auto; margin: 0 auto; }
+.edu-data-axis text { fill: #666; font-size: 9px; }
+.edu-data-axis .edu-data-axis-title { fill: #333; font-size: 10px; font-weight: 700; }
+.edu-data-legend { margin-top: 6px; }
+.edu-data-legend p { margin: 4px 0 0; }
+.edu-data-legend-classes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.edu-data-legend-classes li { display: inline-flex; align-items: center; gap: 5px; }
+.edu-class-swatch { display: inline-block; flex: 0 0 auto; vertical-align: middle; }
+
+.edu-data-segmented { display: inline-flex; overflow: hidden; border: 1px solid #0000002e; border-radius: 6px; background: #fff; }
+.edu-data-segmented button { height: 24px; padding: 0 9px; border: 0; background: #fff; color: #333; font-size: 11px; font-weight: 700; }
+.edu-data-segmented button + button { border-left: 1px solid #0000002e; }
+.edu-data-segmented button.is-on { background: #111; color: #fff; }
+.edu-data-segmented button:focus-visible { outline: 2px solid #e91e63; outline-offset: -2px; }
+.edu-data-axis-pickers { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 6px; }
+.edu-data-axis-pickers label { display: inline-flex; align-items: center; gap: 6px; color: #555; font-size: 11px; font-weight: 700; }
+.edu-data-select { height: 26px; padding: 0 6px; font-size: 12px; }
+
+.edu-data-table-wrap { max-width: 100%; overflow-x: auto; }
+.edu-data-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.edu-data-table th { padding: 4px 6px; border-bottom: 1px solid #0000002e; color: #555; font-weight: 700; text-align: left; white-space: nowrap; }
+.edu-data-table td { padding: 3px 6px; border-bottom: 1px solid #0000000f; white-space: nowrap; }
+.edu-data-table caption { padding-top: 6px; caption-side: bottom; text-align: left; }
+.edu-data-table-compact { width: auto; }
+.edu-data-num { font-variant-numeric: tabular-nums; text-align: right; }
+
+.edu-data-digits { margin: 0; }
+.edu-data-digit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px 6px; margin: 0 0 6px; padding: 0; list-style: none; }
+.edu-data-digit-grid li { display: flex; flex-direction: column; align-items: center; gap: 2px; color: #555; font-size: 10px; font-weight: 700; }
+.edu-data-digit-grid svg { border: 1px solid #0000001f; background: #fff; }
+.edu-data-schematic p { margin: 0 0 6px; }
+
+.edu-data-balance { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.edu-data-balance li { display: grid; grid-template-columns: minmax(88px, 1.1fr) 2fr auto; align-items: center; gap: 2px 8px; font-size: 12px; }
+.edu-data-balance-name { display: inline-flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edu-data-balance-bar { height: 8px; overflow: hidden; border-radius: 4px; background: #efefec; }
+.edu-data-balance-bar span { display: block; height: 100%; background: #111; }
+.edu-data-balance-count { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+.edu-data-balance-split { grid-column: 1 / -1; font-size: 10.5px; }
+.edu-data-balance.is-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; margin-bottom: 8px; }
+.edu-data-balance.is-compact li { grid-template-columns: 26px minmax(0, 1fr) auto; }
+.edu-data-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.edu-data-chips li { padding: 2px 9px; border: 1px solid #0000002e; border-radius: 12px; font-size: 11.5px; }
+
+.edu-data-option-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 16px; margin-bottom: 8px; }
+.edu-data-option { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 8px; font-size: 12px; }
+.edu-data-option-label { color: #333; font-weight: 700; }
+.edu-data-option input[type='range'] { grid-column: 1 / -1; width: 100%; accent-color: #111; }
+.edu-data-option-value { grid-row: 1; grid-column: 2; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.edu-data-number { width: 84px; height: 28px; padding: 0 6px; font-size: 12px; }
+.edu-data-split-sizes { margin: 2px 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.edu-data-cite summary { width: fit-content; font-size: 12px; font-weight: 700; cursor: pointer; }
+.edu-data-cite summary:focus-visible { outline: 2px solid #e91e63; outline-offset: 2px; }
+.edu-data-cite ul { margin: 6px 0 0; padding-left: 18px; color: #444; font-size: 11.5px; line-height: 1.45; }
+.edu-data-card a { color: #111; text-decoration: underline; text-underline-offset: 2px; }
+
+@media (max-width: 1080px) {
+    .edu-data-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* Phones: the list becomes two rows of wrapping chips above the detail, and the page scrolls as one. */
+@media (max-width: 720px) {
+    .edu-data { flex-direction: column; overflow-y: auto; }
+    .edu-data-list { flex: 0 0 auto; overflow: visible; padding: 10px 12px 8px; border-right: 0; border-bottom: 1px solid #00000026; }
+    .edu-data-rows { display: flex; flex-wrap: wrap; gap: 6px; }
+    .edu-data-row { width: auto; min-height: 34px; padding: 4px 9px; border-color: #0000002e; }
+    .edu-data-row-meta { display: none; }
+    .edu-data-detail { flex: 0 0 auto; overflow: visible; padding: 14px 16px 24px; }
+    .edu-data-title { font-size: 17px; }
+}
