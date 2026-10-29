@@ -361,6 +361,28 @@ test('selection follows the table and the canvas', async () => {
     assert.equal(rowOf('gelu').getAttribute('aria-selected'), 'true', 'Selecting on the canvas reveals the row inside a collapsed block');
 });
 
+test('large graphs render 300 rows at a time', async () => {
+    const graph = useArchitectureStore.getState().graph;
+    const input = Object.values(graph.nodes).find((node) => node.libraryKey === 'deepflow.io.Input');
+    const nodes = { [input.id]: { ...input, parameters: { ...input.parameters, shape: '(64,)' } } };
+    const edges = [];
+    let previous = input.id;
+    for (let index = 0; index < 400; index++) {
+        const id = `relu-${index}`;
+        nodes[id] = { id, kind: 'layer', libraryKey: 'torch.nn.ReLU', label: `ReLU ${index}`, position: { x: 0, y: 100 * (index + 1) }, parameters: { inplace: false } };
+        edges.push({ id: `edge-${index}`, source: previous, target: id });
+        previous = id;
+    }
+    await act(() => useArchitectureStore.setState({ graph: { nodes, edges, parameters: [] }, currentPath: [], openPaths: [] }));
+    await openTable();
+    assert.equal(tableRows().length, 300);
+    const more = [...mainTable().querySelectorAll('.df-mt-more button')][0];
+    assert.equal(more.textContent, 'Show 101 more');
+    await click(more);
+    assert.equal(tableRows().length, 401);
+    assert.equal(mainTable().querySelector('[role="treegrid"]').getAttribute('aria-rowcount'), '402');
+});
+
 test('each pane has its own table', async () => {
     await click(byAria('Open to the side'));
     const side = container.querySelector('[data-graph-pane="side"]');

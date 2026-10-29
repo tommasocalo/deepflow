@@ -415,7 +415,9 @@ export default function ModelTablePanel() {
                             context={context} selected={selectedKeys.has(row.key)} focusColumn={row === activeRow ? activeColumn : null}
                             editing={editing?.key === row.key ? editing : null} suggestions={editing?.key === row.key ? suggestions : null} actions={actions} />)}
                         {rows.length > limit && <tr className="df-mt-more"><td colSpan={COLUMNS.length}>
-                            <button type="button" onClick={() => setLimit((current) => current + RENDER_STEP)}>Show {Math.min(RENDER_STEP, rows.length - limit)} more ({rows.length - limit} left)</button>
+                            <button type="button" onClick={() => setLimit((current) => current + RENDER_STEP)}>
+                                {rows.length - limit > RENDER_STEP ? `Show ${RENDER_STEP} more (${rows.length - limit} left)` : `Show ${rows.length - limit} more`}
+                            </button>
                         </td></tr>}
                     </tbody>
                 </table>

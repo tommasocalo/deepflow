@@ -1,7 +1,7 @@
 import { validate } from '../../validation/validator.js';
 import { createValidationCache } from '../../validation/cache.js';
 import { resolveRepeatCount } from '../expressions.js';
-import { getIncomingEdges, mapTemplateInputs, orderOperationEdges } from '../graphInputs.js';
+import { mapTemplateInputs, orderOperationEdges } from '../graphInputs.js';
 import { ACTIVATION_BYTES, activationKnown, CONSTANT_SOURCE_KEYS, layerMacs, layerSize, numelAtBatchOne, producesActivation } from './layerMetrics.js';
 
 const TEMPLATE_INPUT = 'deepflow.template.Input';
@@ -34,10 +34,17 @@ function levelMetrics(graph, report, templates, { inputWeightOnly = {}, fused = 
     const scope = report.scope ?? {};
     const nodes = {};
     const weightOnly = {};
+    // The edges into each node, in graph order, as getIncomingEdges returns them.
+    const incomingEdges = new Map();
+    for (const edge of graph.edges ?? []) {
+        if (!graph.nodes[edge.source]) continue;
+        if (!incomingEdges.has(edge.target)) incomingEdges.set(edge.target, []);
+        incomingEdges.get(edge.target).push(edge);
+    }
     for (const id of [...report.topo, ...report.cyclic]) {
         const node = graph.nodes[id];
         if (!node) continue;
-        const incoming = getIncomingEdges(graph, id);
+        const incoming = incomingEdges.get(id) ?? [];
         const inputShapes = orderOperationEdges(node, incoming).map((edge) => edge ? report.shapes[edge.source] ?? null : null);
         const output = report.shapes[id] ?? null;
         const errors = report.errors[id] ?? [];
