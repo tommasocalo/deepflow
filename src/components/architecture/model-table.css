@@ -63,7 +63,6 @@
 .df-mt-chevron, .df-mt-chevron-space { display: grid; flex: none; place-items: center; width: 14px; height: 14px; }
 .df-mt-chevron { border-radius: 2px; color: #444; }
 .df-mt-chevron:hover { background: #e9e9e3; color: #111; }
-.df-mt-chevron svg { transition: transform .12s ease; }
 .df-mt-row[aria-expanded="true"] .df-mt-chevron svg { transform: rotate(90deg); }
 .df-mt-glyph { display: grid; flex: none; place-items: center; width: 18px; height: 18px; border-radius: 3px; color: #222; }
 .df-mt-glyph .df-operation-icon { width: 14px; height: 14px; }
