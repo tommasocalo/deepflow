@@ -7,12 +7,10 @@ import { useTrainingStore } from '../stores/trainingStore.js';
 import { importEditableArchitecture } from '../stores/importArchitecture.js';
 import { buildEditableOnnxArchitecture } from '../domain/onnx/editable.js';
 import OnnxImport from './OnnxImport.jsx';
-
-const TABS = [
-    { id: 'architecture', label: 'Architecture' },
-    { id: 'data',         label: 'Data',     disabled: true },
-    { id: 'training',     label: 'Training' },
-];
+import { t } from '../edu/lessons/engine/i18n.js';
+import { useLessonSession } from '../edu/lessons/engine/session.js';
+import { TABS } from '../edu/shell/uiStore.js';
+import { applyLoadedPayload, buildSavePayload, restoreEduSlices } from '../edu/shell/workspaceFile.js';
 
 function downloadBlob(name, content, mime = 'application/json') {
     const blob = new Blob([content], { type: mime });
@@ -32,8 +30,11 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
     const templates = useTemplatesStore((s) => s.templates);
     const [onnxFile, setOnnxFile] = useState(null);
 
+    const lessonMode = useLessonSession((s) => s.mode === 'lesson');
+
     const handleSave = () => {
-        const payload = { version: 'deepflow-v2', architecture: archGraph, templates, training: trainingGraph };
+        // Edu slices (dataset binding, trainer settings) travel with the graphs; DeepFlow ignores them.
+        const payload = buildSavePayload({ architecture: archGraph, templates, training: trainingGraph });
         downloadBlob('deepflow-graph.json', JSON.stringify(payload, null, 2));
     };
     const handleLoad = () => {
@@ -48,11 +49,7 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
                 return;
             }
             try {
-                const data = JSON.parse(await file.text());
-                goToLevel(0);
-                if (data?.architecture) useArchitectureStore.setState({ graph: data.architecture, currentPath: [], openPaths: [], selectedNodeIds: [], expandedNodeId: null });
-                if (data?.templates) useTemplatesStore.setState((s) => ({ ...s, templates: data.templates }));
-                if (data?.training) useTrainingStore.setState((s) => ({ ...s, graph: data.training }));
+                applyLoadedPayload(JSON.parse(await file.text()));
             } catch (err) {
                 alert('Could not load file: ' + (err.message ?? err));
             }
@@ -65,10 +62,11 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
         return source;
     };
     const handleReset = () => {
-        if (!window.confirm('Reset architecture and training graphs to empty?')) return;
+        if (!window.confirm(t(lessonMode ? 'shell.resetLesson' : 'shell.resetSandbox'))) return;
         goToLevel(0);
         archResetGraph();
         trainingReset();
+        restoreEduSlices({});
         useArchitectureHistory.getState().clear();
     };
 
@@ -77,13 +75,14 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
             <div className="df-toolbar-tabs">
                 {TABS.map((tab) => (
                     <button
-                        key={tab.id}
-                        disabled={tab.disabled}
-                        onClick={() => !tab.disabled && onChange(tab.id)}
-                        className={`df-tab${activeTab === tab.id ? ' df-tab-active' : ''}`}
+                        key={tab}
+                        type="button"
+                        data-tab={tab}
+                        aria-current={activeTab === tab ? 'page' : undefined}
+                        onClick={() => onChange(tab)}
+                        className={`df-tab${activeTab === tab ? ' df-tab-active' : ''}`}
                     >
-                        <span>{tab.label}</span>
-                        {tab.disabled && <span className="df-tab-soon">soon</span>}
+                        <span>{t(`tab.${tab}`)}</span>
                     </button>
                 ))}
             </div>

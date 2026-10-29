@@ -9,7 +9,7 @@ export const LOG_LIMIT = 2000;
 export const LOG_KEY = eduKey('log:v1');
 export const EVENT_TYPES = Object.freeze([
     'module-start', 'step-enter', 'step-pass', 'step-skip', 'hint', 'show-me', 'reset-step', 'predict', 'warmup',
-    'quiz', 'run', 'code-open', 'module-complete', 'palette-insert',
+    'quiz', 'run', 'code-open', 'module-complete', 'palette-insert', 'step-button',
 ]);
 
 let events = null;

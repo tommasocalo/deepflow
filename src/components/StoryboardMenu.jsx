@@ -6,6 +6,9 @@ import { useTemplatesStore } from '../stores/templatesStore.js';
 import { useTrainingStore } from '../stores/trainingStore.js';
 import NavButton from './NavButton.jsx';
 import { startArchitectureSession } from '../stores/architectureHistory.js';
+import { t } from '../edu/lessons/engine/i18n.js';
+import { useLessonSession } from '../edu/lessons/engine/session.js';
+import { useEduUiStore } from '../edu/shell/uiStore.js';
 
 const StoryboardMenu = () => {
     const [open, setOpen] = useState(false);
@@ -64,8 +67,14 @@ const StoryboardMenu = () => {
                         <button
                             key={sb.id}
                             onClick={() => {
+                                // Examples open in the sandbox: a lesson's workspace is saved first (SPEC §3.7).
+                                if (useLessonSession.getState().mode === 'lesson') {
+                                    if (!window.confirm(t('shell.exampleInLesson'))) return;
+                                    useLessonSession.getState().exitLesson({ tab: 'architecture' });
+                                }
                                 architectureStore.getState().goToLevel(0);
                                 startArchitectureSession(() => sb.run({ architectureStore, templatesStore, trainingStore }));
+                                if (useEduUiStore.getState().activeTab === 'learn') useEduUiStore.getState().setTab('architecture');
                                 setOpen(false);
                             }}
                             className="w-full text-left p-2 border-b border-black/10 last:border-b-0 hover:bg-stone-50"

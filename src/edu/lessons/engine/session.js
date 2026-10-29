@@ -267,6 +267,20 @@ export const useLessonSession = create((set, get) => {
             return result;
         },
 
+        /** A step's extra action button, e.g. M7 s7 "Load GPT-2 small". */
+        runButton: async (buttonId) => {
+            const current = module();
+            const target = step();
+            const button = target?.buttons?.find((item) => item.id === buttonId);
+            if (!current || !button || get().runtime.busy) return { ok: false };
+            updateRuntime({ busy: true, error: null });
+            const result = await runActions(button.actions ?? [], actionContext(`button ${buttonId}`));
+            log('step-button', { step: target.id, data: { id: buttonId, ok: result.ok } });
+            updateRuntime({ busy: false, error: result.ok ? null : result.error });
+            fitSoon();
+            return result;
+        },
+
         submitPrediction: (id, value, { source = 'learner' } = {}) => {
             const current = module();
             if (!current) return null;

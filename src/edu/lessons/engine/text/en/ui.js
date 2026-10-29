@@ -22,6 +22,7 @@ export default {
     // Learn home (§3.2)
     'learn.title': 'Learn to build neural networks',
     'learn.subtitle': '{count} short modules. Build real models, train small ones here, export PyTorch.',
+    'learn.subtitleOne': 'One short module. Build a real model, train it here, export PyTorch.',
     'learn.continue': 'Continue · {number} {title} · step {step} of {total}',
     'learn.continueQuiz': 'Continue · {number} {title} · quiz',
     'learn.continueRecap': 'Continue · {number} {title} · recap',

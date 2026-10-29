@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import Navbar from './Navbar.jsx';
 import ToolbarStrip from './ToolbarStrip.jsx';
 import ArchitectureWorkspace from './architecture/ArchitectureWorkspace.jsx';
@@ -11,6 +11,15 @@ import { useTrainingStore } from '../stores/trainingStore.js';
 import { gpt2Storyboard } from '../storyboards/gpt2.js';
 import { createDefaultModelSeeder } from '../storyboards/defaultModel.js';
 import { startArchitectureSession } from '../stores/architectureHistory.js';
+import { PRODUCT_NAME, PRODUCT_TAGLINE } from '../edu/config.js';
+import LearnHome from '../edu/components/LearnHome.jsx';
+import LessonPanel from '../edu/components/LessonPanel.jsx';
+import DataWorkspace from '../edu/data/DataWorkspace.jsx';
+import TrainerPanel from '../edu/trainer/components/TrainerPanel.jsx';
+import { useLessonSession } from '../edu/lessons/engine/session.js';
+import { installDeepLinks } from '../edu/shell/deepLink.js';
+import { useEduUiStore } from '../edu/shell/uiStore.js';
+import '../edu/shell/shell.css';
 
 const seedDefaultModel = createDefaultModelSeeder({
     seed: () => startArchitectureSession(() => gpt2Storyboard({
@@ -21,38 +30,53 @@ const seedDefaultModel = createDefaultModelSeeder({
 });
 
 const Layout = () => {
-    const [activeTab, setActiveTab] = useState('architecture');
-    const [codeOpen, setCodeOpen] = useState(false);
+    const activeTab = useEduUiStore((s) => s.activeTab);
+    const setTab = useEduUiStore((s) => s.setTab);
+    const codeOpen = useEduUiStore((s) => s.codeOpen);
+    const codeTab = useEduUiStore((s) => s.codeTab);
+    const openCode = useEduUiStore((s) => s.openCode);
+    const closeCode = useEduUiStore((s) => s.closeCode);
+    const setCodeTab = useEduUiStore((s) => s.setCodeTab);
+    const lessonMode = useLessonSession((s) => s.mode === 'lesson');
 
-    useEffect(() => { seedDefaultModel(); }, []);
+    // GPT-2 stays DeepFlow's first-start example and becomes the initial sandbox; deep links apply after it.
+    useEffect(() => {
+        seedDefaultModel();
+        return installDeepLinks();
+    }, []);
+    useEffect(() => { document.title = `${PRODUCT_NAME} — ${PRODUCT_TAGLINE}`; }, []);
 
     return (
         <div className="df-app">
             <Navbar />
             <ToolbarStrip
                 activeTab={activeTab}
-                onChange={setActiveTab}
-                onShowCode={() => setCodeOpen(true)}
+                onChange={setTab}
+                onShowCode={() => openCode()}
             />
 
-            <div className="df-app-main">
-                <div key={activeTab} className="df-tab-pane">
-                    {activeTab === 'architecture' && (
-                        <ArchitectureWorkspace />
-                    )}
-                    {activeTab === 'training' && <TrainingCanvas />}
-                    {activeTab === 'data' && (
-                        <div className="w-full h-full flex items-center justify-center text-text-secondary text-sm">
-                            <span className="border-2 border-black rounded-md px-3 py-1 bg-white shadow-medium">
-                                Data canvas — coming in a later phase
-                            </span>
-                        </div>
-                    )}
+            <div className="df-app-main edu-main">
+                <div className="edu-stage">
+                    <div key={activeTab} className="df-tab-pane">
+                        {activeTab === 'learn' && <LearnHome />}
+                        {activeTab === 'architecture' && (
+                            <ArchitectureWorkspace />
+                        )}
+                        {activeTab === 'data' && <DataWorkspace />}
+                        {activeTab === 'training' && (
+                            <div className="edu-training-split">
+                                <div className="edu-training-canvas">
+                                    <TrainingCanvas />
+                                    <TrainingPalette />
+                                </div>
+                                <div className="edu-trainer-dock"><TrainerPanel /></div>
+                            </div>
+                        )}
+                    </div>
+
+                    <CodePanel open={codeOpen} onClose={closeCode} tab={codeTab} onTabChange={setCodeTab} />
                 </div>
-
-                {activeTab === 'training' && <TrainingPalette />}
-
-                <CodePanel open={codeOpen} onClose={() => setCodeOpen(false)} />
+                {lessonMode && activeTab !== 'learn' && <LessonPanel />}
             </div>
         </div>
     );

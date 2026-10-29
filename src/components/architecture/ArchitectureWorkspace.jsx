@@ -14,7 +14,7 @@ import './workspace.css';
 function CanvasCommandBridge({ paneId, register }) {
     const markerRef = useRef(null);
     const architectureStore = useArchitectureStoreApi();
-    const { screenToFlowPosition, getNodes, fitView } = useReactFlow();
+    const { screenToFlowPosition, getNodes, fitView, getNode, setCenter, getZoom } = useReactFlow();
 
     useEffect(() => register(paneId, {
         fitView: () => fitView({ padding: 0.2, minZoom: 0.2, maxZoom: 1, duration: 220 }),
@@ -42,7 +42,10 @@ function CanvasCommandBridge({ paneId, register }) {
             if (id) { state.selectOnly(id); state.clearExpanded(); }
             return id;
         },
-    }), [paneId, register, architectureStore, screenToFlowPosition, getNodes, fitView]);
+        focusNode: (id) => { const node = getNode(id); if (!node) return false; // DeepFlow Edu: "Show on canvas"
+            architectureStore.getState().selectOnly(id); architectureStore.getState().setExpanded(id);
+            setCenter(node.position.x, node.position.y + 18, { zoom: Math.max(getZoom(), 0.85), duration: 220 }); return true; },
+    }), [paneId, register, architectureStore, screenToFlowPosition, getNodes, fitView, getNode, setCenter, getZoom]);
 
     return <span ref={markerRef} hidden />;
 }
@@ -98,6 +101,15 @@ export default function ArchitectureWorkspace() {
     }, []);
 
     useEffect(() => () => sideStore?.dispose(), [sideStore]);
+    // DeepFlow Edu canvas bridge (docs/edu/SPEC.md §6.12): lessons fit, insert and focus through one synchronous event.
+    useEffect(() => {
+        const onCanvas = ({ detail = {} }) => { const main = commands.current.main;
+            if (detail.command === 'fit') { main?.fitView(); detail.result = !!main; }
+            else if (detail.command === 'insert') detail.result = main?.insert(detail.entry, detail.isTemplate) ?? null;
+            else if (detail.command === 'focusNode') detail.result = main?.focusNode(detail.id) ?? false; };
+        window.addEventListener('deepflow-edu:canvas', onCanvas);
+        return () => window.removeEventListener('deepflow-edu:canvas', onCanvas);
+    }, []);
     useEffect(() => {
         if (sideStore) workspaceRef.current?.querySelector('[data-graph-pane="side"] [role="tab"][aria-selected="true"]')?.focus({ preventScroll: true });
     }, [sideStore, sideFocusRequest]);
