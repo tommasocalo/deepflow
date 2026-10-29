@@ -21,7 +21,7 @@ function downloadBlob(name, content, mime = 'application/json') {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
+const ToolbarStrip = ({ activeTab, onChange, onShowCode, codeOpen = false }) => {
     const archGraph = useArchitectureStore((s) => s.graph);
     const archResetGraph = useArchitectureStore((s) => s.resetCurrentGraph);
     const goToLevel = useArchitectureStore((s) => s.goToLevel);
@@ -89,7 +89,7 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
 
             <div className="df-toolbar-actions">
                 <div className="df-action-group" role="group" aria-label="Project actions">
-                    <ActionSegment icon={Code2}      label="Code"  onClick={onShowCode}  title="Generated PyTorch source" />
+                    <ActionSegment icon={Code2}      label="Code"  onClick={onShowCode}  title="Generated PyTorch source" expanded={codeOpen} />
                     <ActionSegment icon={Save}       label="Save"  onClick={handleSave}  title="Download graph as JSON" />
                     <ActionSegment icon={FolderOpen} label="Load"  onClick={handleLoad}  title="Load a DeepFlow JSON or ONNX model" />
                     <ActionSegment icon={RotateCcw}  label="Reset" onClick={handleReset} title="Clear both graphs" />
@@ -100,8 +100,8 @@ const ToolbarStrip = ({ activeTab, onChange, onShowCode }) => {
     );
 };
 
-const ActionSegment = ({ icon: Icon, label, onClick, title, disabled }) => (
-    <button type="button" onClick={onClick} title={title ?? label} aria-label={label} disabled={disabled} className="df-action-segment">
+const ActionSegment = ({ icon: Icon, label, onClick, title, disabled, expanded }) => (
+    <button type="button" onClick={onClick} title={title ?? label} aria-label={label} aria-expanded={expanded} disabled={disabled} className="df-action-segment">
         {Icon ? <Icon size={12} strokeWidth={2.5} /> : null}
         <span className="df-action-label">{label}</span>
     </button>

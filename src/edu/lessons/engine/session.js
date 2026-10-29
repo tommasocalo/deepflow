@@ -6,7 +6,7 @@ import { runActions } from './actions.js';
 import { requestFit } from './canvasBridge.js';
 import { completedEpochs, evaluateStep, finalMetrics, trainerRuns } from './checks.js';
 import { buildCheckContext, factValues, subscribeCheckContext } from './context.js';
-import { logEvent } from './log.js';
+import { clearLog, logEvent } from './log.js';
 import { gradePrediction } from './predict.js';
 import * as P from './progress.js';
 import { getModule, getModules, stepIndexById } from './registry.js';
@@ -75,7 +75,12 @@ export const useLessonSession = create((set, get) => {
         else if (ui.activeTab === 'learn') ui.setTab('architecture');
     };
 
-    async function enterStep(index, { runSetup = true } = {}) {
+    /**
+     * `resume` re-enters the step the learner left (Continue, a reload, a deep link to the current step): its entry
+     * snapshot is kept, so Reset step still returns to the state the step started from. Moving to another step
+     * captures a new snapshot.
+     */
+    async function enterStep(index, { runSetup = true, resume = false } = {}) {
         const current = module();
         const target = current?.steps?.[index];
         if (!target) return false;
@@ -86,11 +91,10 @@ export const useLessonSession = create((set, get) => {
             if (!result.ok) updateRuntime({ error: result.error });
         }
         showStepTab(target);
-        const restored = !firstEntry && get().restoringEntry ? loadStepEntry(current.id, target.id) : null;
-        if (!restored) saveStepEntry(current.id, target.id, captureWorkspace());
+        const kept = !firstEntry && resume ? loadStepEntry(current.id, target.id) : null;
+        if (!kept) saveStepEntry(current.id, target.id, captureWorkspace());
         updateProgress((progress) => P.enterStep(progress, current.id, target.id));
         updateRuntime({ enteredAtSeq: trainerSeq(), visitedTabs: [useEduUiStore.getState().activeTab], revealShown: false, busy: false });
-        set({ restoringEntry: false });
         log('step-enter', { step: target.id });
         return true;
     }
@@ -109,7 +113,6 @@ export const useLessonSession = create((set, get) => {
 
     return {
         ...initialState(),
-        restoringEntry: true,
 
         setHeadless: (headless) => set({ headless: !!headless }),
         setCollapsed: (collapsed) => set({ collapsed: !!collapsed }),
@@ -143,8 +146,15 @@ export const useLessonSession = create((set, get) => {
             const state = get();
             if (state.runtime.busy) return false;
             const sameModule = state.mode === 'lesson' && state.moduleId === id;
+            // Continue returns to the quiz, or to the recap of an unfinished module, when the learner left it there.
+            // Review of a completed module starts again at the first step.
+            const completed = state.progress.modules?.[id]?.status === 'completed';
+            const resumePhase = !stepId && state.moduleId === id
+                && (state.phase === 'quiz' || (state.phase === 'recap' && !completed)) ? state.phase : null;
             if (!sameModule) {
                 saveSlot(state.mode === 'lesson' && state.moduleId ? state.moduleId : 'sandbox', captureWorkspace());
+                // The code panel shows the outgoing workspace's code: close it with that workspace.
+                useEduUiStore.getState().closeCode();
                 set({ mode: 'lesson', moduleId: id, runtime: freshRuntime({ busy: true }) });
                 const slot = loadSlot(id);
                 try {
@@ -161,26 +171,35 @@ export const useLessonSession = create((set, get) => {
             }
             updateProgress((progress) => P.startModule(progress, id, target.version ?? 1));
             log('module-start');
+            if (resumePhase) {
+                set({ phase: resumePhase, quizIndex: Math.min(state.quizIndex, Math.max(0, (target.quiz?.length ?? 1) - 1)), runtime: freshRuntime() });
+                showStepTab(null);
+                return true;
+            }
             const summary = P.moduleStatus(get().progress, target);
             let index = stepId ? stepIndexById(target, stepId) : -1;
             if (index >= 0) {
                 const skipped = target.steps.slice(0, index).map((item) => item.id);
                 updateProgress((progress) => P.visitSteps(progress, id, skipped));
+            } else if (summary.status === 'completed') {
+                // Review starts at the first step; finished steps open read-only (setup is not re-run).
+                index = 0;
             } else if (summary.currentStepId) {
                 index = Math.max(0, stepIndexById(target, summary.currentStepId));
             } else {
                 index = summary.firstOpenIndex >= 0 ? summary.firstOpenIndex : 0;
             }
             const moduleRecord = get().progress.modules[id];
+            const resume = target.steps[index]?.id === moduleRecord?.currentStepId;
             const warmupPending = !stepId && (target.warmup?.length ?? 0) > 0 && !moduleRecord?.warmupSkipped
                 && !Object.keys(moduleRecord?.warmup ?? {}).length && !Object.keys(moduleRecord?.steps ?? {}).length;
-            set({ stepIndex: index, quizIndex: 0, warmupIndex: 0, restoringEntry: sameModule && get().restoringEntry });
+            set({ stepIndex: index, quizIndex: 0, warmupIndex: 0 });
             if (warmupPending) {
                 set({ phase: 'warmup', runtime: freshRuntime() });
                 showStepTab(null);
                 return true;
             }
-            await enterStep(index);
+            await enterStep(index, { resume });
             return true;
         },
 
@@ -363,6 +382,7 @@ export const useLessonSession = create((set, get) => {
                 fitSoon();
             }
             set({ mode: 'sandbox', runtime: freshRuntime() });
+            useEduUiStore.getState().closeCode();
             useEduUiStore.getState().setTab(tab);
             return true;
         },
@@ -376,11 +396,12 @@ export const useLessonSession = create((set, get) => {
                 if (key.startsWith(eduKey('slot:')) && key !== slotKey('sandbox')) removeKey(key);
             }
             clearStepEntry();
+            clearLog();
             set({ progress: P.emptyProgress(), moduleId: null, phase: 'steps', stepIndex: 0, quizIndex: 0, warmupIndex: 0, runtime: freshRuntime() });
         },
 
         /** Re-read session and progress from storage (tests and module-registry swaps). */
-        hydrate: () => set({ ...initialState(), restoringEntry: true }),
+        hydrate: () => set(initialState()),
     };
 });
 

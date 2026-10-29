@@ -10,9 +10,10 @@
 /* Bottom drawer below 900 px */
 .edu-lesson-panel.is-drawer { flex: 0 0 auto; width: auto; height: 45vh; max-height: 45vh; border-left: 0; border-top: 1px solid #00000026; }
 .edu-lesson-panel.is-drawer.is-closed { height: auto; }
-.edu-drawer-handle { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-height: 36px; padding: 4px 16px; border-bottom: 1px solid #00000014;
-    background: #fff; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; text-align: left; touch-action: none; }
-.edu-drawer-handle > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edu-drawer-bar { display: flex; align-items: center; flex-shrink: 0; padding-right: 8px; border-bottom: 1px solid #00000014; background: #fff; }
+.edu-drawer-handle { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 40px; padding: 4px 8px 4px 16px; border: 0;
+    background: #fff; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; text-align: left; touch-action: none; cursor: ns-resize; }
+.edu-drawer-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .edu-drawer-grip { width: 28px; height: 4px; border-radius: 2px; background: #0000004d; flex-shrink: 0; }
 .edu-drawer-chevron { transition: transform .15s; }
 .edu-lesson-panel:not(.is-closed) .edu-drawer-chevron { transform: rotate(180deg); }
@@ -36,7 +37,7 @@
 .edu-step-title:focus { outline: none; }
 .edu-step-title:focus-visible { outline: 2px solid #e91e63; outline-offset: 3px; border-radius: 2px; }
 .edu-rich p { margin: 0 0 8px; line-height: 1.55; }
-.edu-rich ul { margin: 0 0 8px; padding-left: 18px; line-height: 1.5; }
+.edu-rich ul { margin: 0 0 8px; padding-left: 18px; line-height: 1.5; list-style: disc; }
 .edu-code { padding: 0 3px; border-radius: 3px; background: #f1f1ee; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
 .edu-why { margin: 2px 0 10px; color: #333; }
 .edu-why summary { width: fit-content; color: #111; font-size: 12px; font-weight: 700; cursor: pointer; }
@@ -118,7 +119,8 @@ p.edu-muted { margin: 4px 0 0; }
 .edu-lesson-panel .df-button-primary:disabled, .edu-learn .df-button-primary:disabled { background: #111; }
 .edu-step-button { margin: 6px 0; }
 
-.edu-takeaways { margin: 8px 0 0; padding-left: 20px; }
+.edu-takeaways { margin: 8px 0 0; padding-left: 20px; list-style: decimal; }
+.edu-takeaways li::marker { font-weight: 800; }
 .edu-takeaways li { margin-bottom: 8px; }
 .edu-takeaways .edu-rich p { margin: 0; }
 
@@ -129,6 +131,7 @@ p.edu-muted { margin: 4px 0 0; }
 .edu-param-total { margin: 0 0 6px; font-size: 13px; }
 .edu-temperature-control { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
 .edu-temperature-control input { flex: 1; accent-color: #111; }
+.edu-temperature-control input:focus-visible { outline: 2px solid #e91e63; outline-offset: 3px; }
 .edu-temperature-control output { min-width: 2.5em; font-variant-numeric: tabular-nums; }
 .edu-bar { display: inline-block; width: 90px; height: 8px; margin-right: 6px; vertical-align: middle; border-radius: 2px; background: #eee; overflow: hidden; }
 .edu-bar > span { display: block; height: 100%; background: #111; transition: width .12s; }

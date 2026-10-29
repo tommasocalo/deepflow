@@ -42,7 +42,7 @@ function CanvasCommandBridge({ paneId, register }) {
             if (id) { state.selectOnly(id); state.clearExpanded(); }
             return id;
         },
-        focusNode: (id) => { const node = getNode(id); if (!node) return false; // DeepFlow Edu: "Show on canvas"
+        focusNode: (id) => { const node = getNode(id); if (!node) return false; // Edu: "Show on canvas"
             architectureStore.getState().selectOnly(id); architectureStore.getState().setExpanded(id);
             setCenter(node.position.x, node.position.y + 18, { zoom: Math.max(getZoom(), 0.85), duration: 220 }); return true; },
     }), [paneId, register, architectureStore, screenToFlowPosition, getNodes, fitView, getNode, setCenter, getZoom]);
@@ -101,7 +101,7 @@ export default function ArchitectureWorkspace() {
     }, []);
 
     useEffect(() => () => sideStore?.dispose(), [sideStore]);
-    // DeepFlow Edu canvas bridge (docs/edu/SPEC.md §6.12): lessons fit, insert and focus through one synchronous event.
+    // Edu canvas bridge (docs/edu/SPEC.md §6.12): lessons fit, insert and focus through one synchronous event.
     useEffect(() => {
         const onCanvas = ({ detail = {} }) => { const main = commands.current.main;
             if (detail.command === 'fit') { main?.fitView(); detail.result = !!main; }

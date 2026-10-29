@@ -12,13 +12,8 @@ export default function QuizView({ kind, items, index, records = {}, facts, onAn
     const id = useId();
     const headingRef = useRef(null);
     const record = item ? records[item.id] : null;
+    // The parent keys this view by item, so the choice starts from the saved answer of the item shown.
     const [chosen, setChosen] = useState(record?.last ?? null);
-    const [itemId, setItemId] = useState(item?.id);
-
-    if (item?.id !== itemId) {
-        setItemId(item?.id);
-        setChosen(record?.last ?? null);
-    }
 
     useEffect(() => { headingRef.current?.focus(); }, [item?.id]);
 

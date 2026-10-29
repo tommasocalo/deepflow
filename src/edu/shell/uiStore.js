@@ -22,7 +22,8 @@ export const useEduUiStore = create((set, get) => ({
     drawerOpen: true,
     setTab: (tab) => {
         if (!TABS.includes(tab) || get().activeTab === tab) return;
-        set({ activeTab: tab });
+        // The code panel belongs to the model; it never floats over the Learn home.
+        set(tab === 'learn' ? { activeTab: tab, codeOpen: false } : { activeTab: tab });
     },
     openCode: (tab) => set({ codeOpen: true, codeTab: CODE_TABS.includes(tab) ? tab : get().codeTab }),
     closeCode: () => set({ codeOpen: false }),

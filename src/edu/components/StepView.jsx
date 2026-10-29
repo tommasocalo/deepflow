@@ -108,7 +108,7 @@ export default function StepView({ module, step, index, total, record, answers, 
             {step.palette?.length > 0 && !passing && <PaletteChips items={step.palette} moduleId={module.id} stepId={step.id} />}
             {step.predict && (
                 <PredictGate key={`${prefix}-${answer ? 'answered' : 'open'}`} predict={step.predict} textPrefix={prefix} answer={answer} params={params}
-                    disabled={busy} onSubmit={(predictId, value) => session.submitPrediction(predictId, value)} />
+                    disabled={busy} focusReveal={!!runtime?.revealShown} onSubmit={(predictId, value) => session.submitPrediction(predictId, value)} />
             )}
             {embeds.includes('trainer') && <div className="edu-embed edu-embed-trainer"><TrainerCard locked={locked} lockedReason={locked ? t('panel.trainLocked') : ''} /></div>}
             {embeds.includes('paramCount') && (!step.predict || answer ? <ParamCountReadout /> : <p className="edu-embed edu-muted">{t('paramCount.hidden')}</p>)}

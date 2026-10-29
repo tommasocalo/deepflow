@@ -52,7 +52,13 @@ const Layout = () => {
             <ToolbarStrip
                 activeTab={activeTab}
                 onChange={setTab}
-                onShowCode={() => openCode()}
+                codeOpen={codeOpen}
+                onShowCode={() => {
+                    // Code toggles the panel, so it can be closed at any width.
+                    if (codeOpen) { closeCode(); return; }
+                    if (activeTab === 'learn') setTab('architecture');
+                    openCode();
+                }}
             />
 
             <div className="df-app-main edu-main">

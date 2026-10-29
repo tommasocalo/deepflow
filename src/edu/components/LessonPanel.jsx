@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronUp, Minus, PanelRightOpen, X } from 'lucide-react';
 import { factValues } from '../lessons/engine/context.js';
 import { t } from '../lessons/engine/i18n.js';
@@ -14,6 +14,10 @@ import { CHECK_DELAY, useMediaQuery, useModules, useStepEvaluation } from './hoo
 import './lesson-panel.css';
 
 const NARROW = '(max-width: 899px)';
+const DRAWER_MIN = 120;
+const DRAWER_MAX = 0.85;
+
+const clampDrawer = (height) => Math.round(Math.min(window.innerHeight * DRAWER_MAX, Math.max(DRAWER_MIN, height)));
 
 function segmentStatus(record, step, current) {
     const status = record?.steps?.[step.id]?.status;
@@ -56,6 +60,10 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
     const drawerOpen = useEduUiStore((state) => state.drawerOpen);
     const narrow = useMediaQuery(NARROW);
     const panelRef = useRef(null);
+    // Below 900 px the drawer's handle toggles it and, dragged (or with the arrow keys), resizes it.
+    const [drawerHeight, setDrawerHeight] = useState(null);
+    const dragRef = useRef(null);
+    const draggedRef = useRef(false);
     const module = getModule(moduleId);
     const step = module?.steps?.[stepIndex] ?? null;
     const result = useStepEvaluation(`${moduleId}:${phase}:${stepIndex}`, { enabled: !!module && phase === 'steps' && !!step, delay: checkDelay });
@@ -70,6 +78,42 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
     const passing = !!result?.pass;
     const isCollapsed = narrow ? !drawerOpen : collapsed;
     const toggle = () => (narrow ? useEduUiStore.getState().setDrawerOpen(!drawerOpen) : session.setCollapsed(!collapsed));
+    const exit = () => session.exitLesson({ tab: 'learn' });
+    const resizeDrawer = (height) => {
+        if (!drawerOpen) useEduUiStore.getState().setDrawerOpen(true);
+        setDrawerHeight(clampDrawer(height));
+    };
+    const handleEvents = {
+        onPointerDown: (event) => {
+            if (event.button !== 0) return;
+            dragRef.current = { y: event.clientY, start: panelRef.current?.getBoundingClientRect().height ?? 0, moved: false };
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+        },
+        onPointerMove: (event) => {
+            const drag = dragRef.current;
+            if (!drag) return;
+            const delta = drag.y - event.clientY;
+            if (!drag.moved && Math.abs(delta) < 6) return;
+            drag.moved = true;
+            resizeDrawer(drag.start + delta);
+        },
+        onPointerUp: (event) => {
+            draggedRef.current = !!dragRef.current?.moved;
+            dragRef.current = null;
+            event.currentTarget.releasePointerCapture?.(event.pointerId);
+        },
+        onPointerCancel: () => { dragRef.current = null; },
+        onClick: () => {
+            if (draggedRef.current) { draggedRef.current = false; return; }
+            toggle();
+        },
+        onKeyDown: (event) => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            const current = panelRef.current?.getBoundingClientRect().height ?? window.innerHeight * 0.45;
+            resizeDrawer(current + (event.key === 'ArrowUp' ? 1 : -1) * window.innerHeight * 0.1);
+        },
+    };
 
     if (isCollapsed && !narrow) {
         return (
@@ -86,11 +130,11 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
 
     let body = null;
     if (phase === 'warmup') {
-        body = <QuizView kind="warmup" items={module.warmup ?? []} index={warmupIndex} records={record?.warmup ?? {}} facts={facts}
+        body = <QuizView key={`warmup-${warmupIndex}`} kind="warmup" items={module.warmup ?? []} index={warmupIndex} records={record?.warmup ?? {}} facts={facts}
             onAnswer={(id, option) => session.answerQuiz(id, option)} onNext={() => session.nextWarmup()}
             onBack={warmupIndex > 0 ? () => session.back() : null} onSkip={() => session.skipWarmup()} />;
     } else if (phase === 'quiz') {
-        body = <QuizView kind="quiz" items={module.quiz ?? []} index={quizIndex} records={record?.quiz ?? {}} facts={facts}
+        body = <QuizView key={`quiz-${quizIndex}`} kind="quiz" items={module.quiz ?? []} index={quizIndex} records={record?.quiz ?? {}} facts={facts}
             onAnswer={(id, option) => session.answerQuiz(id, option)} onNext={() => session.nextQuiz()} onBack={() => session.back()} />;
     } else if (phase === 'recap') {
         const next = nextModule(module.id);
@@ -101,30 +145,43 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
             answers={record?.answers ?? {}} runtime={runtime} result={result} facts={facts} isLast={stepIndex === total - 1} />;
     }
 
+    const countText = phase === 'steps' ? t('panel.step', { index: stepIndex + 1, total })
+        : t(phase === 'warmup' ? 'warmup.heading' : phase === 'quiz' ? 'quiz.heading' : 'recap.heading');
+    const shortCount = phase === 'steps' ? `${stepIndex + 1}/${total}${passing ? ' ✓' : ''}` : countText;
+    const drawerStyle = narrow && !isCollapsed && drawerHeight ? { height: drawerHeight, maxHeight: 'none' } : undefined;
+
     return (
-        <aside ref={panelRef} className={`edu-lesson-panel${narrow ? ' is-drawer' : ''}${isCollapsed ? ' is-closed' : ''}`} aria-label={t('panel.label')}>
+        <aside ref={panelRef} className={`edu-lesson-panel${narrow ? ' is-drawer' : ''}${isCollapsed ? ' is-closed' : ''}`} aria-label={t('panel.label')}
+            style={drawerStyle}>
             {narrow && (
-                <button type="button" className="edu-drawer-handle" onClick={toggle} aria-expanded={!isCollapsed} aria-label={t('panel.drawer')}>
-                    <span className="edu-drawer-grip" aria-hidden="true" />
-                    <span>{t('panel.drawer')} · {moduleTitle(module)}</span>
-                    <ChevronUp size={14} aria-hidden="true" className="edu-drawer-chevron" />
-                </button>
+                <div className="edu-drawer-bar">
+                    <button type="button" className="edu-drawer-handle" aria-expanded={!isCollapsed} title={t('panel.drawerHint')} {...handleEvents}>
+                        <span className="edu-drawer-grip" aria-hidden="true" />
+                        <span className="edu-drawer-title">
+                            {isCollapsed ? t('panel.drawerClosed', { count: shortCount, title: t(`${module.id}.title`) }) : `${t('panel.drawer')} · ${moduleTitle(module)}`}
+                        </span>
+                        <ChevronUp size={14} aria-hidden="true" className="edu-drawer-chevron" />
+                    </button>
+                    <button type="button" className="df-icon-button" onClick={exit} aria-label={t('panel.exit')} title={t('panel.exit')}>
+                        <X size={15} aria-hidden="true" />
+                    </button>
+                </div>
             )}
             {!isCollapsed && (
                 <>
-                    <header className="edu-panel-header">
-                        <p className="edu-panel-module">{moduleTitle(module)}</p>
-                        {!narrow && (
+                    {!narrow && (
+                        <header className="edu-panel-header">
+                            <p className="edu-panel-module">{moduleTitle(module)}</p>
                             <button type="button" className="df-icon-button" onClick={toggle} aria-label={t('panel.collapse')} title={t('panel.collapse')}>
                                 <Minus size={15} aria-hidden="true" />
                             </button>
-                        )}
-                        <button type="button" className="df-icon-button" onClick={() => session.exitLesson({ tab: 'learn' })} aria-label={t('panel.exit')} title={t('panel.exit')}>
-                            <X size={15} aria-hidden="true" />
-                        </button>
-                    </header>
+                            <button type="button" className="df-icon-button" onClick={exit} aria-label={t('panel.exit')} title={t('panel.exit')}>
+                                <X size={15} aria-hidden="true" />
+                            </button>
+                        </header>
+                    )}
                     <div className="edu-panel-progress">
-                        <p className="edu-panel-count">{phase === 'steps' ? t('panel.step', { index: stepIndex + 1, total }) : t(phase === 'warmup' ? 'warmup.heading' : phase === 'quiz' ? 'quiz.heading' : 'recap.heading')}</p>
+                        <p className="edu-panel-count">{countText}</p>
                         <ProgressSegments module={module} record={record} stepIndex={stepIndex} phase={phase} onGo={(index) => session.goToStep(index)} />
                     </div>
                     <div className="edu-panel-body">{body}</div>

@@ -68,7 +68,7 @@ export const TEST_MODULE = {
             solution: [{ do: 'answer', id: 'demo.params', value: 24 }],
         },
         {
-            id: 's3', kind: 'task', subgoal: 'model', tab: 'architecture', target: ['lesson.palette', 'ribbon.components'],
+            id: 's3', kind: 'task', subgoal: 'model', tab: 'architecture', target: ['ribbon.components'],
             palette: [{ block: 'torch.nn.ReLU', count: 1 }, { block: 'torch.nn.Sigmoid', distractor: 'sigmoid-before-bce' }],
             check: { all: [
                 { chain: [{ type: 'Input' }, { type: 'Linear' }, { type: 'Activation' }, { type: 'Linear' }, { type: 'Output' }] },

@@ -7,21 +7,22 @@ import RichText from './RichText.jsx';
  * A prediction gate (docs/edu/SPEC.md §3.3, P6 predict–observe–explain). The answer is committed before the tool
  * reveals the value and cannot be changed until Reset step. Predictions are never marked failed.
  */
-export default function PredictGate({ predict, textPrefix, answer, onSubmit, params, disabled = false }) {
+export default function PredictGate({ predict, textPrefix, answer, onSubmit, params, disabled = false, focusReveal = false }) {
     const id = useId();
     const [draft, setDraft] = useState('');
     const [error, setError] = useState('');
     const revealRef = useRef(null);
-    const submittedRef = useRef(false);
+    const focusedRef = useRef(false);
     const optionText = (option) => t(`${textPrefix}.predict.opt.${option}`);
     const display = (value) => (predict.kind === 'choice' ? optionText(value) : formatPredictionValue(predict, value));
 
+    // The answered gate is a new instance (StepView keys it by state). Focus its reveal once when the answer was just
+    // given in this step, not when the learner comes back to a step answered earlier.
     useEffect(() => {
-        if (answer && submittedRef.current) {
-            submittedRef.current = false;
-            revealRef.current?.focus();
-        }
-    }, [answer]);
+        if (!answer || !focusReveal || focusedRef.current) return;
+        focusedRef.current = true;
+        revealRef.current?.focus();
+    }, [answer, focusReveal]);
 
     const submit = (event) => {
         event.preventDefault();
@@ -31,7 +32,6 @@ export default function PredictGate({ predict, textPrefix, answer, onSubmit, par
             return;
         }
         setError('');
-        submittedRef.current = true;
         onSubmit(predict.id, value);
     };
 
@@ -44,8 +44,12 @@ export default function PredictGate({ predict, textPrefix, answer, onSubmit, par
                 <p className="edu-predict-prompt"><RichText inline text={t(`${textPrefix}.predict.prompt`)} params={params} /></p>
                 <h3 id={`${id}-reveal`} ref={revealRef} tabIndex={-1} className="edu-reveal-heading">{verdict}</h3>
                 <p className="edu-reveal-compare">
-                    <span>{t('predict.you', { value: display(answer.value) })}</span>
-                    <span aria-hidden="true"> · </span>
+                    {answer.source !== 'show-me' && (
+                        <>
+                            <span>{t('predict.you', { value: display(answer.value) })}</span>
+                            <span aria-hidden="true"> · </span>
+                        </>
+                    )}
                     <span>{t('predict.tool', { value: display(expectedValue(predict)) })}</span>
                 </p>
                 <RichText text={t(`${textPrefix}.predict.reveal`)} params={params} />

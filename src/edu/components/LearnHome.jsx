@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Download, Play, RotateCcw, SquareDashedMousePointer } from 'lucide-react';
 import { t } from '../lessons/engine/i18n.js';
 import { learningLogExport } from '../lessons/engine/log.js';
@@ -41,8 +42,17 @@ function continueLabel(module, summary, session) {
     return t('learn.continue', { number: module.order, title, step: summary.currentIndex + 1, total: summary.total });
 }
 
+let shownBefore = false;
+
 /** The Learn home (docs/edu/SPEC.md §3.2): the curriculum, progress, Continue and the way into the sandbox. */
 export default function LearnHome() {
+    const headingRef = useRef(null);
+    // Coming back from a lesson (Exit, Back to Learn) unmounts the control that had focus: continue from the heading.
+    useEffect(() => {
+        const active = document.activeElement;
+        if (shownBefore && (!active || active === document.body)) headingRef.current?.focus({ preventScroll: true });
+        shownBefore = true;
+    }, []);
     const modules = useModules();
     const progress = useLessonSession((state) => state.progress);
     const moduleId = useLessonSession((state) => state.moduleId);
@@ -62,7 +72,7 @@ export default function LearnHome() {
         <div className="edu-learn" data-edu-learn="">
             <div className="edu-learn-inner">
                 <header className="edu-learn-header">
-                    <h1>{t('learn.title')}</h1>
+                    <h1 ref={headingRef} tabIndex={-1}>{t('learn.title')}</h1>
                     <p className="edu-learn-subtitle">{modules.length ? t(modules.length === 1 ? 'learn.subtitleOne' : 'learn.subtitle', { count: modules.length }) : t('learn.empty')}</p>
                     <div className="edu-learn-actions">
                         {target && (
