@@ -56,7 +56,7 @@ export default function TrainerCard({ locked = false, lockedReason = '' }) {
                         <p className="edu-tr-card-chance">{tr('card.chance', { chance: formatLoss(record.chance) })}</p>
                     )}
                 </div>
-                {record?.boundary && <BoundaryView record={record} size={112} thumbnail />}
+                {record?.boundary && <BoundaryView record={record} size={120} thumbnail />}
             </div>
             {record?.history?.length > 0 && !record.boundary && record.confusion && !running && <ConfusionMatrix record={record} compact />}
             {ghosts.length > 0 && (
