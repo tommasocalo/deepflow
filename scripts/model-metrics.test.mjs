@@ -112,6 +112,8 @@ test('layer sizes cover convolution kernels, transposed convolutions, frozen and
     assert.equal(layerSize(layer('torch.nn.Conv2d', { in_channels: 3, out_channels: 64, kernel_size: '$missing' }), {}), null, 'An unresolved kernel is not the default kernel');
     assert.deepEqual(layerSize(layer('torch.nn.Conv1d', { in_channels: 3, out_channels: 64, kernel_size: 3 }), {}), { total: 640, trainable: 640 });
     assert.deepEqual(layerSize(layer('torch.nn.ConvTranspose2d', { in_channels: 64, out_channels: 32, kernel_size: 4 }), {}), { total: 32800, trainable: 32800 });
+    assert.equal(layerSize(layer('torch.nn.ConvTranspose2d', { in_channels: 6, out_channels: 4, kernel_size: 4, groups: 4 }), {}), null, 'PyTorch rejects in_channels not divisible by groups');
+    assert.equal(layerSize(layer('torch.nn.Conv2d', { in_channels: 4, out_channels: 6, kernel_size: 3, groups: 4 }), {}), null, 'PyTorch rejects out_channels not divisible by groups');
     assert.deepEqual(layerSize(layer('deepflow.op.Parameter', { shape: [768, 3072], requires_grad: false }), {}), { total: 2359296, trainable: 0 });
     assert.deepEqual(layerSize(layer('deepflow.op.Parameter', { shape: [768], enabled: false }), {}), { total: 0, trainable: 0 });
     assert.deepEqual(layerSize(layer('torch.nn.LeakyReLU'), {}), { total: 0, trainable: 0 });

@@ -1,8 +1,7 @@
 import { useId, useState } from 'react';
 import VariableInput from './VariableInput';
+import { NUMBER_LITERAL } from '../../domain/parameterDisplay.js';
 import './parameter-shape.css';
-
-const NUMBER_LITERAL = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 function shapeDimensions(value) {
     if (Array.isArray(value)) return value;

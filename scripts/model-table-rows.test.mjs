@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import { computeModelMetrics, formatShare } from '../src/domain/metrics/index.js';
 import { buildModelTableRows, readingOrder, rowKey } from '../src/domain/modelTable/rows.js';
 import { describeTarget, followReference, parseCellValue, precheckCellValue, resolveWriteTarget } from '../src/domain/modelTable/writeTargets.js';
+import { createEdge, createLayerNode, createRepeatNode, createSuperNodeInstance, createTemplate } from '../src/domain/architecture/index.js';
+import { getEntry } from '../src/domain/library/index.js';
 import { gpt2Storyboard } from '../src/storyboards/gpt2.js';
 import { resnetStoryboard } from '../src/storyboards/resnet.js';
 import { attentionStoryboard } from '../src/storyboards/attention.js';
@@ -246,4 +248,73 @@ test('reading order follows dataflow and canvas position', () => {
     };
     assert.deepEqual(readingOrder(graph), ['source', 'a', 'b', 'c']);
     assert.deepEqual(readingOrder({ nodes: { x: { id: 'x', position: { x: 0, y: 9 } }, y: { id: 'y', position: { x: 0, y: 1 } } }, edges: [{ source: 'x', target: 'y' }, { source: 'y', target: 'x' }] }), ['y', 'x'], 'Cycles fall back to position');
+});
+
+const layerNode = (libraryKey, parameters = {}, label) => {
+    const node = createLayerNode({ libraryKey, entry: getEntry(libraryKey), position: { x: 0, y: 0 }, label });
+    return { ...node, parameters: { ...node.parameters, ...parameters } };
+};
+const linked = (...nodes) => ({
+    nodes: Object.fromEntries(nodes.map((node, index) => [node.id, { ...node, position: { x: 0, y: index * 100 } }])),
+    edges: nodes.slice(1).map((node, index) => createEdge({ source: nodes[index].id, target: node.id })),
+});
+function custom(graph, templates) {
+    return { graph, templates, metrics: computeModelMetrics(graph, templates) };
+}
+
+test('a binding follows its own definition first, then the repeat index, then globals', () => {
+    const body = createTemplate({ name: 'Body', graph: linked(layerNode('deepflow.template.Input'), layerNode('torch.nn.Linear', { in_features: '$width', out_features: '$width' }, 'proj'), layerNode('deepflow.template.Output')),
+        freeParameters: [{ name: 'd_model', type: 'int', default: 64 }, { name: 'width', type: 'int', default: 64 }, { name: 'depth', type: 'int', default: 1 }] });
+    const repeat = createRepeatNode({ templateId: body.id, position: { x: 0, y: 0 }, count: 2, label: 'Stack', bindings: { d_model: 512, width: '$d_model' } });
+    const graph = { ...linked(layerNode('deepflow.io.Input', { shape: '(512,)' }), repeat, layerNode('deepflow.io.Output')), parameters: [{ name: 'd_model', type: 'int', default: 768 }] };
+    const ctx = custom(graph, { [body.id]: body });
+    const stack = find(rowsAt(ctx, 'blocks'), 'Stack');
+    const width = target(ctx, stack, 'width', 'values');
+    assert.deepEqual([width.kind, width.nodeId, width.source, width.field], ['rootNode', repeat.id, 'bindings', 'd_model'], 'width reads the repeat\'s own d_model, not the global');
+    const inner = target(ctx, find(rowsAt(ctx, 'blocks'), 'proj'), 'in_features', 'values');
+    assert.deepEqual([inner.kind, inner.field], ['rootNode', 'd_model'], 'A layer inside follows width, then d_model on the repeat');
+
+    const indexed = createRepeatNode({ templateId: body.id, position: { x: 0, y: 0 }, count: 2, label: 'Indexed', bindings: { depth: '$i' } });
+    const byIndex = custom({ ...linked(layerNode('deepflow.io.Input', { shape: '(64,)' }), indexed, layerNode('deepflow.io.Output')), parameters: [] }, { [body.id]: body });
+    const index = target(byIndex, find(rowsAt(byIndex, 'blocks'), 'Indexed'), 'depth', 'values');
+    assert.equal(index.kind, 'readonly');
+    assert.match(index.reason, /instance index/);
+});
+
+test('a global computed from other globals is never overwritten with a value', () => {
+    const linear = layerNode('torch.nn.Linear', { in_features: '$d_model', out_features: '$hidden' }, 'fc');
+    const alias = layerNode('torch.nn.Linear', { in_features: '$d_model', out_features: '$width' }, 'alias');
+    const graph = { ...linked(layerNode('deepflow.io.Input', { shape: '(64,)' }), linear, alias, layerNode('deepflow.io.Output')),
+        parameters: [{ name: 'd_model', type: 'int', default: 64 }, { name: 'hidden', type: 'int', default: '4 * d_model' }, { name: 'width', type: 'int', default: '$d_model' }] };
+    const ctx = custom(graph, {});
+    const rows = rowsAt(ctx, 'root');
+    const formula = target(ctx, find(rows, 'fc'), 'out_features', 'values');
+    assert.equal(formula.kind, 'readonly');
+    assert.match(formula.reason, /4 \* d_model/);
+    const forwarded = target(ctx, find(rows, 'alias'), 'out_features', 'values');
+    assert.deepEqual([forwarded.kind, forwarded.name], ['global', 'd_model'], 'A global that forwards another global edits the source');
+});
+
+test('an open container keeps its own problems; auto counts name their source', () => {
+    const left = layerNode('deepflow.template.Input', {}, 'left');
+    const right = layerNode('deepflow.template.Input', {}, 'right');
+    const add = layerNode('deepflow.op.Add', {}, 'join');
+    const out = layerNode('deepflow.template.Output');
+    const pair = createTemplate({ name: 'Pair', graph: { nodes: { [left.id]: left, [right.id]: right, [add.id]: add, [out.id]: out },
+        edges: [createEdge({ source: left.id, target: add.id }), createEdge({ source: right.id, target: add.id }), createEdge({ source: add.id, target: out.id })] } });
+    const instance = createSuperNodeInstance({ templateId: pair.id, position: { x: 0, y: 100 }, label: 'Pair block' });
+    const input = layerNode('deepflow.io.Input', { shape: '(8,)' });
+    const graph = { nodes: { [input.id]: input, [instance.id]: instance }, edges: [createEdge({ source: input.id, target: instance.id, targetHandle: left.id })] };
+    const ctx = custom(graph, { [pair.id]: pair });
+    const open = find(rowsAt(ctx, 'blocks'), 'Pair block');
+    assert.equal(open.expanded, true);
+    assert.ok(open.errors.includes('Connect every template input port'), 'The open row still shows the unconnected port');
+
+    const head = createTemplate({ name: 'Head', graph: linked(layerNode('deepflow.template.Input'), layerNode('torch.nn.ReLU'), layerNode('deepflow.template.Output')) });
+    const broadcast = layerNode('deepflow.op.Broadcast', { count: 4 }, 'copies');
+    const heads = createRepeatNode({ templateId: head.id, position: { x: 0, y: 0 }, count: 'auto', mode: 'parallel', label: 'Heads' });
+    const parallel = custom(linked(layerNode('deepflow.io.Input', { shape: '(8,)' }), broadcast, heads), { [head.id]: head });
+    const auto = target(parallel, find(rowsAt(parallel, 'blocks'), 'Heads'), 'count', 'symbols');
+    assert.equal(auto.kind, 'readonly');
+    assert.match(auto.reason, /Broadcast copies \(count 4\)/);
 });

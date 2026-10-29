@@ -69,13 +69,14 @@ export function layerSize(node, scope) {
     } else if (/^torch\.nn\.Conv[123]d$/.test(key)) {
         const kernel = kernelVolume(key, node.parameters?.kernel_size, scope);
         const groups = n('groups') ?? 1;
-        if (!n('in_channels') || !n('out_channels') || !kernel || n('in_channels') % groups) return null;
+        // PyTorch requires both channel counts to be divisible by groups.
+        if (!n('in_channels') || !n('out_channels') || !kernel || n('in_channels') % groups || n('out_channels') % groups) return null;
         total = n('out_channels') * (n('in_channels') / groups) * kernel + (p.bias === false ? 0 : n('out_channels'));
     } else if (/^torch\.nn\.ConvTranspose[123]d$/.test(key)) {
         // PyTorch stores ConvTranspose weights as (in, out / groups, *kernel).
         const kernel = kernelVolume(key, node.parameters?.kernel_size, scope);
         const groups = n('groups') ?? 1;
-        if (!n('in_channels') || !n('out_channels') || !kernel || n('out_channels') % groups) return null;
+        if (!n('in_channels') || !n('out_channels') || !kernel || n('in_channels') % groups || n('out_channels') % groups) return null;
         total = n('in_channels') * (n('out_channels') / groups) * kernel + (p.bias === false ? 0 : n('out_channels'));
     } else if (key === 'deepflow.nn.PositionalEmbedding') {
         if (!n('max_len') || !n('embedding_dim')) return null;

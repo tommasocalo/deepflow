@@ -19,8 +19,10 @@ const MAX_VALIDATED_NODES = 20000;
  *
  * With `collect: true` (metrics only) the report also keeps this level's
  * resolved `scope` and, per repeat or component, one `children` entry per
- * instance: { index, templateId, scope, inputs, report, parameterIssues }.
- * Without it, reports are unchanged.
+ * instance: { index, templateId, scope, inputs, report, parameterIssues,
+ * instanceIssues }. The issues are the instance's own problems, which
+ * otherwise appear only in the container's summary. Without the option,
+ * reports are unchanged.
  */
 export function validate(graph, opts = {}) {
     const { templates = {}, externalInputs = {}, depth = 0 } = opts;
@@ -132,7 +134,7 @@ export function validate(graph, opts = {}) {
             const instanceTemplate = templates[instanceTemplateId];
             if (!instanceTemplate?.graph) {
                 childErrors.push(`Instance ${index + 1} template is missing`);
-                if (collect) (children[id] ??= [])[index] = { index, templateId: instanceTemplateId, scope: null, inputs: null, report: null, parameterIssues: [] };
+                if (collect) (children[id] ??= [])[index] = { index, templateId: instanceTemplateId, scope: null, inputs: null, report: null, parameterIssues: [], instanceIssues: [`Instance ${index + 1} template is missing`] };
                 carry = null;
                 outputs.push(null);
                 continue;
@@ -140,10 +142,15 @@ export function validate(graph, opts = {}) {
             const inputIds = getTemplateInputIds(instanceTemplate.graph);
             const outputIds = Object.values(instanceTemplate.graph.nodes).filter((n) => n.libraryKey === TEMPLATE_OUTPUT).map((n) => n.id);
             const initialInputs = mapTemplateInputs(instanceTemplate.graph, edges, (edge) => shapes[edge.source] ?? null);
+            const instanceIssues = collect ? [] : null;
+            const instanceIssue = (message) => {
+                childErrors.push(message);
+                instanceIssues?.push(message);
+            };
             if (parallel || index === 0) {
-                for (const issue of validateInputPorts(edges, inputIds)) childErrors.push(issue);
+                for (const issue of validateInputPorts(edges, inputIds)) instanceIssue(issue);
                 const connectedPorts = mapTemplateInputs(instanceTemplate.graph, edges, () => true);
-                if (edges.length && Object.values(connectedPorts).some((connected) => !connected)) childErrors.push('Connect every template input port');
+                if (edges.length && Object.values(connectedPorts).some((connected) => !connected)) instanceIssue('Connect every template input port');
             }
             let childInputs;
             if (parallel) {
@@ -157,7 +164,7 @@ export function validate(graph, opts = {}) {
             const subScope = buildParameterScope(instanceTemplate.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined, childInputs);
             const parameterIssues = collect ? [] : null;
             const parameterIssue = (name, message) => {
-                childErrors.push(message);
+                instanceIssue(message);
                 parameterIssues?.push({ name, message });
             };
             for (const parameter of instanceTemplate.freeParameters ?? []) {
@@ -177,7 +184,7 @@ export function validate(graph, opts = {}) {
                 }
             }
             const child = validate(instanceTemplate.graph, { templates, scope: subScope, externalInputs: childInputs, depth: depth + 1, budget, collect });
-            if (collect) (children[id] ??= [])[index] = { index, templateId: instanceTemplateId, scope: subScope, inputs: childInputs, report: child, parameterIssues };
+            if (collect) (children[id] ??= [])[index] = { index, templateId: instanceTemplateId, scope: subScope, inputs: childInputs, report: child, parameterIssues, instanceIssues };
             carry = outputIds.reduce((output, port) => child.shapes[port] ?? output, null);
             outputs.push(carry);
             childErrors.push(...child.globalErrors, ...Object.values(child.errors).flat());

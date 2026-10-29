@@ -1,6 +1,6 @@
 import { asFreeParamRef } from '../expressions.js';
 import { getEntry } from '../library/index.js';
-import { formatParameterValue } from '../parameterDisplay.js';
+import { formatParameterValue, NUMBER_LITERAL } from '../parameterDisplay.js';
 import { resolvedLayerParameters } from '../optimization/parameterCount.js';
 import { fieldAlias } from '../parameterBindings.js';
 
@@ -67,7 +67,6 @@ const FAMILY_LAYOUTS = {
 
 /** Custom repeats and components show at most this many interesting integer bindings. */
 const MAX_BINDINGS = 2;
-const NUMBER_LITERAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 export const COUNT_SPEC = Object.freeze({ name: 'count', type: 'int', required: true, description: 'Number of instances' });
 
@@ -85,7 +84,8 @@ export function fieldRaw(node, source, name) {
     return node[source]?.[name];
 }
 
-const unset = (raw) => raw === undefined || raw === null || raw === '';
+/** Empty fields inherit their default. */
+export const unset = (raw) => raw === undefined || raw === null || raw === '';
 
 /** A plain forward such as `d_model: $d_model` restates its parent's value. */
 function isForward(name, raw) {

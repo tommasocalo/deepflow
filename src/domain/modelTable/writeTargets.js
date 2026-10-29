@@ -1,6 +1,7 @@
 import { asFreeParamRef, globalParameters, resolveDimensionTuple, resolveRepeatCount } from '../expressions.js';
 import { fieldAlias, globalParameterUses, parameterReferences, resolvedFieldValue } from '../parameterBindings.js';
-import { fieldRaw } from './configFields.js';
+import { NUMBER_LITERAL } from '../parameterDisplay.js';
+import { fieldRaw, unset } from './configFields.js';
 
 /**
  * Where a Model table edit is written. Each kind names the real owner of the value:
@@ -12,8 +13,6 @@ import { fieldRaw } from './configFields.js';
  * - readonly      { reason }                      nothing is written; the reason says where to edit
  */
 
-const NUMBER_LITERAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
-const unset = (raw) => raw === undefined || raw === null || raw === '';
 const readonly = (reason, hops = []) => ({ kind: 'readonly', reason, hops });
 
 /** A value written as-is: numbers, flags, enum choices and numeric tuples. */
@@ -49,14 +48,40 @@ const bindingSource = (container) => container.kind === 'repeat' ? 'bindings' : 
 const iterationName = (container) => container.kind === 'repeat' ? container.iterationVariable || 'i' : null;
 
 /**
- * Follow a direct `$name` to the value it reads, mirroring buildParameterScope:
- * a container's binding may use parameters declared earlier in the same
- * definition, then the repeat index, then the enclosing level; globals last.
+ * A global's value, following references to earlier globals, as
+ * withGlobalParameters resolves them in declaration order.
  */
-export function followReference(name, frames, rootGraph) {
+function followGlobal(name, rootGraph, hops) {
+    const globals = globalParameters(rootGraph);
+    let before = globals.length;
+    for (;;) {
+        const index = globals.findIndex((parameter) => parameter.name === name);
+        if (index < 0 || index >= before) return readonly(`$${name} is unresolved.`, hops);
+        const raw = globals[index].default;
+        hops.push({ name, label: 'global', raw, bound: true });
+        const reference = asFreeParamRef(typeof raw === 'string' ? raw.trim() : raw);
+        if (reference) {
+            name = reference;
+            before = index;
+            continue;
+        }
+        if (Array.isArray(raw) && globals[index].type !== 'tuple') return readonly(`Global ${name} holds several values; edit it in Parameters → Global.`, hops);
+        if (!unset(raw) && !isLiteralValue(raw, globals[index])) return readonly(`Computed by ${raw} (global ${name}). Edit the formula in Parameters → Global.`, hops);
+        return { kind: 'global', name, hops };
+    }
+}
+
+/**
+ * Follow a direct `$name` to the value it reads, mirroring buildParameterScope.
+ * Inside a definition every parameter is visible, then the repeat index, then
+ * the enclosing level; globals come last. A binding (or default) sees only
+ * the parameters declared before it in its definition: `before` is that
+ * declaration index when the walk starts at a container's own binding.
+ */
+export function followReference(name, frames, rootGraph, { before: startBefore = Infinity } = {}) {
     const hops = [];
     let depth = frames.length - 1;
-    let before = Infinity;
+    let before = startBefore;
     while (depth >= 0) {
         const { container, owner, templateId, template } = frames[depth];
         const parameters = template.freeParameters ?? [];
@@ -80,7 +105,7 @@ export function followReference(name, frames, rootGraph) {
                     before = index;
                     continue;
                 }
-                if (reference === iterationName(container)) return readonly(`${name} is the instance index of ${container.label}.`, hops);
+                if (reference === iterationName(container)) return readonly(`${reference} is the instance index of ${container.label}.`, hops);
                 name = reference;
                 before = Infinity;
                 depth -= 1;
@@ -91,12 +116,12 @@ export function followReference(name, frames, rootGraph) {
                 ? { kind: owner ? 'templateNode' : 'rootNode', templateId: owner, nodeId: container.id, source, field: name, hops }
                 : { kind: 'templateDefault', templateId, name, hops };
         }
-        if (before === Infinity && name === iterationName(container)) return readonly(`${name} is the instance index of ${container.label}.`, hops);
+        // Not a parameter visible here: the repeat index, then the enclosing level.
+        if (name === iterationName(container)) return readonly(`${name} is the instance index of ${container.label}.`, hops);
         before = Infinity;
         depth -= 1;
     }
-    if (globalParameters(rootGraph).some((parameter) => parameter.name === name)) return { kind: 'global', name, hops };
-    return readonly(`$${name} is unresolved.`, hops);
+    return followGlobal(name, rootGraph, hops);
 }
 
 /** Write where the field itself is stored. */
@@ -106,13 +131,31 @@ function directTarget(row, field, ownerId) {
     return { kind: 'templateNode', templateId: ownerId, nodeId: row.nodeId, source: field.source, field: field.name };
 }
 
+const globalUseCounts = new WeakMap();
+
+/** Fields that read a global, counted once per document state. */
+function globalUseCount(rootGraph, templates, name) {
+    let byTemplates = globalUseCounts.get(rootGraph);
+    if (!byTemplates) {
+        byTemplates = new WeakMap();
+        globalUseCounts.set(rootGraph, byTemplates);
+    }
+    let counts = byTemplates.get(templates);
+    if (!counts) {
+        counts = new Map();
+        byTemplates.set(templates, counts);
+    }
+    if (!counts.has(name)) counts.set(name, globalParameterUses(rootGraph, templates, name).length);
+    return counts.get(name);
+}
+
 /** Tooltip text naming the owner before the edit happens. */
 export function describeTarget(target, { row, rootGraph, templates, templateUses = {} }) {
     if (target.kind === 'readonly') return target.reason;
     const uses = (templateId) => templateUses[templateId] ?? 0;
     const usesText = (templateId) => `${uses(templateId)} use${uses(templateId) === 1 ? '' : 's'}`;
     if (target.kind === 'global') {
-        const count = globalParameterUses(rootGraph, templates, target.name).length;
+        const count = globalUseCount(rootGraph, templates, target.name);
         return `Sets global ${target.name} · used by ${count} field${count === 1 ? '' : 's'}`;
     }
     if (target.kind === 'templateDefault') return `Sets the default of ${target.name} in the shared ${templates[target.templateId]?.name ?? 'component'} definition · ${usesText(target.templateId)}`;
@@ -143,14 +186,15 @@ export function resolveWriteTarget({ row, field, cells = 'values', rootGraph, te
     const ownerGraph = ownerId ? templates[ownerId]?.graph : rootGraph;
     const node = ownerGraph?.nodes?.[row.nodeId];
     if (!node) return readonly('This node is no longer in the model.');
-    if (field.differs) return readonly('Instances use different values; open the level to edit one.');
     const alias = ownerId && field.source !== 'count' ? fieldAlias(templates[ownerId], row.nodeId, field.name) : null;
     const raw = fieldRaw(node, field.source, field.name);
     if (field.source === 'count' && raw === 'auto') {
-        const split = Object.values(ownerGraph.nodes).find((candidate) => candidate.libraryKey === 'deepflow.op.Split'
-            && (ownerGraph.edges ?? []).some((edge) => edge.source === candidate.id && edge.target === node.id));
-        const chunks = split?.parameters?.chunks;
-        return readonly(`Counted from the incoming Split${chunks !== undefined ? ` (chunks ${chunks})` : ''}; change the number of pieces there.`);
+        const source = (ownerGraph.edges ?? []).filter((edge) => edge.target === node.id).map((edge) => ownerGraph.nodes[edge.source])
+            .find((candidate) => ['deepflow.op.Split', 'deepflow.op.Broadcast'].includes(candidate?.libraryKey));
+        if (!source) return readonly('Counted from the incoming collections.');
+        const split = source.libraryKey === 'deepflow.op.Split';
+        const value = split ? source.parameters?.chunks : source.parameters?.count;
+        return readonly(`Counted from the incoming ${split ? 'Split' : 'Broadcast'} ${source.label ?? ''}${value !== undefined ? ` (${split ? 'chunks' : 'count'} ${value})` : ''}; change the ${split ? 'number of pieces' : 'count'} there.`);
     }
     if (Array.isArray(raw) && field.source === 'bindings' && field.spec?.type !== 'tuple') {
         return readonly('Varies per instance; set the values in Structure → Instances.');
@@ -164,7 +208,17 @@ export function resolveWriteTarget({ row, field, cells = 'values', rootGraph, te
     if (!reference) return readonly(`Computed by ${typeof raw === 'string' ? raw.trim() : JSON.stringify(raw)}. Switch to Symbols to edit the formula.`);
     const frames = rowFrames(row, rootGraph, templates);
     if (!frames) return readonly('The level of this row changed; try again.');
-    const followed = followReference(reference, frames, rootGraph);
+    let followed;
+    if (field.source === 'bindings' || field.source === 'parameterValues') {
+        // A container's binding is resolved inside its own definition first:
+        // earlier parameters there, then its repeat index, then this level.
+        const template = templates[row.definitionIds[0]];
+        if (!template) return readonly('The definition of this component is missing.');
+        const index = template.freeParameters?.findIndex((parameter) => parameter.name === field.name) ?? -1;
+        followed = followReference(reference, [...frames, { container: node, owner: ownerId, templateId: row.definitionIds[0], template }], rootGraph, { before: Math.max(0, index) });
+    } else {
+        followed = followReference(reference, frames, rootGraph);
+    }
     return followed.kind === 'readonly' ? followed : { ...followed, literalOnly: true };
 }
 

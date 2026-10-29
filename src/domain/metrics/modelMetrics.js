@@ -75,7 +75,8 @@ function levelMetrics(graph, report, templates, { inputWeightOnly = {}, fused = 
             if (!child) continue;
             const template = templates[child.templateId];
             if (!child.report || !template?.graph) {
-                instances.push({ index: child.index, templateId: child.templateId, scope: null, inputs: null, output: null, level: null, parameterIssues: [] });
+                instances.push({ index: child.index, templateId: child.templateId, scope: null, inputs: null, output: null, level: null,
+                    parameterIssues: [], instanceIssues: child.instanceIssues ?? [] });
                 continue;
             }
             const portFlags = mapTemplateInputs(template.graph, incoming, (edge) => weightOnly[edge.source] === true);
@@ -84,7 +85,8 @@ function levelMetrics(graph, report, templates, { inputWeightOnly = {}, fused = 
             });
             instances.push({
                 index: child.index, templateId: child.templateId, scope: child.scope, inputs: child.inputs,
-                output: instanceOutput(template, child.report), level, parameterIssues: child.parameterIssues ?? [],
+                output: instanceOutput(template, child.report), level,
+                parameterIssues: child.parameterIssues ?? [], instanceIssues: child.instanceIssues ?? [],
             });
         }
         weightOnly[id] = instances.length > 0 && instances.every((instance) => instance.level

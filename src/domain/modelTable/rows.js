@@ -14,11 +14,22 @@ const SUMMARY = /^(?:Repeat|Template ".*") has \d+ internal errors?: /;
 /** Rows are keyed by their absolute node-id path, like level paths. */
 export const rowKey = (path) => JSON.stringify(path);
 
+const orderCache = new WeakMap();
+
 /**
  * Dataflow order; when several nodes are ready, read top to bottom and then
- * left to right, as on the canvas. Nodes in cycles come last.
+ * left to right, as on the canvas. Nodes in cycles come last. Graphs are
+ * immutable, so the order is computed once per graph object.
  */
 export function readingOrder(graph) {
+    if (!graph) return [];
+    if (orderCache.has(graph)) return orderCache.get(graph);
+    const order = computeReadingOrder(graph);
+    orderCache.set(graph, order);
+    return order;
+}
+
+function computeReadingOrder(graph) {
     const nodes = graph?.nodes ?? {};
     const ids = Object.keys(nodes);
     const insertion = new Map(ids.map((id, index) => [id, index]));
@@ -32,17 +43,25 @@ export function readingOrder(graph) {
     const position = (id) => nodes[id].position ?? {};
     const before = (a, b) => (position(a).y ?? 0) - (position(b).y ?? 0)
         || (position(a).x ?? 0) - (position(b).x ?? 0) || insertion.get(a) - insertion.get(b);
-    const ready = ids.filter((id) => indegree.get(id) === 0).sort(before);
+    // The ready set stays sorted, largest first, so the next node pops off the end.
+    const ready = ids.filter((id) => indegree.get(id) === 0).sort((a, b) => before(b, a));
+    const insert = (id) => {
+        let low = 0;
+        let high = ready.length;
+        while (low < high) {
+            const middle = (low + high) >> 1;
+            if (before(ready[middle], id) > 0) low = middle + 1;
+            else high = middle;
+        }
+        ready.splice(low, 0, id);
+    };
     const order = [];
     while (ready.length) {
-        const id = ready.shift();
+        const id = ready.pop();
         order.push(id);
         for (const next of outgoing.get(id)) {
             indegree.set(next, indegree.get(next) - 1);
-            if (indegree.get(next) === 0) {
-                ready.push(next);
-                ready.sort(before);
-            }
+            if (indegree.get(next) === 0) insert(next);
         }
     }
     const seen = new Set(order);
@@ -132,8 +151,8 @@ function buildConfig(row, list, templates, occurrenceLabels) {
         const source = fieldSource(firstNode, name);
         const spec = fieldSpec(row, name, templates);
         const alias = source === 'count' ? null : aliasFor(templates, ownerId, row.nodeId, name);
-        const raws = list.map((merged) => fieldRaw(merged.metrics.node, source, name));
-        const raw = alias ? alias.default : raws[0];
+        // One owner definition (or one root node) means one written value for every occurrence.
+        const raw = alias ? alias.default : fieldRaw(firstNode, source, name);
         const written = rawText(alias?.exposes?.inherited && alias.default === (spec?.default ?? null) ? undefined : raw, spec);
         let values;
         let labels = occurrenceLabels;
@@ -147,9 +166,8 @@ function buildConfig(row, list, templates, occurrenceLabels) {
         const resolved = summarizeValues(values, spec, labels);
         parts.push({
             kind: 'field', name, source, spec, prefix: part.prefix ?? null, readOnly: part.readOnly ?? null,
-            raw, raws, alias: alias ? { name: alias.name } : null,
+            raw, alias: alias ? { name: alias.name } : null,
             symbols: written, values: resolved,
-            differs: raws.some((value) => JSON.stringify(value ?? null) !== JSON.stringify(raws[0] ?? null)),
         });
     }
     // A Linear without bias says so in both modes; it is not an editable field here.
@@ -248,8 +266,13 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
             }
             row.share = Object.fromEntries(METRICS.map((metric) => [metric, modelTotals[metric] > 0 ? row[metric].total / modelTotals[metric] : null]));
             const errors = unique(list.flatMap((merged) => merged.metrics.errors));
-            // An open container's children carry their own errors.
-            row.errors = row.expanded ? errors.filter((message) => !SUMMARY.test(message)) : errors;
+            // An open container's children show their own errors, so its summary
+            // gives way to the problems of the container itself (ports, missing
+            // definitions, parameters that do not resolve).
+            row.errors = row.expanded
+                ? unique([...errors.filter((message) => !SUMMARY.test(message)),
+                    ...list.flatMap((merged) => merged.metrics.instances.flatMap((instance) => instance.instanceIssues ?? []))])
+                : errors;
             row.warnings = unique(list.flatMap((merged) => merged.metrics.warnings));
             row.parameterIssues = {};
             for (const merged of list) {
