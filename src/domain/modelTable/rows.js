@@ -234,6 +234,10 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
                 shape: shapeSummary(list.map((merged) => merged.metrics.output)),
                 fused: first.kind === 'layer' && first.fused,
                 countError: first.kind === 'repeat' ? first.countError : null,
+                // Scopes of the first occurrence, for checking an edit before it is written.
+                scope: first.scope ?? {},
+                instanceScope: container ? first.instances[0]?.scope ?? null : null,
+                iterationVariable: first.kind === 'repeat' ? first.node.iterationVariable || 'i' : null,
             };
             row.expanded = row.expandable && (overrides[key] ?? automatic(row));
             for (const metric of METRICS) row[metric] = metricSummary(list, occurrences, metric);

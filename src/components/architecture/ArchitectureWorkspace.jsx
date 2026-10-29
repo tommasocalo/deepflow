@@ -6,6 +6,7 @@ import ArchitectureCanvas from './ArchitectureCanvas.jsx';
 import ArchitectureRibbon from './ArchitectureRibbon.jsx';
 import LevelTabs from './LevelTabs.jsx';
 import NodeInspector from './NodeInspector.jsx';
+import ModelTablePanel from './ModelTablePanel.jsx';
 import { OpenToSideProvider } from './OpenToSideContext.jsx';
 import { useArchitectureHistoryKeys } from '../../hooks/useArchitectureHistoryKeys.js';
 import './workspace.css';
@@ -50,6 +51,7 @@ function CanvasCommandBridge({ paneId, register }) {
 function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
     const importSource = useArchitectureStore((state) => state.graph.importSource);
     const atRoot = useArchitectureStore((state) => state.currentPath.length === 0);
+    const showModelTable = useArchitectureStore((state) => state.showModelTable);
     return (
         <section className={`df-graph-pane${active ? ' is-active' : ''}`} data-graph-pane={id}
             aria-label={id === 'main' ? 'Main graph pane' : 'Side graph pane'}
@@ -60,22 +62,23 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
                 {onClose && <button type="button" className="df-side-close" onClick={onClose} aria-label="Close side view" title="Close side view"><X size={13} strokeWidth={3} /></button>}
             </div>
             <div className="df-architecture-body">
-                <ArchitectureCanvas paneId={id} keyboardActive={active} overlay={(
+                <ArchitectureCanvas paneId={id} keyboardActive={active} aside={showModelTable ? <ModelTablePanel /> : null} overlay={(
                     <>
                         <NodeInspector />
                         <CanvasCommandBridge paneId={id} register={registerCommands} />
+                        {/* On the canvas, so a docked Model table never covers it. */}
+                        {id === 'main' && atRoot && importSource?.provider === 'huggingface' && <a className="df-import-source"
+                            href={`https://huggingface.co/${importSource.repoId}/tree/${encodeURIComponent(importSource.commit)}`}
+                            target="_blank" rel="noopener noreferrer"
+                            aria-label={`View imported Hugging Face source ${importSource.repoId}`}
+                            title={`Imported from ${importSource.repoId} at ${importSource.commit}${importSource.fileName ? ` · ${importSource.fileName}` : ''}. Architecture only; weights were not loaded.`}>
+                            <span>Architecture from Hugging Face · </span>
+                            <strong className="df-import-source-full">{importSource.repoId}</strong>
+                            <strong className="df-import-source-short">{importSource.repoId.split('/').at(-1)}</strong>
+                            <ExternalLink size={10} aria-hidden="true" />
+                        </a>}
                     </>
                 )} />
-                {id === 'main' && atRoot && importSource?.provider === 'huggingface' && <a className="df-import-source"
-                    href={`https://huggingface.co/${importSource.repoId}/tree/${encodeURIComponent(importSource.commit)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    aria-label={`View imported Hugging Face source ${importSource.repoId}`}
-                    title={`Imported from ${importSource.repoId} at ${importSource.commit}${importSource.fileName ? ` · ${importSource.fileName}` : ''}. Architecture only; weights were not loaded.`}>
-                    <span>Architecture from Hugging Face · </span>
-                    <strong className="df-import-source-full">{importSource.repoId}</strong>
-                    <strong className="df-import-source-short">{importSource.repoId.split('/').at(-1)}</strong>
-                    <ExternalLink size={10} aria-hidden="true" />
-                </a>}
             </div>
         </section>
     );

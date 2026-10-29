@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Redo2, Ruler, Search, Undo2, Variable, X } from 'lucide-react';
+import { ArrowUpRight, Boxes, Braces, Check, ChevronDown, Columns2, Copy, GitBranch, Group, Maximize, Redo2, Ruler, Search, Table2, Undo2, Variable, X } from 'lucide-react';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { importHuggingFaceArchitecture } from '../../domain/huggingFace/index.js';
 import { effectiveTemplateId, inspectedInstanceIndex } from '../../domain/architecture/instanceStructure.js';
@@ -49,6 +49,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
     const inspectedIterations = useArchitectureStore((s) => s.inspectedIterations);
     const showGradientFlow = useArchitectureStore((s) => s.showGradientFlow);
     const showDimensions = useArchitectureStore((s) => s.showDimensions) !== false;
+    const showModelTable = useArchitectureStore((s) => s.showModelTable);
     const canUndo = useArchitectureHistory((s) => s.canUndo);
     const canRedo = useArchitectureHistory((s) => s.canRedo);
     const undoLabel = useArchitectureHistory((s) => s.undoLabel);
@@ -261,6 +262,9 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             <RibbonGroup label="View">
                 <RibbonButton icon={Columns2} onClick={() => { closePopup(); openToSide?.(selectedComponent ? [...currentPath, selectedComponent.id] : currentPath); }} title="Open selected component or current level to the side" aria-label="Open to the side">To side</RibbonButton>
                 <RibbonButton icon={Maximize} onClick={onFitView} title={`Fit graph in ${targetLabel.toLowerCase()}`} aria-label="Fit active graph">Fit</RibbonButton>
+                <RibbonButton icon={Table2} aria-label="Show model table" aria-pressed={!!showModelTable}
+                    onClick={() => { closePopup(); architectureStore.getState().setShowModelTable(!showModelTable); }}
+                    title={`Model table in ${targetLabel.toLowerCase()}: shapes, settings, parameters and MACs of the whole model`}>Table</RibbonButton>
                 <div className="df-ribbon-view-options">
                     <button type="button" aria-label="Show dimensions" aria-pressed={showDimensions} onClick={() => architectureStore.getState().setShowDimensions(!showDimensions)} title="Show tensor dimensions at input and output ports"><Ruler size={14} />Dimensions</button>
                     <button type="button" aria-label="Show gradient flow" aria-pressed={!!showGradientFlow} onClick={() => architectureStore.getState().setShowGradientFlow(!showGradientFlow)} title="Show differentiable paths and stopped gradients"><GitBranch size={14} />Gradients</button>

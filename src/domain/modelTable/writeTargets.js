@@ -205,8 +205,8 @@ function unknownNames(value, scope) {
  * Check a parsed value before writing it. Returns an error message, or null.
  * Nothing is written while this fails; the editor stays open.
  */
-export function precheckCellValue(value, { spec, scope = {}, literalOnly = false, source }) {
-    const required = source === 'count' || (spec?.required && spec?.default === undefined);
+export function precheckCellValue(value, { spec, scope = {}, literalOnly = false, source, required: requiredOverride }) {
+    const required = requiredOverride ?? (source === 'count' || (spec?.required && spec?.default === undefined));
     if (value === null) return required ? 'Required' : null;
     if (literalOnly && !isLiteralValue(value, spec)) return 'Values mode sets a value here; switch to Symbols to write an expression.';
     if (source === 'count') {

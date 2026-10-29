@@ -1,11 +1,6 @@
 import React from 'react';
 import { getEntry } from '../../domain/library/index.js';
-
-const FAMILY_ASSETS = {
-    Linear: 'linear', Attention: 'attention', Convolution: 'convolution',
-    Normalization: 'normalization', Activation: 'activation', Pooling: 'pooling',
-    Regularization: 'dropout', Recurrent: 'recurrent',
-};
+import { FAMILY_ASSETS } from './categoryStyle.js';
 
 /** One visual vocabulary, shared by the canvas and the block library. */
 export default function OperationIcon({ libraryKey, size = 32, className = '' }) {

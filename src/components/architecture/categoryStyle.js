@@ -20,6 +20,13 @@ const STYLES = {
 
 const FALLBACK = { card: 'bg-white', pill: 'bg-gray-200', accent: '#000000' };
 
+/** Module categories drawn with a family icon (public/assets/operations/*.png). */
+export const FAMILY_ASSETS = {
+    Linear: 'linear', Attention: 'attention', Convolution: 'convolution',
+    Normalization: 'normalization', Activation: 'activation', Pooling: 'pooling',
+    Regularization: 'dropout', Recurrent: 'recurrent',
+};
+
 export function styleFor(category) {
     return STYLES[category] ?? FALLBACK;
 }

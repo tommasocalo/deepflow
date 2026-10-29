@@ -168,6 +168,10 @@ test('model metrics are cached across position-only edits and recomputed for par
     const edited = cachedModelMetrics(patchLayerParameters(graph, dropout.id, { p: 0.2 }), templates);
     assert.notEqual(edited, first, 'A parameter edit recomputes the metrics');
     assert.equal(edited.totals.params, first.totals.params);
+    const wider = { ...graph, parameters: graph.parameters.map((parameter) => parameter.name === 'd_model' ? { ...parameter, default: 1024 } : parameter) };
+    const resized = cachedModelMetrics(wider, templates);
+    assert.notEqual(resized, first, 'A global parameter edit recomputes the metrics');
+    assert.ok(resized.totals.params > first.totals.params);
 });
 
 test('validate collects instance reports only on request', () => {

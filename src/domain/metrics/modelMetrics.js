@@ -226,8 +226,16 @@ function safeComputeModelMetrics(graph, templates) {
     }
 }
 
-/** Shared across panes; moving nodes reuses the previous result. */
-export const cachedModelMetrics = createValidationCache((graph, { templates }) => safeComputeModelMetrics(graph, templates));
+const metricsCache = createValidationCache((graph, { templates }) => safeComputeModelMetrics(graph, templates));
+
+/**
+ * Shared across panes; moving nodes reuses the previous result. The cache
+ * compares nodes and edges, so the model-wide parameters that live beside
+ * them on the root graph join its key.
+ */
+export function cachedModelMetrics(graph, templates = {}) {
+    return metricsCache(graph, templates, { globals: graph?.parameters ?? [] });
+}
 
 /** Totals of the whole model, or of a subtree's metrics root. */
 export function modelTotals(metrics) {

@@ -73,7 +73,7 @@ function toFlowEdges(edges, selectedEdgeSet, residuals, gradients) {
     }));
 }
 
-const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) => {
+const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = true }) => {
     const architectureStore = useArchitectureStoreApi();
     const clipboardNotice = useArchitectureClipboard(architectureStore, keyboardActive);
     const storeId = useMemo(() => architectureStore.getState().getMutationContext().storeId, [architectureStore]);
@@ -176,7 +176,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
 
     useEffect(() => {
         const isEditable = (target) =>
-            target?.closest?.('input, textarea, select, [contenteditable="true"]');
+            target?.closest?.('input, textarea, select, [contenteditable="true"], .nokey');
         const onKeyDown = (event) => {
             if (!keyboardActive) return;
             if (event.code === 'Space' && !isEditable(event.target)) setSpacePressed(true);
@@ -403,7 +403,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                 ref={wrapperRef}
                 data-architecture-canvas
                 className={showPanCursor ? 'deepflow-mode-pan' : 'deepflow-mode-select'}
-                style={{ flex: 1, minWidth: 0, height: '100%', backgroundColor: '#fff', position: 'relative' }}
+                style={{ flex: 1, minWidth: 0, minHeight: 0, height: '100%', backgroundColor: '#fff', position: 'relative' }}
                 onPointerUpCapture={(event) => {
                     const { userSelectionActive, userSelectionRect } = flowStore.getState();
                     completedMarqueeRef.current = userSelectionActive;
@@ -503,13 +503,15 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
                 {keyboardActive && spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
                 {clipboardNotice && !spacePressed && <div className="df-space-hint" role="status">{clipboardNotice}</div>}
             </div>
+            {/* A docked tool beside the canvas; it narrows the canvas, which keeps the graph centred. */}
+            {aside}
         </div>
     );
 };
 
-const ArchitectureCanvas = ({ children, overlay, ...props }) => (
+const ArchitectureCanvas = ({ children, overlay, aside, ...props }) => (
     <ReactFlowProvider>
-        <Inner overlay={overlay} {...props}>{children}</Inner>
+        <Inner overlay={overlay} aside={aside} {...props}>{children}</Inner>
     </ReactFlowProvider>
 );
 
