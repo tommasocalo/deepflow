@@ -42,7 +42,7 @@ const HISTORY_ACTIONS = {
     convertLayerToComponent: 'Open component definition', cloneComponent: 'Make independent component', cloneCurrentComponent: 'Make independent component',
     addRepeatNode: 'Add repeat', convertInstanceToRepeat: 'Repeat component', convertRepeatToInstance: 'Remove repeat',
     patchRepeatNode: 'Change repeat', patchRepeatBinding: 'Change repeat parameter',
-    deleteElements: 'Delete selection', removeNode: 'Delete node', patchNode: 'Change node', patchLayerParameters: 'Change node settings',
+    deleteElements: 'Delete selection', removeNode: 'Delete node', patchNode: 'Change node', patchRootNode: 'Change node', patchLayerParameters: 'Change node settings',
     moveNode: 'Move node', moveNodes: 'Move nodes', connect: 'Connect nodes', reconnectEdge: 'Reconnect nodes',
     removeEdge: 'Delete connection', patchEdge: 'Change connection', setEdgeGradientOp: 'Change gradient flow',
     resetCurrentGraph: 'Reset graph', groupSelection: 'Group nodes',
@@ -212,6 +212,11 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
         setShowDimensions: (value) => set({ showDimensions: Boolean(value) }),
         showGradientFlow: false,
         setShowGradientFlow: (value) => set({ showGradientFlow: Boolean(value) }),
+        /** The Model table is a per-pane view; its settings are not part of the document. */
+        showModelTable: false,
+        setShowModelTable: (value) => set({ showModelTable: Boolean(value) }),
+        modelTable: { depth: 'blocks', share: 'params', cells: 'values' },
+        setModelTable: (patch) => set((state) => ({ modelTable: { ...state.modelTable, ...patch } })),
 
         /** @returns {import('../domain/architecture/types.js').ArchitectureGraph} */
         getViewGraph: () => getViewGraph(get()),
@@ -437,6 +442,17 @@ const createArchitectureState = ({ graph = initialGraph(), path = [], isActive =
                 return patchNode(g, id, nextPatch);
             })) return;
             updateCurrentGraph((g) => patchNode(g, id, patch));
+        },
+
+        /** Model-table edits address root nodes whatever level this pane shows; they
+         * never use per-instance edit modes, because the table edits every instance. */
+        patchRootNode: (id, patch) => {
+            if (!isActive()) return false;
+            const state = get();
+            if (!state.graph.nodes[id]) return false;
+            const graph = patchNode(state.graph, id, patch);
+            if (graph !== state.graph) set({ graph, ...navigationPatch(state, graph) });
+            return true;
         },
 
         patchLayerParameters: (id, parameterPatch) => {

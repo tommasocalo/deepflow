@@ -1,5 +1,5 @@
 import { resolveLevelContext } from './architecture/levelContext.js';
-import { asFreeParamRef, resolveParameterValue } from './expressions.js';
+import { asFreeParamRef, globalParameters, resolveParameterValue } from './expressions.js';
 export { formatParameterValue } from './parameterDisplay.js';
 
 /** References in arithmetic and dimension tuples; numeric exponents are not names. */
@@ -26,6 +26,22 @@ export function availableParameters(frames) {
         for (const parameter of frame.template.freeParameters ?? []) visible.set(parameter.name, { ...parameter, owner: frame.instance.label });
     }
     return [...visible.values()];
+}
+
+/**
+ * Names a field at `path` can reference, with their values in `scope`: globals,
+ * then parameters of the enclosing components (which shadow globals), then
+ * each enclosing repeat's instance index.
+ */
+export function parameterSuggestions(graph, path, templates, inspectedIterations = {}, scope = {}, frames = parameterFrames(graph, path, templates, inspectedIterations)) {
+    const visible = new Map(globalParameters(graph).map((parameter) => [parameter.name, { ...parameter, owner: 'Global' }]));
+    for (const parameter of availableParameters(frames)) visible.set(parameter.name, parameter);
+    const parameters = [...visible.values()];
+    for (const frame of frames) {
+        const name = frame.instance.iterationVariable || 'i';
+        if (frame.instance.kind === 'repeat' && !parameters.some((parameter) => parameter.name === name)) parameters.push({ name, type: 'int', owner: 'Instance index' });
+    }
+    return parameters.map((parameter) => ({ ...parameter, value: resolvedFieldValue(`$${parameter.name}`, scope) }));
 }
 
 /** Follow explicit forwarding through enclosing instances instead of calling every $ref global. */
