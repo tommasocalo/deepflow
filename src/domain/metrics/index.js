@@ -1,4 +1,4 @@
-export { ACTIVATION_BYTES, layerMacs, layerSize, numelAtBatchOne, producesActivation, unresolvedReason } from './layerMetrics.js';
+export { ACTIVATION_BYTES, activationKnown, layerMacs, layerSize, numelAtBatchOne, producesActivation, unresolvedReason } from './layerMetrics.js';
 export {
     cachedModelMetrics, computeModelMetrics, definitionFamily, FUSED_FAMILIES, instanceTotals, levelSubtree, METRICS, modelTotals,
     PATH_SEPARATOR, subtreeMetrics,

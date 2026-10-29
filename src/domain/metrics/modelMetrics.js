@@ -2,7 +2,7 @@ import { validate } from '../../validation/validator.js';
 import { createValidationCache } from '../../validation/cache.js';
 import { resolveRepeatCount } from '../expressions.js';
 import { getIncomingEdges, mapTemplateInputs, orderOperationEdges } from '../graphInputs.js';
-import { ACTIVATION_BYTES, CONSTANT_SOURCE_KEYS, layerMacs, layerSize, numelAtBatchOne, producesActivation } from './layerMetrics.js';
+import { ACTIVATION_BYTES, activationKnown, CONSTANT_SOURCE_KEYS, layerMacs, layerSize, numelAtBatchOne, producesActivation } from './layerMetrics.js';
 
 const TEMPLATE_INPUT = 'deepflow.template.Input';
 const TEMPLATE_OUTPUT = 'deepflow.template.Output';
@@ -48,7 +48,7 @@ function levelMetrics(graph, report, templates, { inputWeightOnly = {}, fused = 
                 : key === TEMPLATE_INPUT ? inputWeightOnly[id] === true
                     : incoming.length > 0 && incoming.every((edge) => weightOnly[edge.source] === true);
             const counted = !fused && producesActivation(key) && !weightOnly[id];
-            const elements = counted ? numelAtBatchOne(output) : 0;
+            const elements = !counted ? 0 : activationKnown(key) ? numelAtBatchOne(output) : null;
             nodes[id] = {
                 id, node, kind: 'layer', output, inputShapes, scope, fused, weightOnly: weightOnly[id],
                 params: layerSize(node, scope),

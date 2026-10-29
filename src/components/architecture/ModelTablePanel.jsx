@@ -16,7 +16,7 @@ import './model-table.css';
 const RENDER_STEP = 300;
 const WIDTH_KEY = 'deepflow:model-table-width';
 const MIN_WIDTH = 380;
-const DEFAULT_WIDTH = 720;
+const DEFAULT_WIDTH = 760;
 const MIN_HEIGHT = 160;
 
 const DEPTHS = [
@@ -35,17 +35,19 @@ const CELLS = [
 ];
 const LENS_NAMES = { params: 'parameters', macs: 'multiply-accumulates', activation: 'activation bytes' };
 
+/** A width the user chose earlier, or null for the default (760px or less of a small window). */
 function readWidth() {
     try {
         const saved = Number(localStorage.getItem(WIDTH_KEY));
-        return Number.isFinite(saved) && saved >= MIN_WIDTH ? saved : DEFAULT_WIDTH;
+        return Number.isFinite(saved) && saved >= MIN_WIDTH ? saved : null;
     } catch {
-        return DEFAULT_WIDTH;
+        return null;
     }
 }
 function saveWidth(width) {
     try {
-        localStorage.setItem(WIDTH_KEY, String(Math.round(width)));
+        if (width === null) localStorage.removeItem(WIDTH_KEY);
+        else localStorage.setItem(WIDTH_KEY, String(Math.round(width)));
     } catch {
         // The width is a convenience; storage may be unavailable.
     }
@@ -212,7 +214,7 @@ export default function ModelTablePanel() {
         editDone: (row, edits, { refocus = true } = {}) => {
             const written = edits?.length ? applyModelTableEdit(store, row, edits) : 0;
             setEditing(null);
-            setMessage(written ? `Set ${row.label} ${edits.map((edit) => edit.field.name).join(', ')} · Undo with Ctrl+Z` : edits ? 'No change' : 'Edit cancelled');
+            setMessage(written ? `Set ${row.label} ${edits.map((edit) => edit.field.name).join(', ')} · ⌘Z / Ctrl+Z to undo` : edits ? 'No change' : 'Edit cancelled');
             if (refocus) focusCell(row.key, CONFIG_COLUMN);
         },
         message: setMessage,
@@ -225,6 +227,7 @@ export default function ModelTablePanel() {
         const id = state.selectedNodeIds[0];
         if (!id) return;
         const key = rowKey([...state.currentPath, id]);
+        setActive((current) => current.key === key ? current : { key, column: current.column });
         if (!rowsRef.current.has(key)) {
             const ancestors = ancestorKeys([...state.currentPath, id]);
             setOverrides((current) => ancestors.every((ancestor) => current[ancestor] === true) ? current
@@ -309,6 +312,7 @@ export default function ModelTablePanel() {
         event.preventDefault();
     };
 
+    const renderedWidth = () => width ?? asideRef.current?.getBoundingClientRect().width ?? DEFAULT_WIDTH;
     const resizeBy = (delta) => {
         if (sheet) {
             const current = height ?? asideRef.current?.getBoundingClientRect().height ?? 320;
@@ -316,7 +320,7 @@ export default function ModelTablePanel() {
             return;
         }
         const limitWidth = (asideRef.current?.parentElement?.getBoundingClientRect().width ?? 0) * 0.72 || Infinity;
-        const next = Math.max(MIN_WIDTH, Math.min(limitWidth, width + delta));
+        const next = Math.max(MIN_WIDTH, Math.min(limitWidth, renderedWidth() + delta));
         setWidth(next);
         saveWidth(next);
     };
@@ -336,7 +340,7 @@ export default function ModelTablePanel() {
         : 'Select a row');
 
     return <aside ref={asideRef} className={`df-model-table nokey${sheet ? ' is-sheet' : ''}`} aria-label="Model table"
-        style={{ '--model-table-width': `${width}px`, ...(height ? { '--model-table-height': `${height}px` } : {}) }}
+        style={{ ...(width ? { '--model-table-width': `${width}px` } : {}), ...(height ? { '--model-table-height': `${height}px` } : {}) }}
         onKeyDown={(event) => {
             // Plain keys stay in the table: Delete, Backspace, Space and "/"
             // never reach the canvas or the ribbon. Undo still works: its
@@ -351,9 +355,9 @@ export default function ModelTablePanel() {
         }}
         onPaste={(event) => { if (!event.target.closest?.('input, textarea, select')) event.preventDefault(); }}>
         <div className="df-mt-resizer" role="separator" tabIndex={0} aria-label="Resize model table"
-            aria-orientation={sheet ? 'horizontal' : 'vertical'} aria-valuenow={Math.round(sheet ? height ?? 0 : width)} aria-valuemin={sheet ? MIN_HEIGHT : MIN_WIDTH}
+            aria-orientation={sheet ? 'horizontal' : 'vertical'} aria-valuenow={Math.round(sheet ? height ?? 0 : width ?? DEFAULT_WIDTH)} aria-valuemin={sheet ? MIN_HEIGHT : MIN_WIDTH}
             onPointerDown={(event) => {
-                dragRef.current = { x: event.clientX, y: event.clientY, width, height: asideRef.current?.getBoundingClientRect().height ?? 0 };
+                dragRef.current = { x: event.clientX, y: event.clientY, width: renderedWidth(), height: asideRef.current?.getBoundingClientRect().height ?? 0 };
                 event.currentTarget.setPointerCapture?.(event.pointerId);
                 event.preventDefault();
             }}
@@ -369,10 +373,10 @@ export default function ModelTablePanel() {
             onPointerUp={(event) => {
                 dragRef.current = null;
                 event.currentTarget.releasePointerCapture?.(event.pointerId);
-                if (!sheet) saveWidth(width);
+                if (!sheet && width) saveWidth(width);
             }}
             onPointerCancel={() => { dragRef.current = null; }}
-            onDoubleClick={() => { if (sheet) setHeight(null); else { setWidth(DEFAULT_WIDTH); saveWidth(DEFAULT_WIDTH); } }}
+            onDoubleClick={() => { if (sheet) setHeight(null); else { setWidth(null); saveWidth(null); } }}
             onKeyDown={(event) => {
                 const keys = sheet ? { ArrowUp: 16, ArrowDown: -16 } : { ArrowLeft: 16, ArrowRight: -16 };
                 if (keys[event.key]) { event.preventDefault(); resizeBy(keys[event.key]); }

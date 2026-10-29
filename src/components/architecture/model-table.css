@@ -4,9 +4,10 @@
     position: relative;
     z-index: 4;
     display: flex;
-    flex: 0 0 var(--model-table-width, 720px);
+    /* Default: 760px, or less of a small window; a width the user drags applies up to 72%. */
+    flex: 0 0 var(--model-table-width, min(760px, 58%));
     flex-direction: column;
-    width: var(--model-table-width, 720px);
+    width: var(--model-table-width, min(760px, 58%));
     min-width: 380px;
     max-width: 72%;
     height: 100%;
@@ -39,12 +40,12 @@
 
 /* The table scrolls inside its own box; the header and Layer column stay. */
 .df-mt-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.df-mt-table { width: 100%; min-width: 640px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
-.df-mt-col-count { width: 38px; }
-.df-mt-col-output { width: 106px; }
-.df-mt-col-config { width: 160px; }
-.df-mt-col-params, .df-mt-col-macs { width: 60px; }
-.df-mt-col-share { width: 80px; }
+.df-mt-table { width: 100%; min-width: 700px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.df-mt-col-count { width: 44px; }
+.df-mt-col-output { width: 112px; }
+.df-mt-col-config { width: 172px; }
+.df-mt-col-params, .df-mt-col-macs { width: 68px; }
+.df-mt-col-share { width: 84px; }
 .df-mt-table thead th { position: sticky; top: 0; z-index: 3; height: 24px; padding: 0 6px; border-bottom: 1px solid #111; background: #fff; color: #555; font: 600 9px/1.2 ui-sans-serif, system-ui, sans-serif; letter-spacing: .05em; text-align: left; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .df-mt-table thead th.df-mt-layer { z-index: 4; left: 0; }
 .df-mt-table thead th.df-mt-num { text-align: right; }
@@ -76,30 +77,34 @@
 .df-mt-count { color: #444; }
 .df-mt-metric { display: inline-flex; flex-direction: column; align-items: flex-end; vertical-align: middle; }
 .df-mt-number { line-height: 12px; }
-.df-mt-each { color: #777; font-size: 9px; line-height: 10px; }
+.df-mt-each { color: #666; font-size: 9px; line-height: 10px; }
 .df-mt-unknown { color: #b45309; font-weight: 700; cursor: help; }
 .df-mt-shape { color: #333; font: 10px/1 var(--mt-mono); font-variant-numeric: tabular-nums; }
+.df-mt-times { margin: 0 1px; color: #9a9a94; }
+.df-mt-times.is-collection { margin: 0 3px 0 2px; }
 
 .df-mt-share { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; }
 .df-mt-bar { display: block; flex: none; width: 32px; height: 4px; background: #ececec; }
 .df-mt-bar > span { display: block; height: 100%; background: #111; }
 .df-mt-row.is-expanded .df-mt-bar > span { opacity: .4; }
-.df-mt-share-text { min-width: 4.6ch; font-size: 10px; }
+.df-mt-share-text { min-width: 5ch; font-size: 10px; }
 
 /* Config: written expressions in the expression colour, defaults muted. */
-.df-mt-config-cell { font: 10.5px/1 var(--mt-mono); font-variant-numeric: tabular-nums; }
-.df-mt-config { display: inline-flex; align-items: baseline; gap: 0; max-width: 100%; overflow: hidden; white-space: nowrap; }
-.df-mt-field { display: inline-flex; align-items: baseline; max-width: 17ch; overflow: hidden; border-bottom: 1px solid transparent; }
-.df-mt-field-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.df-mt-config-cell { font: 10.5px/16px var(--mt-mono); font-variant-numeric: tabular-nums; }
+/* Plain inline text, so a long cell ends in an ellipsis; the line height
+   leaves room for underscores in names such as d_model. */
+.df-mt-config { display: block; overflow: hidden; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.df-mt-field { border-bottom: 1px solid transparent; }
+.df-mt-field + .df-mt-field { margin-left: 7px; }
 .df-mt-field.is-expression { color: #6d28d9; }
-.df-mt-field.is-default { color: #8a8a84; }
-.df-mt-field.is-varies .df-mt-field-text { text-decoration: underline dotted #888; text-underline-offset: 2px; }
+.df-mt-field.is-default { color: #737373; }
+.df-mt-field.is-varies { text-decoration: underline dotted #888; text-underline-offset: 3px; }
 .df-mt-field.is-editable { cursor: text; }
 .df-mt-row:hover .df-mt-field.is-editable, .df-mt-config-cell:focus-visible .df-mt-field.is-editable { border-bottom: 1px dotted #777; }
 .df-mt-field.is-invalid { color: #b91c1c; border-bottom: 1px solid #dc2626 !important; }
-.df-mt-prefix { margin-right: 2px; color: #777; }
-.df-mt-separator { margin: 0 4px; color: #999; }
-.df-mt-note { margin-left: 6px; color: #777; font: 9.5px/1 ui-sans-serif, system-ui, sans-serif; }
+.df-mt-prefix { color: #666; }
+.df-mt-separator { margin: 0 3px; color: #999; }
+.df-mt-note { margin-left: 6px; color: #666; font: 9.5px/1 ui-sans-serif, system-ui, sans-serif; }
 
 .df-mt-config-cell.is-editing { overflow: visible; }
 .df-mt-editor { display: inline-flex; align-items: center; gap: 0; max-width: 100%; }
@@ -137,5 +142,5 @@ select.df-mt-input { width: auto; padding-right: 2px; }
     .df-model-table { flex: 0 0 var(--model-table-height, 46%); width: auto; min-width: 0; max-width: none; height: auto; border-top: 2px solid #111; border-left: 0; }
     .df-mt-resizer { top: -5px; right: 0; bottom: auto; left: 0; width: auto; height: 8px; cursor: row-resize; }
     .df-mt-resizer::after { top: 3px; left: calc(50% - 16px); width: 32px; height: 2px; }
-    .df-mt-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .df-mt-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 }

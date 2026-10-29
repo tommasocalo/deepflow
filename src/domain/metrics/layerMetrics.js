@@ -16,6 +16,8 @@ export const CONSTANT_SOURCE_KEYS = new Set(['deepflow.op.Parameter', 'deepflow.
 const HIDDEN_COMPUTE = /^(torch\.nn\.(LSTM|GRU|RNN|MultiheadAttention|TransformerEncoderLayer|TransformerDecoderLayer|Transformer)|deepflow\.nn\.CausalSelfAttention)$/;
 /** Convolutions without a shape rule: validation passes their input shape through. */
 const NO_SHAPE_RULE = /^torch\.nn\.(Conv1d|Conv3d|ConvTranspose1d|ConvTranspose3d)$/;
+/** Any layer whose output shape is that placeholder rather than an inferred shape. */
+const PLACEHOLDER_SHAPE = /^torch\.nn\.(Conv1d|Conv3d|ConvTranspose1d|ConvTranspose3d|MaxPool1d|AvgPool1d|LSTM|GRU|RNN)$/;
 
 const positive = (value) => Number.isSafeInteger(value) && value > 0 ? value : null;
 
@@ -89,6 +91,14 @@ export function producesActivation(libraryKey) {
     return !BOUNDARY_KEYS.has(libraryKey) && !VIEW_KEYS.has(libraryKey);
 }
 
+/**
+ * Whether the output size is known: placeholder shapes would give a wrong
+ * size, and opaque modules keep internal activations the table cannot see.
+ */
+export function activationKnown(libraryKey) {
+    return !PLACEHOLDER_SHAPE.test(libraryKey) && !HIDDEN_COMPUTE.test(libraryKey);
+}
+
 /** Why a layer metric is unknown, for tooltips. */
 export function unresolvedReason(node, metric) {
     const key = node?.libraryKey;
@@ -100,6 +110,10 @@ export function unresolvedReason(node, metric) {
     if (metric === 'macs') {
         if (NO_SHAPE_RULE.test(key)) return `no shape rule for ${name}`;
         if (HIDDEN_COMPUTE.test(key)) return `${name} computes internally; not counted yet`;
+    }
+    if (metric === 'activation') {
+        if (HIDDEN_COMPUTE.test(key)) return `${name} keeps internal activations the table does not count yet`;
+        if (PLACEHOLDER_SHAPE.test(key)) return `no shape rule for ${name}, so its output size is unknown`;
     }
     return 'the output shape is unknown';
 }

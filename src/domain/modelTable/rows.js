@@ -2,6 +2,7 @@ import { STANDARD_COMPONENTS } from '../components/index.js';
 import { getEntry } from '../library/index.js';
 import { isShapeCollection } from '../shapeCollections.js';
 import { instanceTotals, METRICS, subtreeMetrics } from '../metrics/modelMetrics.js';
+import { unresolvedReason } from '../metrics/layerMetrics.js';
 import { aliasFor, configLayout, fieldRaw, fieldSource, fieldSpec, rawText, resolvedBinding, resolvedLayerField, resolvesFalse, summarizeValues } from './configFields.js';
 
 export const DEPTHS = ['root', 'blocks', 'ops'];
@@ -240,7 +241,11 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
                 iterationVariable: first.kind === 'repeat' ? first.node.iterationVariable || 'i' : null,
             };
             row.expanded = row.expandable && (overrides[key] ?? automatic(row));
-            for (const metric of METRICS) row[metric] = metricSummary(list, occurrences, metric);
+            for (const metric of METRICS) {
+                row[metric] = metricSummary(list, occurrences, metric);
+                // A layer says why its own value is unknown; containers list what they could not count.
+                if (row[metric].unresolved && first.kind === 'layer') row[metric].reason = unresolvedReason(first.node, metric);
+            }
             row.share = Object.fromEntries(METRICS.map((metric) => [metric, modelTotals[metric] > 0 ? row[metric].total / modelTotals[metric] : null]));
             const errors = unique(list.flatMap((merged) => merged.metrics.errors));
             // An open container's children carry their own errors.

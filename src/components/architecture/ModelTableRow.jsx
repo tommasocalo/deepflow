@@ -32,21 +32,35 @@ function metricTitle(metric, summary, multiplicity) {
             ? `${formatExact(summary.each.max)} ${unit} per instance × ${multiplicity} = ${formatExact(summary.total)}`
             : `${formatExact(summary.each.min)} to ${formatExact(summary.each.max)} ${unit} per instance · ${formatExact(summary.total)} in total`);
     } else lines.push(`${formatExact(summary.total)} ${unit}`);
-    if (summary.unresolved) lines.push(`Not counted: ${summary.unresolvedLabels.join(', ')} (unknown size)`);
+    if (summary.unresolved) lines.push(summary.reason ? `Not counted: ${summary.reason}` : `Not counted: ${summary.unresolvedLabels.join(', ')} (unknown size)`);
     return lines.join('\n');
 }
 
 /** A number, its unit-free compact form, and a small per-instance figure when ×N > 1. */
 function MetricCell({ metric, summary, multiplicity }) {
     if (!summary.total && summary.unresolved) {
-        return <span className="df-mt-unknown" title={`Unknown: ${summary.unresolvedLabels.join(', ')}`}>?</span>;
+        return <span className="df-mt-unknown" title={summary.reason ? `Unknown: ${summary.reason}` : `Unknown: ${summary.unresolvedLabels.join(', ')}`}>?</span>;
     }
     if (!summary.total) return null;
     const each = summary.each && multiplicity > 1 && summary.each.max > 0 ? summary.each : null;
+    const compact = (value) => formatMetric(metric, value, { compact: true });
     return <span className="df-mt-metric" title={metricTitle(metric, summary, multiplicity)}>
         <span className="df-mt-number">{summary.unresolved ? '≥ ' : ''}{formatMetric(metric, summary.total)}</span>
-        {each && <span className="df-mt-each">{each.min === each.max ? `${formatMetric(metric, each.max)} ea` : `${formatMetric(metric, each.min)}–${formatMetric(metric, each.max)}`}</span>}
+        {each && <span className="df-mt-each">{each.min === each.max ? `${compact(each.max)} ea` : `${compact(each.min)}–${compact(each.max)}`}</span>}
     </span>;
+}
+
+/** Shapes read like the canvas but tighter: B×1024×768, and 12 × [B×1024×64] for collections. */
+function CompactShape({ text }) {
+    if (!text) return null;
+    const collection = text.match(/^(\d+) tensors(?: \[(.*)\])?$/);
+    const dims = (value) => value.split(' × ').flatMap((dim, index) => index
+        ? [<span key={`x${index}`} className="df-mt-times" aria-hidden="true">×</span>, <span key={index}>{dim}</span>]
+        : [<span key={index}>{dim}</span>]);
+    if (collection) {
+        return <><span>{collection[1]}</span><span className="df-mt-times is-collection" aria-hidden="true">×</span>{collection[2] ? <>[{dims(collection[2])}]</> : 'tensors'}</>;
+    }
+    return <>{dims(text)}</>;
 }
 
 function ShareCell({ row, lens, modelTotal }) {
@@ -83,6 +97,10 @@ function ModelTableRow({ row, index, cells, lens, modelTotal, context, selected,
     return <tr role="row" data-row-key={row.key} aria-rowindex={index + 2} aria-level={row.depth + 1} aria-posinset={row.posInSet} aria-setsize={row.setSize}
         aria-expanded={row.expandable ? row.expanded : undefined} aria-selected={selected}
         className={`df-mt-row${selected ? ' is-selected' : ''}${row.kind !== 'layer' ? ' is-container' : ''}${row.expanded ? ' is-expanded' : ''}${hasErrors ? ' has-error' : ''}`}
+        onMouseDown={(event) => {
+            // A double-click opens the level; it should not select a word.
+            if (event.detail > 1 && !event.target.closest?.('input, select')) event.preventDefault();
+        }}
         onClick={(event) => actions.click(row, Number(event.target.closest?.('[data-col]')?.dataset.col ?? 0))}
         onDoubleClick={(event) => { if (!event.target.closest?.('.df-mt-editor')) actions.open(row); }}>
         <th role="rowheader" scope="row" {...cell(0)} className="df-mt-layer" aria-invalid={hasErrors || undefined}
@@ -101,7 +119,7 @@ function ModelTableRow({ row, index, cells, lens, modelTotal, context, selected,
         <td role="gridcell" {...cell(1)} className="df-mt-num df-mt-count" title={row.multiplicity === null ? 'The count is unresolved' : `${row.multiplicity} per forward pass`}>
             {row.multiplicity === null ? <span className="df-mt-unknown">?</span> : row.multiplicity > 1 ? `×${row.multiplicity}` : ''}
         </td>
-        <td role="gridcell" {...cell(2)} className="df-mt-shape" title={row.shape.title}>{row.shape.text ?? ''}</td>
+        <td role="gridcell" {...cell(2)} className="df-mt-shape" title={row.shape.title} aria-label={row.shape.text ?? undefined}><CompactShape text={row.shape.text} /></td>
         <td role="gridcell" {...cell(3)} className={`df-mt-config-cell${editing ? ' is-editing' : ''}`} aria-readonly={!editable}
             title={editing ? undefined : editableHints.join('\n') || undefined}>
             <ModelTableConfigCell row={row} cells={cells} targets={targets} context={context} fieldErrors={fieldErrors}

@@ -4,22 +4,31 @@ import { parseCellValue, precheckCellValue } from '../../domain/modelTable/write
 import { emptyAllowed, fieldScope, initialText } from './modelTableEdits.js';
 
 const widthOf = (text, placeholder) => `${Math.min(22, Math.max(4, String(text || placeholder || '').length + 1))}ch`;
+const LONG_TEXT = 20;
 
 function shownText(field, cells) {
     return cells === 'symbols' ? field.symbols : { text: field.values.text, tone: field.values.varies ? 'varies' : 'value' };
 }
 
+/** `p=0.1`, `k=3` like a PyTorch repr; symbols such as × and + attach directly. */
+function Prefix({ prefix }) {
+    if (!prefix) return null;
+    return <span className="df-mt-prefix">{prefix}{/^[A-Za-z_]/.test(prefix) ? '=' : ''}</span>;
+}
+
 /** A field as text: expressions in the expression colour, inherited defaults muted. */
-function FieldText({ field, cells, info, errors }) {
+function FieldText({ field, cells, info, errors, onClick }) {
     const shown = shownText(field, cells);
     const error = errors?.[0];
     const title = [
         `${field.name}${cells === 'symbols' && field.values.text !== shown.text ? ` = ${field.values.text}` : ''}${cells === 'values' && field.symbols.text !== shown.text ? ` · written ${field.symbols.text}` : ''}`,
-        field.values.title, error, info?.hint,
+        shown.text.length > LONG_TEXT ? shown.text : null, field.values.title, error, info?.hint,
     ].filter(Boolean).join('\n');
+    // Long formulas are cut here; the title keeps them whole.
+    const text = shown.text.length > LONG_TEXT ? `${shown.text.slice(0, LONG_TEXT - 2)}…` : shown.text;
     return <span className={`df-mt-field is-${shown.tone}${info?.editable ? ' is-editable' : ''}${error ? ' is-invalid' : ''}`}
-        data-field={field.name} title={title}>
-        {field.prefix && <span className="df-mt-prefix">{field.prefix}</span>}<span className="df-mt-field-text">{shown.text}</span>
+        data-field={field.name} title={title} onClick={onClick}>
+        <Prefix prefix={field.prefix} />{text}
     </span>;
 }
 
@@ -75,8 +84,9 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
     const commitOrExplain = () => {
         const problem = commit();
         if (!problem) return;
-        onMessage(problem);
+        // Focus first: focusing announces the field, and the problem must stay visible.
         focusInput(editable.find((part) => problem.startsWith(`${part.name}:`))?.name);
+        onMessage(problem);
     };
     const cancel = () => finish(null);
     const move = (index, step) => {
@@ -95,6 +105,8 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
         else if (event.key === 'Tab') { event.preventDefault(); move(index, event.shiftKey ? -1 : 1); }
         event.stopPropagation();
     };
+    // Say where the value goes before anything is written.
+    const announce = (part) => onMessage(`${part.name}: ${targets[part.name].hint} · Enter apply · Esc cancel`);
     const update = (name, text) => {
         setDrafts((current) => ({ ...current, [name]: text }));
         if (errors[name]) setErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== name)));
@@ -118,7 +130,7 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
             if (index < 0) {
                 const shown = shownText(part, cells);
                 return <span key={part.name} role="textbox" aria-readonly="true" aria-label={`${row.label} ${part.name}`} title={info?.hint ?? ''}
-                    className={`df-mt-field is-${shown.tone} is-readonly`}>{part.prefix && <span className="df-mt-prefix">{part.prefix}</span>}{shown.text}</span>;
+                    className={`df-mt-field is-${shown.tone} is-readonly`}><Prefix prefix={part.prefix} />{shown.text}</span>;
             }
             const text = drafts[part.name] ?? '';
             const placeholder = part.values.text;
@@ -134,18 +146,21 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
                 onDoubleClick: (event) => event.stopPropagation(),
             };
             if (part.spec?.type === 'enum') {
-                return <span key={part.name} className="df-mt-input-wrap">{part.prefix && <span className="df-mt-prefix">{part.prefix}</span>}
-                    <select {...common} value={text} onChange={(event) => update(part.name, event.target.value)}>
+                return <span key={part.name} className="df-mt-input-wrap"><Prefix prefix={part.prefix} />
+                    <select {...common} value={text} onFocus={() => announce(part)} onChange={(event) => update(part.name, event.target.value)}>
                         {!part.spec.options.includes(text) && <option value={text}>{text || 'Default'}</option>}
                         {part.spec.options.map((option) => <option key={option} value={option}>{option}</option>)}
                     </select>
                 </span>;
             }
-            return <span key={part.name} className="df-mt-input-wrap">{part.prefix && <span className="df-mt-prefix">{part.prefix}</span>}
+            return <span key={part.name} className="df-mt-input-wrap"><Prefix prefix={part.prefix} />
                 <VariableInput {...common} type="text" spellCheck={false} autoComplete="off" floatingSuggestions
                     suggestions={info.target.literalOnly ? [] : suggestions} value={text} placeholder={placeholder}
                     style={{ '--parameter-width': widthOf(text, placeholder) }}
-                    onFocus={(event) => { if (seed === undefined || seed === null || part.name !== firstName) event.currentTarget.select?.(); }}
+                    onFocus={(event) => {
+                        announce(part);
+                        if (seed === undefined || seed === null || part.name !== firstName) event.currentTarget.select?.();
+                    }}
                     onChange={(event) => update(part.name, event.target.value)} />
             </span>;
         })}
@@ -160,7 +175,8 @@ export default function ModelTableConfigCell({ row, cells, targets, context, fie
     }
     return <span className="df-mt-config">
         {row.config.map((part, index) => part.kind === 'field'
-            ? <span key={part.name} onClick={() => { if (targets[part.name]?.editable) onStartEdit(part.name); }}><FieldText field={part} cells={cells} info={targets[part.name]} errors={fieldErrors[part.name]} /></span>
+            ? <FieldText key={part.name} field={part} cells={cells} info={targets[part.name]} errors={fieldErrors[part.name]}
+                onClick={() => { if (targets[part.name]?.editable) onStartEdit(part.name); }} />
             : <Separator key={index} part={part} />)}
     </span>;
 }

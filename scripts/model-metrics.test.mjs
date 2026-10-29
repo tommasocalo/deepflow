@@ -135,6 +135,7 @@ test('unknown modules and counts give partial totals, never NaN', () => {
     assert.equal(partial.totals.unresolved.params.size, 1);
     assert.deepEqual([...partial.totals.unresolved.params.values()], ['LSTM']);
     assert.equal(partial.totals.unresolved.macs.size, 1);
+    assert.deepEqual([...partial.totals.unresolved.activation.values()], ['LSTM'], 'An LSTM output has no shape rule, so its size is unknown');
 
     const body = createTemplate({ name: 'Body', graph: chain(layer('deepflow.template.Input'), layer('torch.nn.Linear', { in_features: 32, out_features: 32 }), layer('deepflow.template.Output')) });
     const repeat = createRepeatNode({ templateId: body.id, position: { x: 0, y: 0 }, count: '$missing', label: 'Stack' });

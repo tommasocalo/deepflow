@@ -71,6 +71,11 @@
     .df-ribbon-view-options button { font-size: 9px; padding-left: 3px; padding-right: 3px; }
     .df-ribbon-pane-cue { position: absolute; right: 8px; bottom: 4px; font-size: 8px; }
 }
+/* The View group's Table toggle keeps the row within 1024px. */
+@media (max-width: 1100px) {
+    .df-ribbon-row { padding-left: 6px; padding-right: 6px; gap: 3px; }
+    .df-ribbon-group { padding-right: 3px; }
+}
 @media (max-width: 930px) { .df-ribbon-pane-cue { display: none; } }
 @media (max-width: 760px) {
     .df-ribbon-button { min-width: 30px; font-size: 8px; padding-left: 3px; padding-right: 3px; }
