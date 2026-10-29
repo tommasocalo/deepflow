@@ -56,6 +56,7 @@ export default function PredictGate({ predict, textPrefix, answer, onSubmit, par
                 {grade.misconception && hasText(`mis.${grade.misconception}`) && (
                     <p className="edu-callout edu-callout-misconception"><strong>{t('panel.misconception')}: </strong><RichText inline text={t(`mis.${grade.misconception}`)} /></p>
                 )}
+                <p className="edu-muted">{t('predict.locked')}</p>
             </section>
         );
     }

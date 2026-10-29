@@ -9,6 +9,7 @@ import { useEduUiStore } from '../shell/uiStore.js';
 import QuizView from './QuizView.jsx';
 import RecapView from './RecapView.jsx';
 import StepView from './StepView.jsx';
+import { requestLearnHeadingFocus } from './focus.js';
 import { moduleTitle } from './format.js';
 import { CHECK_DELAY, useMediaQuery, useModules, useStepEvaluation } from './hooks.js';
 import './lesson-panel.css';
@@ -78,7 +79,10 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
     const passing = !!result?.pass;
     const isCollapsed = narrow ? !drawerOpen : collapsed;
     const toggle = () => (narrow ? useEduUiStore.getState().setDrawerOpen(!drawerOpen) : session.setCollapsed(!collapsed));
-    const exit = () => session.exitLesson({ tab: 'learn' });
+    const exit = () => {
+        requestLearnHeadingFocus();
+        session.exitLesson({ tab: 'learn' });
+    };
     const resizeDrawer = (height) => {
         if (!drawerOpen) useEduUiStore.getState().setDrawerOpen(true);
         setDrawerHeight(clampDrawer(height));
@@ -139,10 +143,10 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
     } else if (phase === 'recap') {
         const next = nextModule(module.id);
         body = <RecapView module={module} next={next} facts={facts} complete={isModuleComplete(progress, module)}
-            onNext={() => session.startModule(next.id)} onLearn={() => session.exitLesson({ tab: 'learn' })} />;
+            onNext={() => session.startModule(next.id)} onLearn={exit} />;
     } else if (step) {
         body = <StepView key={`${module.id}-${step.id}`} module={module} step={step} index={stepIndex} total={total} record={record?.steps?.[step.id] ?? null}
-            answers={record?.answers ?? {}} runtime={runtime} result={result} facts={facts} isLast={stepIndex === total - 1} />;
+            answers={record?.answers ?? {}} runTags={record?.runTags ?? {}} runtime={runtime} result={result} facts={facts} isLast={stepIndex === total - 1} />;
     }
 
     const countText = phase === 'steps' ? t('panel.step', { index: stepIndex + 1, total })

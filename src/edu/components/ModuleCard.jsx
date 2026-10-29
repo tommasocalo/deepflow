@@ -2,7 +2,15 @@ import { ChevronRight } from 'lucide-react';
 import { t } from '../lessons/engine/i18n.js';
 import { datasetName } from './format.js';
 
-const STATUS_ICON = { 'not-started': '○', 'in-progress': '◐', completed: '●' };
+/** ○ not started, ◐ in progress, ● completed, drawn as SVG so every font shows the same three shapes. */
+function StatusIcon({ status }) {
+    return (
+        <svg className="edu-status-glyph" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+            <circle cx="6" cy="6" r="4.75" fill={status === 'completed' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
+            {status === 'in-progress' && <path d="M6 1.25a4.75 4.75 0 0 1 0 9.5z" fill="currentColor" />}
+        </svg>
+    );
+}
 
 /**
  * One module on the Learn home (docs/edu/SPEC.md §3.2): number and title, a status with a text label, the goal,
@@ -25,7 +33,7 @@ export default function ModuleCard({ module, summary, recommendedAfter, onOpen }
                 <span>{title}</span>
             </h2>
             <p className="edu-module-status">
-                <span className="edu-status-glyph" aria-hidden="true">{STATUS_ICON[status] ?? '○'}</span>
+                <StatusIcon status={status} />
                 <span className="edu-sr-only">{statusLabel}</span>
                 <span aria-hidden="true">{statusShort}</span>
                 <span className="edu-dot" aria-hidden="true">·</span>

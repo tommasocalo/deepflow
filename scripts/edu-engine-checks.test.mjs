@@ -212,6 +212,7 @@ test('run queries filter by entry sequence, dataset, epochs and final metrics', 
     const query = { dataset: 'blobs', minEpochs: 20, final: { valAccuracy: { gte: 0.9 } } };
     assert.ok(passes({ run: query }, ctx([run(1)])));
     assert.equal(evaluateCheck({ run: query }, ctx([run(1)])).runId, 'run1', 'the satisfying run is reported for tagRun');
+    assert.equal(evaluateCheck({ all: [{ run: query }, { valid: true }] }, ctx([run(1)])).runId, 'run1', 'all reports it wherever the run check sits');
     assert.ok(!passes({ run: query }, ctx([run(1)], 1)), 'runs from before the step started do not count');
     assert.equal(detail(evaluateCheck({ run: query }, ctx([], 0))), 'Press **Train** to train the model.');
     assert.equal(detail(evaluateCheck({ run: query }, ctx([run(1, { epochs: 10 })]))), 'The last run trained 10 epochs; train at least 20.');

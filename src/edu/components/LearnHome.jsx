@@ -5,6 +5,7 @@ import { learningLogExport } from '../lessons/engine/log.js';
 import { moduleStatus } from '../lessons/engine/progress.js';
 import { useLessonSession } from '../lessons/engine/session.js';
 import ModuleCard from './ModuleCard.jsx';
+import { takeLearnHeadingFocus } from './focus.js';
 import { useModules, useStorageDegraded } from './hooks.js';
 import './learn.css';
 
@@ -42,16 +43,12 @@ function continueLabel(module, summary, session) {
     return t('learn.continue', { number: module.order, title, step: summary.currentIndex + 1, total: summary.total });
 }
 
-let shownBefore = false;
-
 /** The Learn home (docs/edu/SPEC.md §3.2): the curriculum, progress, Continue and the way into the sandbox. */
 export default function LearnHome() {
     const headingRef = useRef(null);
     // Coming back from a lesson (Exit, Back to Learn) unmounts the control that had focus: continue from the heading.
     useEffect(() => {
-        const active = document.activeElement;
-        if (shownBefore && (!active || active === document.body)) headingRef.current?.focus({ preventScroll: true });
-        shownBefore = true;
+        if (takeLearnHeadingFocus()) headingRef.current?.focus({ preventScroll: true });
     }, []);
     const modules = useModules();
     const progress = useLessonSession((state) => state.progress);

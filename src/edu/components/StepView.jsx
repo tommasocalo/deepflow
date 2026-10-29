@@ -53,7 +53,7 @@ function statusText(result, busy) {
     return '';
 }
 
-export default function StepView({ module, step, index, total, record, answers, runtime, result, facts, isLast }) {
+export default function StepView({ module, step, index, total, record, answers, runTags = {}, runtime, result, facts, isLast }) {
     const session = useLessonSession.getState();
     const id = useId();
     const headingRef = useRef(null);
@@ -68,7 +68,8 @@ export default function StepView({ module, step, index, total, record, answers, 
     const answer = step.predict ? answers?.[step.predict.id] ?? null : null;
     const locked = step.locks?.gate === 'train' && !!step.predict && !answer;
     const busy = !!runtime?.busy;
-    const live = revealValues(step.reveal, { trainer, enteredAtSeq: runtime?.enteredAtSeq ?? 0, runTags: record?.runTags ?? {} });
+    // Run tags belong to the module (M5 compares its Dropout run with the run tagged in an earlier step).
+    const live = revealValues(step.reveal, { trainer, enteredAtSeq: runtime?.enteredAtSeq ?? 0, runTags });
     const params = { ...facts, ...live.params };
     const showMeAt = runtime?.showMe?.at ?? null;
 

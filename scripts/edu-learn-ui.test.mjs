@@ -73,7 +73,7 @@ try {
                 export { default as LessonPanel } from './src/edu/components/LessonPanel.jsx';
                 export { useArchitectureStore } from './src/stores/architectureStore.js';
                 export { useArchitectureHistory } from './src/stores/architectureHistory.js';
-                export { readSource } from './src/edu/bridge.js';
+                export { readSource, registerSource } from './src/edu/bridge.js';
                 export { useEduUiStore } from './src/edu/shell/uiStore.js';
                 export { applyDeepLink, parseLearnHash, syncHash } from './src/edu/shell/deepLink.js';
                 export { useLessonSession } from './src/edu/lessons/engine/session.js';
@@ -102,7 +102,7 @@ try {
     await rm(temporaryDirectory, { recursive: true, force: true });
 }
 const {
-    LearnHome, LessonPanel, useArchitectureStore, useArchitectureHistory, readSource, useEduUiStore, applyDeepLink, parseLearnHash, syncHash,
+    LearnHome, LessonPanel, useArchitectureStore, useArchitectureHistory, readSource, registerSource, useEduUiStore, applyDeepLink, parseLearnHash, syncHash,
     useLessonSession, setModuleRegistry, restoreWorkspace, buildFixtureSnapshot, readLog, resetLogForTests, resetStorageForTests, P,
     TEST_MODULE, TEST_TEXT,
 } = bundle;
@@ -199,7 +199,7 @@ test('Learn home: statuses come from progress, the cards are never locked, and C
     assert.equal(text(first.querySelector('.edu-module-number')), '1');
     assert.match(text(first.querySelector('h2')), /Tour of the lesson panel$/);
     assert.match(text(first), /In progress, 2 of 7 steps/, 'the status has a text label for screen readers');
-    assert.match(text(first), /◐/);
+    assert.ok(first.querySelector('svg.edu-status-glyph[aria-hidden="true"] path'), 'the half-filled circle marks in progress');
     assert.equal(text(button('Continue module 1: Tour of the lesson panel')), 'Continue');
     assert.match(text(second), /Not started/);
     assert.match(text(second), /Recommended after 1/);
@@ -456,6 +456,54 @@ test('end to end: the demo module runs from warm-up to recap with Hint, Hint, Sh
     assert.equal(session().mode, 'sandbox');
     assert.equal(useEduUiStore.getState().activeTab, 'learn');
     assert.ok(Object.values(arch().graph.nodes).some((node) => node.id === 'relu'), 'the sandbox workspace is back');
+});
+
+test('a run tagged in one step feeds the before/after reveal of a later step', async () => {
+    // A two-step module in the shape of M5 s3 → s5: the passing run of s1 is tagged, and s2 compares its own run with it.
+    const TAGS = {
+        id: 'tags', version: 1, order: 3, minutes: 5, datasets: ['blobs'], objectives: [], warmup: [], quiz: [],
+        fixtures: TEST_MODULE.fixtures, start: 'relu', facts: {},
+        steps: [
+            { id: 's1', kind: 'task', subgoal: 'train', tagRun: 'base', check: { all: [{ run: { dataset: 'blobs', minEpochs: 1 } }, { valid: true }] }, solution: [] },
+            { id: 's2', kind: 'task', subgoal: 'evaluate', reveal: { compare: { tag: 'base', metric: 'gap' } }, check: { run: { dataset: 'blobs', minEpochs: 1 } }, solution: [] },
+        ],
+    };
+    const words = { 'tags.title': 'Tags', 'tags.goal': 'Compare runs.' };
+    for (const id of ['s1', 's2']) Object.assign(words, { [`tags.${id}.title`]: `Step ${id}`, [`tags.${id}.body`]: 'Train.', [`tags.${id}.hint1`]: 'Train.', [`tags.${id}.hint2`]: 'Train.' });
+    words['tags.s2.reveal.better'] = 'The gap went from {before} to {after}.';
+    words['tags.s2.reveal.notBetter'] = 'The gap did not shrink: {before} to {after}.';
+    setModuleRegistry({ modules: [TEST_MODULE, TAGS], text: { en: { ...TEXT.en, ...words } } });
+    const runs = [];
+    const listeners = new Set();
+    const addRun = (valLoss, trainLoss) => {
+        const seq = runs.length + 1;
+        const history = [{ epoch: 0, trainLoss: 1.2, valLoss: 1.2, trainAccuracy: 0.5, valAccuracy: 0.5 }, { epoch: 1, trainLoss, valLoss, trainAccuracy: 0.9, valAccuracy: 0.9 }];
+        runs.push({ id: `run${seq}`, seq, status: 'completed', datasetId: 'blobs', settings: { epochs: 1, batchSize: 32, seed: 1 }, optimizer: { type: 'Adam', hyperparameters: { learning_rate: 0.03 } }, history });
+        for (const listener of listeners) listener();
+    };
+    const unregister = registerSource('trainer', {
+        read: () => ({ status: 'idle', seq: runs.length, settings: { epochs: 1, batchSize: 32, seed: 1 }, current: null, runs: [...runs], preflight: { ok: true, errors: [], warnings: [] } }),
+        subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
+        actions: { tagRun: () => {} },
+    });
+    try {
+        await run(() => session().startModule('tags'));
+        await renderPanel();
+        await settle();
+        assert.match(status(), /Press Train/);
+        await run(() => addRun(0.9, 0.3));
+        await settle();
+        assert.equal(status(), 'Done — Step complete');
+        await click(button('Next'));
+        assert.deepEqual(session().progress.modules.tags.runTags.base.runId, 'run1', 'the run that passed s1 was tagged');
+        assert.match(status(), /Press Train/, 'runs from before the step do not count');
+        await run(() => addRun(0.5, 0.3));
+        await settle();
+        assert.equal(status(), 'Done — Step complete');
+        assert.equal(text(panel().querySelector('.edu-callout-info')), 'The gap went from 0.600 to 0.200.');
+    } finally {
+        unregister();
+    }
 });
 
 test('collapse keeps a rail on wide screens; below 900 px the drawer handle toggles and resizes the lesson', async () => {

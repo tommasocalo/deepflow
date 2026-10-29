@@ -211,13 +211,14 @@ function datasetName(id) {
 
 const handlers = {
     all(list, ctx) {
-        let last = null;
+        // The run that satisfied a `run` sub-check travels up, wherever it sits in the list (step.tagRun needs it).
+        let runId = null;
         for (const spec of list ?? []) {
             const result = evaluateCheck(spec, ctx);
             if (!result.pass) return result;
-            last = result;
+            runId = result.runId ?? runId;
         }
-        return pass('all', last?.runId ? { runId: last.runId } : {});
+        return pass('all', runId ? { runId } : {});
     },
     any(list, ctx) {
         let first = null;
