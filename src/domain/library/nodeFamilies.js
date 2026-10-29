@@ -36,6 +36,7 @@ export const NODE_FAMILIES = [
             { key: 'torch.nn.Sigmoid', name: 'Sigmoid' },
             { key: 'torch.nn.Tanh', name: 'Tanh' },
             { key: 'torch.nn.Softmax', name: 'Softmax' },
+            { key: 'torch.nn.LogSoftmax', name: 'Log-softmax' },
         ],
     },
     {

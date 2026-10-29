@@ -216,6 +216,7 @@ const RULES = {
     'torch.nn.Sigmoid':    passthrough,
     'torch.nn.Tanh':       passthrough,
     'torch.nn.Softmax':    passthrough,
+    'torch.nn.LogSoftmax': passthrough,
 
     'deepflow.op.Parameter': parameterRule,
     'deepflow.op.Arange': arangeRule,

@@ -238,6 +238,16 @@ export const PYTORCH_BLOCKS = [
             { name: 'dim', type: 'int', description: 'Dimension to softmax over', default: -1 },
         ],
     },
+    {
+        key: 'torch.nn.LogSoftmax',
+        name: 'LogSoftmax',
+        category: 'Activation',
+        description: 'Log-probabilities over a dimension: log(softmax(x)). Cross-Entropy applies this itself.',
+        pyTorchFn: 'torch.nn.LogSoftmax',
+        parameters: [
+            { name: 'dim', type: 'int', description: 'Dimension to normalize over', default: -1 },
+        ],
+    },
 
     {
         key: 'torch.nn.BatchNorm1d',
