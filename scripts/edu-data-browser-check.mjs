@@ -157,6 +157,25 @@ async function checkViewport(browser, width, height) {
         assert.ok(sync.ms < 1.5 * limit, `${name} took ${sync.ms.toFixed(0)} ms (budget ${limit} ms on a 2020 laptop)`);
     }
 
+    // Responsiveness: a long run yields between slices, so the page keeps painting and Stop acts within a slice.
+    await page.evaluate((value) => window.__stageB.load(value), cases.spiralOverfit[0]);
+    await page.click('[data-tab="training"]');
+    await page.click('.edu-tr-panel [data-edu-target="trainer-run"]');
+    await page.waitForTimeout(300);
+    const frames = await page.evaluate(() => new Promise((resolve) => {
+        let count = 0;
+        const started = performance.now();
+        const tick = () => { count += 1; if (performance.now() - started < 1000) requestAnimationFrame(tick); else resolve(count); };
+        requestAnimationFrame(tick);
+    }));
+    const stopStarted = Date.now();
+    await page.click('.edu-tr-panel .edu-tr-stop');
+    await page.waitForFunction(() => window.__stageB.idle() && window.__deepflow.edu.trainer.getState().current?.status === 'stopped');
+    const stopMs = Date.now() - stopStarted;
+    budget.responsiveness = { framesPerSecondWhileTraining: frames, stopMs };
+    assert.ok(frames >= 20, `${tag}: only ${frames} frames painted in 1 s of training`);
+    assert.ok(stopMs < 1000, `${tag}: Stop took ${stopMs} ms`);
+
     assert.deepEqual(errors, [], `${tag}: console errors`);
     const missing = STAGE_B_TARGETS.filter((name) => !seen.has(name));
     assert.deepEqual(missing, [], `${tag}: Stage B targets never visible`);

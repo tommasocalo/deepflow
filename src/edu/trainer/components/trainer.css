@@ -44,6 +44,7 @@
 .edu-tr-issues { padding: 7px 9px; border-radius: 6px; font-size: 11.5px; line-height: 1.4; }
 .edu-tr-issues.is-error { border: 1.5px solid #b91c1c; background: #fef2f2; color: #7f1d1d; }
 .edu-tr-issues.is-warning { border: 1px solid #d9a441; background: #fffbeb; color: #713f12; }
+.edu-tr-issues.is-colab { border: 1px solid #0000004d; background: #fff; color: #222; }
 .edu-tr-issues-title { margin: 0 0 3px; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .edu-tr-issues ul { margin: 0; padding-left: 16px; }
 .edu-tr-link { padding: 0; border: 0; background: none; color: #111; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
@@ -68,6 +69,7 @@
 .edu-tr-end-label.is-train { fill: #111; }
 .edu-tr-end-label.is-val { fill: #a84a00; }
 .edu-tr-end-label.is-ghost { fill: #6b6b6b; font-weight: 600; }
+.edu-tr-axis-title { fill: #6b6b6b; font-size: 9px; }
 .edu-tr-chart-box.is-compact .edu-tr-line.is-train, .edu-tr-chart-box.is-compact .edu-tr-line.is-val { stroke-width: 1.6; }
 .edu-tr-ghosts { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 4px 0 0; padding: 0; list-style: none; color: #555; font-size: 10.5px; }
 .edu-tr-ghosts li { display: inline-flex; align-items: center; gap: 5px; }

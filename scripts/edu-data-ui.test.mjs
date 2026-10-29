@@ -268,6 +268,28 @@ test('preflight problems are listed, and a failed Train says why', async () => {
     assert.match($('.edu-tr-status').textContent, /^Not trained: No dataset yet/);
 });
 
+test('blocks the browser cannot train are guidance with a way to train.py, not errors to fix', async () => {
+    const fx = createFixtureHelpers();
+    const input = fx.input('in', [1, 8, 8], { label: 'images' });
+    const conv = fx.layer('conv', 'torch.nn.Conv2d', { in_channels: 1, out_channels: 4, kernel_size: 3 }, 'conv1');
+    const flat = fx.layer('flat', 'torch.nn.Flatten');
+    const linear = fx.linear('fc', 144, 10, { label: 'classifier' });
+    const output = fx.output('out');
+    restoreWorkspace(fx.snapshot({
+        nodes: [input, conv, flat, linear, output], edges: fx.chain(input, conv, flat, linear, output),
+        training: [fx.optimizer('Adam', { learning_rate: 0.001 }), fx.loss('cross_entropy', output)],
+        data: fx.data('digits', { seed: 1 }),
+    }));
+    await render(h(TrainerPanel));
+    await act(async () => { trainer().refreshPreflight(); });
+    assert.equal($('.edu-tr-issues.is-error'), null, 'nothing for the learner to fix');
+    const colab = $('.edu-tr-issues.is-colab');
+    assert.match(colab.textContent, /conv1 \(Conv2d\) is not supported by the browser trainer/);
+    await click([...colab.querySelectorAll('button')].find((button) => button.textContent === 'Open train.py'));
+    assert.equal(useEduUiStore.getState().codeOpen, true);
+    assert.equal(useEduUiStore.getState().codeTab, 'train');
+});
+
 test('a locked TrainerCard disables Train and Check initial loss and says why; the panel follows the lesson lock', async () => {
     load({ dataset: 'blobs', options: { n: 200, noise: 0.1, seed: 1 } });
     await render(h(TrainerCard, { locked: true, lockedReason: 'Answer the question first, then train.' }));

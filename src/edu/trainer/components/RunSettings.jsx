@@ -109,31 +109,51 @@ function showOnCanvas(nodeId) {
     setTimeout(() => focusNode(nodeId), 80);
 }
 
+/** Problems the learner fixes in the model or data; "trains in Colab" cases are guidance, not mistakes. */
+const COLAB_CODES = new Set(['dataset-export-only', 'unsupported-op', 'too-large', 'multi-phase', 'custom-loss']);
+
+function IssueList({ issues, limit, colab = false }) {
+    return (
+        <ul>
+            {issues.slice(0, limit).map((issue) => (
+                <li key={`${issue.code}:${issue.message}`}>
+                    {issue.message}
+                    {issue.nodeId && (
+                        <> <button type="button" className="edu-tr-link" onClick={() => showOnCanvas(issue.nodeId)}>{tr('preflight.showOnCanvas')}</button></>
+                    )}
+                    {colab && (
+                        <> <button type="button" className="edu-tr-link" onClick={() => useEduUiStore.getState().openCode('train')}>{tr('preflight.openTrainPy')}</button></>
+                    )}
+                </li>
+            ))}
+        </ul>
+    );
+}
+
 export function PreflightList({ preflight, limit = 4 }) {
-    const errors = groupIssues(preflight?.errors ?? []);
+    const all = groupIssues(preflight?.errors ?? []);
+    const colab = all.filter((issue) => COLAB_CODES.has(issue.code));
+    const errors = all.filter((issue) => !COLAB_CODES.has(issue.code));
     const warnings = preflight?.warnings ?? [];
-    if (!errors.length && !warnings.length) return null;
+    if (!all.length && !warnings.length) return null;
     return (
         <div className="edu-tr-preflight">
             {errors.length > 0 && (
                 <div className="edu-tr-issues is-error">
                     <p className="edu-tr-issues-title">{tr('preflight.errors')}</p>
-                    <ul>
-                        {errors.slice(0, limit).map((issue) => (
-                            <li key={`${issue.code}:${issue.message}`}>
-                                {issue.message}
-                                {issue.nodeId && (
-                                    <> <button type="button" className="edu-tr-link" onClick={() => showOnCanvas(issue.nodeId)}>{tr('preflight.showOnCanvas')}</button></>
-                                )}
-                            </li>
-                        ))}
-                    </ul>
+                    <IssueList issues={errors} limit={limit} />
+                </div>
+            )}
+            {colab.length > 0 && (
+                <div className="edu-tr-issues is-colab">
+                    <p className="edu-tr-issues-title">{tr('preflight.colab')}</p>
+                    <IssueList issues={colab} limit={limit} colab />
                 </div>
             )}
             {warnings.length > 0 && (
                 <div className="edu-tr-issues is-warning">
                     <p className="edu-tr-issues-title">{tr('preflight.warnings')}</p>
-                    <ul>{warnings.slice(0, limit).map((issue) => <li key={`${issue.code}:${issue.message}`}>{issue.message}</li>)}</ul>
+                    <IssueList issues={warnings} limit={limit} />
                 </div>
             )}
         </div>

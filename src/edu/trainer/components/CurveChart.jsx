@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { epochTicks, linearScale, linePath, spreadLabels } from '../charts.js';
+import { tr } from '../text.js';
 
 const FULL = { left: 36, right: 52, top: 12, bottom: 22 };
 const COMPACT = { left: 2, right: 2, top: 3, bottom: 3 };
@@ -45,6 +46,7 @@ export default function CurveChart({
                         {epochTicks(Math.max(1, xMax)).map((value) => (
                             <text key={`x${value}`} x={sx(value)} y={height - 7} textAnchor={value === 0 ? 'start' : 'middle'}>{value}</text>
                         ))}
+                        <text className="edu-tr-axis-title" x={w - 2} y={height - 7} textAnchor="end">{tr('chart.epoch')}</text>
                     </g>
                 )}
                 {reference && Number.isFinite(reference.y) && reference.y <= yMax && reference.y >= yMin && (
