@@ -16,9 +16,16 @@ const MAX_VALIDATED_NODES = 20000;
  * Validate tensors and explicit collections through a graph. externalInputs
  * maps template boundary node IDs to shapes. Repeats default to sequential;
  * parallel repeats select item i from each incoming collection.
+ *
+ * With `collect: true` (metrics only) the report also keeps this level's
+ * resolved `scope` and, per repeat or component, one `children` entry per
+ * instance: { index, templateId, scope, inputs, report, parameterIssues }.
+ * Without it, reports are unchanged.
  */
 export function validate(graph, opts = {}) {
     const { templates = {}, externalInputs = {}, depth = 0 } = opts;
+    const collect = opts.collect === true;
+    const children = collect ? {} : null;
     const scope = withGlobalParameters(graph, opts.scope ?? {});
     const budget = opts.budget ?? { remaining: MAX_VALIDATED_NODES };
     const { order: topo, cyclic, adjacency: adj } = topologicalSort(graph);
@@ -125,6 +132,7 @@ export function validate(graph, opts = {}) {
             const instanceTemplate = templates[instanceTemplateId];
             if (!instanceTemplate?.graph) {
                 childErrors.push(`Instance ${index + 1} template is missing`);
+                if (collect) (children[id] ??= [])[index] = { index, templateId: instanceTemplateId, scope: null, inputs: null, report: null, parameterIssues: [] };
                 carry = null;
                 outputs.push(null);
                 continue;
@@ -147,23 +155,29 @@ export function validate(graph, opts = {}) {
             }
             const iterationScope = isRepeat ? { ...scope, [node.iterationVariable || 'i']: index } : scope;
             const subScope = buildParameterScope(instanceTemplate.freeParameters, isRepeat ? node.bindings : node.parameterValues, iterationScope, isRepeat ? index : undefined, childInputs);
+            const parameterIssues = collect ? [] : null;
+            const parameterIssue = (name, message) => {
+                childErrors.push(message);
+                parameterIssues?.push({ name, message });
+            };
             for (const parameter of instanceTemplate.freeParameters ?? []) {
                 const value = subScope[parameter.name];
                 if (parameter.derived && value === null) {
                     const input = instanceTemplate.graph.nodes[parameter.derived.inputId];
-                    childErrors.push(`${parameter.name} cannot be inferred from ${input?.label ?? parameter.derived.inputId}: connect an input with a known dimension`);
+                    parameterIssue(parameter.name, `${parameter.name} cannot be inferred from ${input?.label ?? parameter.derived.inputId}: connect an input with a known dimension`);
                     continue;
                 }
                 if (parameter.nullable && (value === null || value === undefined)) continue;
-                if (parameter.type === 'bool' && typeof value !== 'boolean') childErrors.push(`${parameter.name} must resolve to true or false`);
+                if (parameter.type === 'bool' && typeof value !== 'boolean') parameterIssue(parameter.name, `${parameter.name} must resolve to true or false`);
                 if (parameter.type === 'int' && (value === null || value === undefined || !Number.isSafeInteger(Number(value)))) {
-                    childErrors.push(`${parameter.name} must resolve to an integer (got ${String(value)})`);
+                    parameterIssue(parameter.name, `${parameter.name} must resolve to an integer (got ${String(value)})`);
                 }
                 if (parameter.type === 'float' && (value === null || value === undefined || !Number.isFinite(Number(value)))) {
-                    childErrors.push(`${parameter.name} must resolve to a finite number`);
+                    parameterIssue(parameter.name, `${parameter.name} must resolve to a finite number`);
                 }
             }
-            const child = validate(instanceTemplate.graph, { templates, scope: subScope, externalInputs: childInputs, depth: depth + 1, budget });
+            const child = validate(instanceTemplate.graph, { templates, scope: subScope, externalInputs: childInputs, depth: depth + 1, budget, collect });
+            if (collect) (children[id] ??= [])[index] = { index, templateId: instanceTemplateId, scope: subScope, inputs: childInputs, report: child, parameterIssues };
             carry = outputIds.reduce((output, port) => child.shapes[port] ?? output, null);
             outputs.push(carry);
             childErrors.push(...child.globalErrors, ...Object.values(child.errors).flat());
@@ -175,5 +189,7 @@ export function validate(graph, opts = {}) {
         }
     }
     const ok = Object.keys(errors).length === 0 && globalErrors.length === 0;
-    return { topo, cyclic, shapes, errors, warnings, globalErrors, ok };
+    return collect
+        ? { topo, cyclic, shapes, errors, warnings, globalErrors, ok, scope, children }
+        : { topo, cyclic, shapes, errors, warnings, globalErrors, ok };
 }

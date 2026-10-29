@@ -7,11 +7,42 @@ const sizeOf = (shape) => Array.isArray(shape) && shape.length > 0
     ? shape.reduce((product, axis) => product * axis, 1) : null;
 const positive = (value) => Number.isSafeInteger(value) && value > 0 ? value : null;
 
-/** Count only weights whose sizes are known. Unknown modules invalidate the estimate. */
-function layerSize(node, scope) {
+/** Modules with no learned weights. Anything else unrecognized may hide weights. */
+const WEIGHT_FREE_MODULE = /^torch\.nn\.(ReLU|LeakyReLU|GELU|SiLU|Tanh|Sigmoid|Softmax|LogSoftmax|Dropout|Dropout2d|Dropout3d|Flatten|Identity|MaxPool[123]d|AvgPool[123]d|AdaptiveAvgPool[123]d|AdaptiveMaxPool[123]d|Upsample)$/;
+
+/** Spatial rank from the module name: Conv1d → 1, ConvTranspose2d → 2. */
+export function spatialRank(libraryKey) {
+    return Number(String(libraryKey).match(/([123])d$/)?.[1] ?? 1);
+}
+
+/**
+ * Kernel elements of a convolution from its raw kernel_size. A scalar applies
+ * to every spatial axis, as in PyTorch: Conv2d with kernel_size 3 is 3 × 3.
+ * An empty value uses the library default; an unresolved reference stays null.
+ */
+export function kernelVolume(libraryKey, kernel, scope = {}) {
+    const rank = spatialRank(libraryKey);
+    const raw = kernel === null || kernel === undefined || kernel === ''
+        ? getEntry(libraryKey)?.parameters.find((parameter) => parameter.name === 'kernel_size')?.default
+        : kernel;
+    let dims = resolveDimensionTuple(raw, scope);
+    if (dims?.length === 1 && rank > 1) dims = Array(rank).fill(dims[0]);
+    return dims?.length === rank ? sizeOf(dims) : null;
+}
+
+/** Library defaults merged under the node's own values, resolved in scope. */
+export function resolvedLayerParameters(node, scope = {}) {
+    const defaults = defaultParameterValues(getEntry(node.libraryKey));
+    return resolveLayerParameters({ ...node, parameters: { ...defaults, ...node.parameters } }, scope).parameters;
+}
+
+/**
+ * Learned weights of one layer node: { total, trainable }, or null when the
+ * size is unknown (an unresolved setting or a module with hidden weights).
+ */
+export function layerSize(node, scope) {
     const key = node.libraryKey;
-    const defaults = defaultParameterValues(getEntry(key));
-    const p = resolveLayerParameters({ ...node, parameters: { ...defaults, ...node.parameters } }, scope).parameters;
+    const p = resolvedLayerParameters(node, scope);
     const n = (name) => positive(p[name]);
     if (key === 'deepflow.op.Parameter') {
         if (p.enabled === false) return { total: 0, trainable: 0 };
@@ -36,16 +67,22 @@ function layerSize(node, scope) {
     } else if (key === 'torch.nn.GroupNorm') {
         if (p.affine !== false) { if (!n('num_channels')) return null; total = 2 * n('num_channels'); }
     } else if (/^torch\.nn\.Conv[123]d$/.test(key)) {
-        const kernel = sizeOf(resolveDimensionTuple(p.kernel_size, scope));
+        const kernel = kernelVolume(key, node.parameters?.kernel_size, scope);
         const groups = n('groups') ?? 1;
         if (!n('in_channels') || !n('out_channels') || !kernel || n('in_channels') % groups) return null;
         total = n('out_channels') * (n('in_channels') / groups) * kernel + (p.bias === false ? 0 : n('out_channels'));
+    } else if (/^torch\.nn\.ConvTranspose[123]d$/.test(key)) {
+        // PyTorch stores ConvTranspose weights as (in, out / groups, *kernel).
+        const kernel = kernelVolume(key, node.parameters?.kernel_size, scope);
+        const groups = n('groups') ?? 1;
+        if (!n('in_channels') || !n('out_channels') || !kernel || n('out_channels') % groups) return null;
+        total = n('in_channels') * (n('out_channels') / groups) * kernel + (p.bias === false ? 0 : n('out_channels'));
     } else if (key === 'deepflow.nn.PositionalEmbedding') {
         if (!n('max_len') || !n('embedding_dim')) return null;
         total = n('max_len') * n('embedding_dim');
     } else if (key?.startsWith('torch.nn.') || key?.startsWith('deepflow.nn.')) {
         // An unrecognized neural module may contain hidden weights.
-        if (!/^torch\.nn\.(ReLU|GELU|SiLU|Tanh|Sigmoid|Softmax|LogSoftmax|Dropout|Dropout2d|Dropout3d|Flatten|Identity|MaxPool[123]d|AvgPool[123]d|AdaptiveAvgPool[123]d|AdaptiveMaxPool[123]d|Upsample)$/.test(key)) return null;
+        if (!WEIGHT_FREE_MODULE.test(key)) return null;
     }
     if (!Number.isSafeInteger(total) || total < 0) return null;
     return { total, trainable: total };
