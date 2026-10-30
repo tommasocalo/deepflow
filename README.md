@@ -33,7 +33,7 @@ Open the address Vite prints, http://localhost:5173/ by default (`npm run dev --
 | 6 | Reusable blocks and residual connections | Add a skip connection, group it into a component, repeat it three times, see shared structure with separate weights and the gradient paths | CIFAR-10 | 20 |
 | 7 | Attention and a tiny Transformer | Predict a character-level GPT's output shape, open its embedding table, positions, causal attention heads and head width, sample with a temperature, then scale the same blocks to GPT-2 small | Tiny Shakespeare | 25 |
 
-Every module has 6–8 steps (50 in all) ordered read and predict, then modify, then a build of your own; modules 2–7 open with two retrieval questions on earlier modules, and every module ends by reading the exported code. Numbers in the copy come from a facts ledger that the tests recompute from the fixtures.
+Every module has 6–8 steps (50 in all) ordered read and predict, then modify, then a build of your own; modules 2–7 open with two retrieval questions on earlier modules, and every module ends by reading the exported code. Numbers in the copy come from a facts ledger: the tests recompute each one from the fixtures, except four marked with their source: two results quoted from the Fashion-MNIST README, CIFAR-10's download size, and the Dropout comparison measured with the trainer (SPEC §11.2).
 
 ## Datasets
 
