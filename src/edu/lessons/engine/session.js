@@ -277,7 +277,9 @@ export const useLessonSession = create((set, get) => {
             if (!current || !target || get().runtime.busy) return { ok: false };
             const undoBefore = useArchitectureHistory.getState().undoCount;
             updateRuntime({ busy: true, error: null });
-            const result = await runActions(target.solution ?? [], actionContext('show me'));
+            // Blocks added since the step began (a palette chip) are completed, not duplicated (§6.5).
+            const entryNodes = loadStepEntry(current.id, target.id)?.graph?.nodes;
+            const result = await runActions(target.solution ?? [], { ...actionContext('show me'), entryNodeIds: entryNodes ? Object.keys(entryNodes) : null });
             updateProgress((progress) => P.raiseHint(progress, current.id, target.id, 3));
             log('show-me', { step: target.id, data: { ok: result.ok } });
             const undoable = useArchitectureHistory.getState().undoCount > undoBefore;

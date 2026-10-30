@@ -11,7 +11,7 @@ import { callSource, readSource } from '../../bridge.js';
 import { effectiveObjective } from '../../objective.js';
 import { useEduUiStore } from '../../shell/uiStore.js';
 import { ROW_GAP } from './fixtures.js';
-import { describeMatch, matchNodes } from './nodes.js';
+import { describeMatch, matchNodes, orderedNodeIds } from './nodes.js';
 import { loadFixtureIntoWorkspace, runStoryboard } from './workspace.js';
 
 /**
@@ -19,6 +19,11 @@ import { loadFixtureIntoWorkspace, runStoryboard } from './workspace.js';
  * graph edits share one recordArchitectureEdit('Lesson: <label>'), so a whole Show me is a single Undo step;
  * workspace replacements (loadFixture, loadStoryboard) start a fresh history; training runs are awaited between
  * batches. Graph actions address the main pane's root graph.
+ *
+ * Insert actions (insertBetween, insertAfter, buildChain) first reuse blocks of the same kind that the learner added
+ * in this step and left unwired, or wired only to the blocks the action connects (a palette chip, Components ▾).
+ * Show me then completes the learner's attempt instead of adding a duplicate beside it. The caller passes the ids of
+ * the root nodes at step entry as `ctx.entryNodeIds`; without them nothing is reused.
  */
 export const ACTIONS = Object.freeze([
     'loadFixture', 'loadStoryboard', 'useDataset', 'setDatasetOptions', 'setParam', 'setGlobal', 'insertBetween', 'insertAfter',
@@ -51,22 +56,74 @@ function goRoot() {
     if (architecture().currentPath.length) architecture().goToLevel(0);
 }
 
+const isComponentRef = (block) => typeof block === 'string' && block.startsWith('component:');
+
+function applyBlockSettings(id, block, { params, label } = {}) {
+    if (params && isComponentRef(block)) architecture().patchNode(id, { parameterValues: { ...rootGraph().nodes[id].parameterValues, ...params } });
+    else if (params) architecture().patchLayerParameters(id, params);
+    if (label) architecture().patchNode(id, { label });
+}
+
 /** BlockRef → a new node at `position`; returns its id. */
 export function createBlock(block, { params, label, position }) {
     let id = null;
-    if (typeof block === 'string' && block.startsWith('component:')) {
+    if (isComponentRef(block)) {
         const key = block.slice('component:'.length);
         if (!STANDARD_COMPONENTS.some((component) => component.key === key)) throw new ActionError(`Unknown component ${key}`);
         id = architecture().addStandardComponent(key, position);
-        if (id && params) architecture().patchNode(id, { parameterValues: { ...rootGraph().nodes[id].parameterValues, ...params } });
     } else {
         if (!getEntry(block)) throw new ActionError(`Unknown block ${block}`);
         id = architecture().addLayerByLibraryKey(block, position);
-        if (id && params) architecture().patchLayerParameters(id, params);
     }
     if (!id) throw new ActionError(`Could not add ${block}`);
-    if (label) architecture().patchNode(id, { label });
+    applyBlockSettings(id, block, { params, label });
     return id;
+}
+
+/** The BlockRef a root node was made from: its library key, or `component:<key>` for a standard component. */
+export function blockRefOf(node, templateMap = templates()) {
+    if (node?.kind === 'layer') return node.libraryKey ?? null;
+    if (node?.kind !== 'supernode') return null;
+    const template = templateMap[node.templateId];
+    const key = template?.standardKey ?? template?.componentStyleKey;
+    return key ? `component:${key}` : null;
+}
+
+/**
+ * Blocks added since the step began whose wires, if any, all end at `anchors` or at another such block: the
+ * candidates an insert action may adopt, in canvas order. Empty without `ctx.entryNodeIds`.
+ */
+function adoptableBlocks(ctx, anchors, refs) {
+    if (!Array.isArray(ctx?.entryNodeIds)) return [];
+    const graph = rootGraph();
+    const entry = new Set(ctx.entryNodeIds);
+    const wanted = new Set(refs);
+    const candidates = new Set(Object.values(graph.nodes)
+        .filter((node) => !entry.has(node.id) && wanted.has(blockRefOf(node)))
+        .map((node) => node.id));
+    const allowed = (id) => anchors.has(id) || candidates.has(id);
+    // Dropping one candidate can disqualify a neighbour wired to it: repeat until nothing changes.
+    for (let changed = true; changed;) {
+        changed = false;
+        for (const edge of graph.edges) {
+            for (const [end, other] of [[edge.source, edge.target], [edge.target, edge.source]]) {
+                if (candidates.has(end) && !allowed(other)) { candidates.delete(end); changed = true; }
+            }
+        }
+    }
+    return orderedNodeIds(graph).filter((id) => candidates.has(id)).map((id) => graph.nodes[id]);
+}
+
+/** Pick one adoptable node per block (in order) and unwire the picked ones, so the action can wire them afresh. */
+function adoptBlocks(blocks, ctx, anchors) {
+    const spare = adoptableBlocks(ctx, anchors, blocks.map((item) => item.block));
+    const picked = blocks.map((item) => {
+        const index = spare.findIndex((node) => blockRefOf(node) === item.block);
+        return index >= 0 ? spare.splice(index, 1)[0].id : null;
+    });
+    const ids = new Set(picked.filter(Boolean));
+    for (const edge of rootGraph().edges.filter((item) => ids.has(item.source) || ids.has(item.target))) architecture().removeEdge(edge.id);
+    return picked;
 }
 
 /** Make room below `node`: every root node lower on the canvas moves down by rows × 130 px. */
@@ -85,12 +142,17 @@ function connectOrThrow(source, target, handles = {}) {
     if (!id) throw new ActionError('Could not connect the blocks');
 }
 
-function insertBlocks(fromNode, blocks) {
-    pushDown(fromNode, blocks.length);
-    return blocks.map((item, index) => createBlock(item.block, {
-        params: item.params, label: item.label,
-        position: { x: fromNode.position.x, y: fromNode.position.y + (index + 1) * ROW_GAP },
-    }));
+/** Place `blocks` in the column below `fromNode`: adopted nodes (`reuse[i]`) move into their slot, the rest are new. */
+function insertBlocks(fromNode, blocks, reuse = []) {
+    pushDown(fromNode, blocks.length, new Set(reuse.filter(Boolean)));
+    return blocks.map((item, index) => {
+        const position = { x: fromNode.position.x, y: fromNode.position.y + (index + 1) * ROW_GAP };
+        const id = reuse[index];
+        if (!id) return createBlock(item.block, { params: item.params, label: item.label, position });
+        architecture().moveNodes([{ id, position }]);
+        applyBlockSettings(id, item.block, item);
+        return id;
+    });
 }
 
 function defaultTrainingLabel(kind, type) {
@@ -133,22 +195,25 @@ const SYNC = {
         if (!(rootGraph().parameters ?? []).some((parameter) => parameter.name === name)) throw new ActionError(`No global parameter ${name}`);
         architecture().patchGlobalParameter(name, { default: value });
     },
-    insertBetween({ block, from, to, params, label }) {
+    insertBetween({ block, from, to, params, label }, ctx) {
         goRoot();
         const source = resolveRootNode(from);
         const target = resolveRootNode(to);
+        const reuse = adoptBlocks([{ block }], ctx, new Set([source.id, target.id]));
         const edges = rootGraph().edges.filter((edge) => edge.source === source.id && edge.target === target.id);
-        const [id] = insertBlocks(source, [{ block, params, label }]);
+        const [id] = insertBlocks(source, [{ block, params, label }], reuse);
         for (const edge of edges) architecture().removeEdge(edge.id);
         connectOrThrow(source.id, id, { sourceHandle: edges[0]?.sourceHandle });
         connectOrThrow(id, target.id, { targetHandle: edges[0]?.targetHandle });
         return id;
     },
-    insertAfter({ block, after, params, label }) {
+    insertAfter({ block, after, params, label }, ctx) {
         goRoot();
         const source = resolveRootNode(after);
+        const next = rootGraph().edges.filter((edge) => edge.source === source.id).map((edge) => edge.target);
+        const reuse = adoptBlocks([{ block }], ctx, new Set([source.id, ...next]));
         const outgoing = rootGraph().edges.filter((edge) => edge.source === source.id);
-        const [id] = insertBlocks(source, [{ block, params, label }]);
+        const [id] = insertBlocks(source, [{ block, params, label }], reuse);
         for (const edge of outgoing) {
             architecture().removeEdge(edge.id);
             connectOrThrow(id, edge.target, { targetHandle: edge.targetHandle });
@@ -156,12 +221,13 @@ const SYNC = {
         connectOrThrow(source.id, id, { sourceHandle: outgoing[0]?.sourceHandle });
         return id;
     },
-    buildChain({ from, to, blocks = [] }) {
+    buildChain({ from, to, blocks = [] }, ctx) {
         goRoot();
         const source = resolveRootNode(from);
         const target = resolveRootNode(to);
+        const reuse = adoptBlocks(blocks, ctx, new Set([source.id, target.id]));
         for (const edge of rootGraph().edges.filter((item) => item.source === source.id && item.target === target.id)) architecture().removeEdge(edge.id);
-        const ids = insertBlocks(source, blocks);
+        const ids = insertBlocks(source, blocks, reuse);
         const chain = [source.id, ...ids, target.id];
         for (let index = 1; index < chain.length; index++) connectOrThrow(chain[index - 1], chain[index]);
         return ids;
@@ -286,7 +352,7 @@ async function runBarrier(action, ctx) {
 
 /**
  * @param {object[]} actions ActionSpec list: { do: 'setParam', … }
- * @param {{ module?, headless?, label?, answer?: (id, value) => void, answers?: object }} ctx
+ * @param {{ module?, headless?, label?, answer?: (id, value) => void, answers?: object, entryNodeIds?: string[]|null }} ctx
  * @returns {Promise<{ ok: boolean, error?: string, action?: object }>}
  */
 export async function runActions(actions = [], ctx = {}) {

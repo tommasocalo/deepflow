@@ -234,3 +234,68 @@ test('loadFixture replaces the workspace and clears history', async () => {
     assert.deepEqual(Object.keys(graph().nodes), Object.keys(buildFixtureSnapshot(TEST_MODULE, 'relu').graph.nodes));
     assert.equal(resolveRootNode({ type: 'Activation' }).id, 'relu');
 });
+
+// ---- Show me completes what the learner added in this step (docs/edu/SPEC.md §6.5) -------------------------------
+
+const entryIds = () => Object.keys(graph().nodes);
+const ofKey = (key) => Object.values(graph().nodes).filter((node) => node.libraryKey === key);
+const chip = (key) => arch().addLayerByLibraryKey(key, { x: 400, y: 261 });
+
+test('insertAfter wires an unconnected block added since the step began instead of adding a duplicate', async () => {
+    const h = createFixtureHelpers();
+    restoreWorkspace(h.snapshot({ nodes: [h.input('in', [1, 28, 28]), h.output('out', { row: 5 })], edges: [] }));
+    const entryNodeIds = entryIds();
+    const flatten = chip('torch.nn.Flatten');
+    const result = await runActions([{ do: 'insertAfter', block: 'torch.nn.Flatten', after: { type: 'Input' } }], { entryNodeIds });
+    assert.equal(result.ok, true, result.error);
+    assert.deepEqual(ofKey('torch.nn.Flatten').map((node) => node.id), [flatten], 'the chip block is reused');
+    assert.deepEqual(edgesOf(), [`in>${flatten}`]);
+    assert.equal(graph().nodes[flatten].position.y, graph().nodes.in.position.y + 130, 'it moves into the column');
+});
+
+test('a block already wired to the anchors is completed, and the result is the same as from scratch', async () => {
+    const entryNodeIds = entryIds();
+    const relu = chip('torch.nn.ReLU');
+    arch().connect({ source: 'lin1', target: relu });
+    await runActions([{ do: 'insertBetween', block: 'torch.nn.ReLU', from: { id: 'lin1' }, to: { id: 'lin2' } }], { entryNodeIds });
+    assert.equal(ofKey('torch.nn.ReLU').length, 1);
+    assert.deepEqual(edgesOf(), ['in>lin1', `lin1>${relu}`, 'lin2>out', `${relu}>lin2`].sort());
+});
+
+test('buildChain adopts several chips in canvas order and applies the chain parameters', async () => {
+    const h = createFixtureHelpers();
+    restoreWorkspace(h.snapshot({ nodes: [h.input('in', [2]), h.output('out', { row: 5 })], edges: [] }));
+    const entryNodeIds = entryIds();
+    const first = arch().addStandardComponent('linear', { x: 700, y: 100 });
+    const second = arch().addStandardComponent('linear', { x: 700, y: 400 });
+    const relu = chip('torch.nn.ReLU');
+    arch().connect({ source: first, target: relu });
+    const result = await runActions([{ do: 'buildChain', from: { type: 'Input' }, to: { type: 'Output' }, blocks: [
+        { block: 'component:linear', params: { in_features: 2, out_features: 8 } }, { block: 'torch.nn.ReLU' }, { block: 'component:linear', params: { in_features: 8, out_features: 1 } },
+    ] }], { entryNodeIds });
+    assert.equal(result.ok, true, result.error);
+    assert.equal(Object.keys(graph().nodes).length, 5, 'no duplicates');
+    assert.deepEqual(edgesOf(), ['in>' + first, `${first}>${relu}`, `${relu}>${second}`, `${second}>out`].sort());
+    assert.equal(graph().nodes[first].parameterValues.out_features, 8);
+    assert.equal(graph().nodes[second].parameterValues.in_features, 8);
+});
+
+test('blocks from the step entry, blocks wired elsewhere and calls without entry ids are never adopted', async () => {
+    // A ReLU that is part of the entry graph stays where it is.
+    loadMlp({ relu: true });
+    await runActions([{ do: 'insertBetween', block: 'torch.nn.ReLU', from: { id: 'in' }, to: { id: 'lin1' } }], { entryNodeIds: entryIds() });
+    assert.equal(ofKey('torch.nn.ReLU').length, 2);
+    // A learner block wired to an unrelated node keeps its wire; a new block is inserted.
+    loadMlp();
+    const entryNodeIds = entryIds();
+    const elsewhere = chip('torch.nn.ReLU');
+    arch().connect({ source: elsewhere, target: 'out' });
+    await runActions([{ do: 'insertBetween', block: 'torch.nn.ReLU', from: { id: 'lin1' }, to: { id: 'lin2' } }], { entryNodeIds });
+    assert.equal(ofKey('torch.nn.ReLU').length, 2);
+    assert.ok(edgesOf().includes(`${elsewhere}>out`));
+    // Setup and fixture actions pass no entry ids: a loose block is left alone.
+    loadMlp();
+    chip('torch.nn.ReLU');
+    await runActions([{ do: 'insertBetween', block: 'torch.nn.ReLU', from: { id: 'lin1' }, to: { id: 'lin2' } }]);
+    assert.equal(ofKey('torch.nn.ReLU').length, 2);
+});
