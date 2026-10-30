@@ -6,17 +6,23 @@ import { useArchitectureStore } from '../../../stores/architectureStore.js';
  * Without a mounted canvas every call is a harmless no-op.
  */
 export const CANVAS_EVENT = 'deepflow-edu:canvas';
+export const TRAINING_CANVAS_EVENT = 'deepflow-edu:training-canvas';
 
-function dispatch(detail) {
+function dispatch(detail, name = CANVAS_EVENT) {
     const target = globalThis.window;
     if (!target?.dispatchEvent || typeof globalThis.CustomEvent !== 'function') return detail;
-    target.dispatchEvent(new globalThis.CustomEvent(CANVAS_EVENT, { detail }));
+    target.dispatchEvent(new globalThis.CustomEvent(name, { detail }));
     return detail;
 }
 
 /** Returns true when a mounted canvas fitted its view. */
 export function requestFit() {
     return dispatch({ command: 'fit', result: false }).result === true;
+}
+
+/** Fit the Training tab's canvas beside its palette; true when it was mounted. */
+export function requestTrainingFit() {
+    return dispatch({ command: 'fit', result: false }, TRAINING_CANVAS_EVENT).result === true;
 }
 
 /** Insert a palette entry ({ key } or { standardComponentKey }) with DeepFlow's own placement; returns the node id. */

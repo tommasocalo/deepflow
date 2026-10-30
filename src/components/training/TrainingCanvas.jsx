@@ -20,6 +20,8 @@ const nodeTypes = {
 };
 
 const VIEWPORT_KEY = 'deepflow:training-viewport';
+// Fit beside the TrainingPalette (240 px wide, top right) and the Controls (bottom left), never above 100 %.
+const FIT_OPTIONS = { padding: { top: '24px', bottom: '24px', left: '56px', right: '40%' }, maxZoom: 1 };
 
 function toFlowNodes(graph, selectedSet) {
     return Object.values(graph.nodes).map((node) => ({
@@ -49,7 +51,7 @@ function toFlowEdges(graph, selectedEdgeSet) {
     }));
 }
 
-const Inner = () => {
+const Inner = ({ fitOnOpen = false }) => {
     const graph = useTrainingStore((s) => s.graph);
     const selectedNodeIds = useTrainingStore((s) => s.selectedNodeIds);
     const moveNode = useTrainingStore((s) => s.moveNode);
@@ -98,14 +100,26 @@ const Inner = () => {
     useEffect(() => {
         if (initRef.current) return;
         initRef.current = true;
-        const saved = localStorage.getItem(VIEWPORT_KEY);
+        // Edu lessons fit instead: a viewport saved in another workspace may not show the step's loss block.
+        const saved = fitOnOpen ? null : localStorage.getItem(VIEWPORT_KEY);
         if (saved) {
             try { setViewport(JSON.parse(saved), { duration: 0 }); return; } catch {
                 // A stale saved viewport falls back to fitting the graph below.
             }
         }
-        setTimeout(() => fitView({ padding: 0.2, duration: 0 }), 0);
-    }, [setViewport, fitView]);
+        setTimeout(() => fitView({ ...FIT_OPTIONS, duration: 0 }), 0);
+    }, [setViewport, fitView, fitOnOpen]);
+
+    // Edu canvas bridge (docs/edu/SPEC.md §6.12): "Where is it?" asks for the same fit.
+    useEffect(() => {
+        const onCommand = ({ detail = {} }) => {
+            if (detail.command !== 'fit') return;
+            fitView({ ...FIT_OPTIONS, duration: 220 });
+            detail.result = true;
+        };
+        window.addEventListener('deepflow-edu:training-canvas', onCommand);
+        return () => window.removeEventListener('deepflow-edu:training-canvas', onCommand);
+    }, [fitView]);
 
     const handleViewportChange = useCallback((vp) => {
         try { localStorage.setItem(VIEWPORT_KEY, JSON.stringify(vp)); } catch {
@@ -186,7 +200,7 @@ const Inner = () => {
                 multiSelectionKeyCode={['Meta', 'Shift']}
                 deleteKeyCode={['Delete', 'Backspace']}
                 edgesFocusable
-                fitViewOptions={{ padding: 0.2 }}
+                fitViewOptions={FIT_OPTIONS}
                 proOptions={{ hideAttribution: true }}
                 style={{ width: '100%', height: '100%' }}
             >
@@ -213,9 +227,9 @@ const Inner = () => {
     );
 };
 
-const TrainingCanvas = () => (
+const TrainingCanvas = ({ fitOnOpen = false }) => (
     <ReactFlowProvider>
-        <Inner />
+        <Inner fitOnOpen={fitOnOpen} />
     </ReactFlowProvider>
 );
 

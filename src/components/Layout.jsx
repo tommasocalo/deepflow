@@ -72,7 +72,7 @@ const Layout = () => {
                         {activeTab === 'training' && (
                             <div className="edu-training-split">
                                 <div className="edu-training-canvas">
-                                    <TrainingCanvas />
+                                    <TrainingCanvas fitOnOpen={lessonMode} />
                                     <TrainingPalette />
                                 </div>
                                 <div className="edu-trainer-dock"><TrainerPanel /></div>
