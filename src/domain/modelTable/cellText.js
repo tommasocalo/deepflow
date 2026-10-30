@@ -116,10 +116,21 @@ export const SHAPE_ERROR_NOTE = 'Totals use the declared settings. A layer whose
     + 'later MACs, activations and widths inferred from it (such as an attention D) read ? too. '
     + 'The canvas still draws the shapes validation carries on with; the table counts nothing from them.';
 
-/** `1/12`: how many occurrences a shape label covers, when it does not cover them all. */
+/**
+ * `1/12`: how many occurrences a shape label covers, when it does not cover
+ * them all; `12/?` when how many there are is unknown (an unresolved count).
+ */
 export function knownShapeMark(row) {
     const { known, count } = row.shape;
-    return !row.shape.unknown && known < count ? `${known}/${count}` : null;
+    if (row.shape.unknown) return null;
+    if (count === null) return `${known}/?`;
+    return known < count ? `${known}/${count}` : null;
+}
+
+/** The mark in words, for screen readers: `known in 1 of 12 occurrences`. */
+export function knownShapeWords(row) {
+    const { known, count } = row.shape;
+    return count === null ? `known in ${known} occurrences; how many others there are is unknown` : `known in ${known} of ${count} occurrences`;
 }
 
 /** The Output cell explained. */

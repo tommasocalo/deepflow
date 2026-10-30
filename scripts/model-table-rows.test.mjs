@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { computeModelMetrics, formatShare } from '../src/domain/metrics/index.js';
 import { buildModelTableRows, readingOrder, rowKey } from '../src/domain/modelTable/rows.js';
 import { configAccessibleText } from '../src/domain/modelTable/configFields.js';
-import { cellStatus, eachText, failingText, knownShapeMark, layerLines, metricLines, multiplicityInfo, SHAPE_GUESS_NOTE, shareInfo } from '../src/domain/modelTable/cellText.js';
+import { cellStatus, eachText, failingText, knownShapeMark, knownShapeWords, layerLines, metricLines, multiplicityInfo, SHAPE_GUESS_NOTE, shareInfo } from '../src/domain/modelTable/cellText.js';
 import { cutExpression, fitConfigParts, fitShapeText } from '../src/domain/modelTable/fitText.js';
 import { describeTarget, followReference, parseCellValue, precheckCellValue, resolveWriteTarget, targetSummary, targetTag } from '../src/domain/modelTable/writeTargets.js';
 import { createEdge, createLayerNode, createRepeatNode, createSuperNodeInstance, createTemplate } from '../src/domain/architecture/index.js';
@@ -540,6 +540,12 @@ test('shares of a partial total are upper bounds, or unknown where the row is pa
     assert.deepEqual([ln1.shape.text, ln1.shape.known, ln1.shape.count, knownShapeMark(ln1)], ['B × 1024 × 768', 1, 12, '1/12'],
         'A shape known in block 0 only says so in the cell');
     assert.equal(knownShapeMark(find(rows, 'token embedding')), null);
+    // In blocks 1–11 the heads repeat counts its heads from a Split that failed: how many there are is unknown.
+    const heads = find(rowsAt(broken, 'ops'), 'Attention heads');
+    assert.deepEqual([heads.shape.known, heads.shape.count, knownShapeMark(heads)], [12, null, '12/?'],
+        'An unresolved repeat leaves the total unknown instead of counting as one occurrence');
+    assert.equal(knownShapeWords(heads), 'known in 12 occurrences; how many others there are is unknown');
+    assert.match(heads.shape.title, /\nKnown in 12 occurrences; how many others there are is unknown: after Transformer blocks › residual: /);
     const residual = rows.filter((row) => row.label === 'residual');
     assert.equal(layerLines(residual[0])[1], 'Inputs: attention projection dropout B × 1024 × 768 + block input B × 1024 × 768', 'A merge row names its inputs');
     assert.equal(layerLines(residual[1])[1], 'Inputs: dropout B × 1024 × 1024 + residual B × 1024 × 768', 'which shows where shapes disagree');

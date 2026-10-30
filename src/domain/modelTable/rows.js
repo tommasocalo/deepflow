@@ -91,11 +91,12 @@ function singleShapeText(shape) {
  * that differ in some axes read as a range there: `B × 64…256 × 32 × 32`.
  * `null` marks an occurrence whose shape is unknown; `unknownReason` says why.
  * `known` of `count` occurrences have a known shape, so a label that covers
- * only some of them can say so.
+ * only some of them can say so. `count` defaults to one occurrence per shape;
+ * it is null when how many occurrences there are is unknown.
  */
-export function shapeSummary(shapes, { unknownReason = null } = {}) {
+export function shapeSummary(shapes, { unknownReason = null, count = shapes.length } = {}) {
     const unknown = shapes.filter((shape) => shape === null || shape === undefined).length;
-    const counts = { known: shapes.length - unknown, count: shapes.length };
+    const counts = { known: shapes.length - unknown, count };
     const distinct = [];
     const seen = new Set();
     for (const shape of shapes) {
@@ -105,7 +106,9 @@ export function shapeSummary(shapes, { unknownReason = null } = {}) {
         seen.add(key);
         distinct.push(shape);
     }
-    const unknownNote = unknown && distinct.length ? `\nUnknown in ${unknown} of ${shapes.length} occurrences${unknownReason ? `: ${unknownReason}` : ''}` : '';
+    const others = count === null ? `Known in ${counts.known} occurrences; how many others there are is unknown`
+        : `Unknown in ${count - counts.known} of ${count} occurrences`;
+    const unknownNote = unknown && distinct.length ? `\n${others}${unknownReason ? `: ${unknownReason}` : ''}` : '';
     if (!distinct.length) return { text: null, varies: false, unknown: shapes.length > 0, title: unknownReason ? `Unknown: ${unknownReason}` : '', ...counts };
     const labels = distinct.map((shape) => singleShapeText(shape) ?? '?');
     if (distinct.length === 1) return { text: singleShapeText(distinct[0]), varies: false, unknown: false, title: `${labels[0]}${unknownNote}`, ...counts };
@@ -256,12 +259,22 @@ function occurrenceRuns(trails, test) {
     return valueRuns(trails.map(test), trails.map(occurrenceLabel)).filter((run) => run.value);
 }
 
-/** Outputs of every occurrence; unknown shapes are null. Repeats show one instance's output. */
+/**
+ * Outputs of every occurrence, unknown ones null, and how many occurrences
+ * there are. Repeats show one instance's output. A repeat analysed in part
+ * stands for its count of occurrences, none known; one whose count is
+ * unresolved leaves the number unknown (null).
+ */
 function occurrenceShapes(first, list) {
-    if (first.kind !== 'repeat') return list.map((merged) => merged.metrics.shapeUnknown ? null : merged.metrics.output);
-    return list.flatMap((merged) => merged.metrics.complete
-        ? merged.metrics.instances.map((instance) => instance.outputTaint ? null : instance.output)
-        : [null]);
+    if (first.kind !== 'repeat') return { shapes: list.map((merged) => merged.metrics.shapeUnknown ? null : merged.metrics.output), count: list.length };
+    let count = 0;
+    const shapes = list.flatMap((merged) => {
+        const { complete, instances } = merged.metrics;
+        const instancesCount = complete ? instances.length : merged.metrics.count;
+        count = count !== null && Number.isInteger(instancesCount) ? count + instancesCount : null;
+        return complete ? instances.map((instance) => instance.outputTaint ? null : instance.output) : [null];
+    });
+    return { shapes, count };
 }
 
 function shapeReason(first, list) {
@@ -321,6 +334,7 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
             const complete = list.every((merged) => merged.metrics.kind === 'layer' || merged.metrics.complete);
             const counts = first.kind === 'repeat' ? list.map((merged) => merged.metrics.count) : null;
             const live = levelPath.length ? null : rootGraph?.nodes?.[id];
+            const outputs = occurrenceShapes(first, list);
             const row = {
                 key, path, levelPath, nodeId: id, parentKey, depth: level, posInSet: position + 1, setSize: visible.length,
                 kind: first.kind, libraryKey: first.kind === 'layer' ? first.node.libraryKey : null,
@@ -348,7 +362,7 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
                 definitionIds,
                 ownerIds: levelPath.length ? unique(list.map((merged) => merged.trail.at(-1)?.templateId)) : [],
                 ancestorConflict,
-                shape: shapeSummary(occurrenceShapes(first, list), { unknownReason: shapeReason(first, list) }),
+                shape: shapeSummary(outputs.shapes, { unknownReason: shapeReason(first, list), count: outputs.count }),
                 // A parallel repeat collects its instances' outputs; the row shows one instance's.
                 collectedShape: first.kind === 'repeat' && first.node.mode === 'parallel' ? shapeSummary(list.map((merged) => merged.metrics.output)).text : null,
                 // Ops inside a standard module: the module's output stands for theirs.
