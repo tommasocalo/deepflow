@@ -1,5 +1,7 @@
+import { cachedValidate } from '../../../domain/architecture/levelContext.js';
+import { withGlobalParameters } from '../../../domain/expressions.js';
 import { getIncomingEdges } from '../../../domain/graphInputs.js';
-import { paramLabel } from './i18n.js';
+import { paramLabel, t } from './i18n.js';
 import { nodeType, orderedNodeIds } from './nodes.js';
 
 /**
@@ -96,4 +98,16 @@ export function friendlyIssues(report, graph, templates = {}) {
         issues.push({ nodeId: null, key: 'fb.global', params: { message: String(message) }, message: String(message) });
     }
     return issues;
+}
+
+/** Lesson markup (**bold**, `code`) without the marks, for plain-text places (the trainer, code comments). */
+export const plainText = (markup) => String(markup).replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1');
+
+/** The friendly rewrite of a graph's first validation error as plain text, or null when the graph validates. */
+export function firstGraphProblem(graph, templates = {}) {
+    if (!graph?.nodes) return null;
+    const report = cachedValidate(graph, templates, withGlobalParameters(graph), {});
+    if (report.ok) return null;
+    const issue = friendlyIssues(report, graph, templates)[0];
+    return issue ? plainText(t(issue.key, issue.params)) : null;
 }

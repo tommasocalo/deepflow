@@ -14,7 +14,7 @@ import { cachedValidate } from '../../domain/architecture/levelContext.js';
 import { effectiveTemplateId } from '../../domain/architecture/instanceStructure.js';
 import { resolveGradientFactor } from '../../domain/gradientFactor.js';
 import { isShapeCollection } from '../../domain/shapeCollections.js';
-import { friendlyIssues } from '../lessons/engine/feedback.js';
+import { friendlyIssues, plainText } from '../lessons/engine/feedback.js';
 import { t } from '../lessons/engine/i18n.js';
 
 export const MAX_PARAMETERS = 2_000_000;
@@ -58,9 +58,6 @@ const typeName = (node, templates) => node.kind === 'layer'
     : templates[node.templateId]?.name ?? (node.kind === 'repeat' ? 'Repeat' : 'Component');
 const formatShape = (shape) => (Array.isArray(shape) ? `(${shape.map((dim) => (dim === null ? 'B' : dim)).join(', ')})` : '(?)');
 const normalAxis = (axis, rank) => (Number.isInteger(axis) ? (axis < 0 ? rank + axis : axis) : null);
-
-/** Lesson markup (**bold**, `code`) without the marks, for the trainer's plain-text lines. */
-const plainText = (markup) => String(markup).replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1');
 
 export function unsupportedMessage(label) {
     return `${label} is not supported by the browser trainer. Use Code → train.py to train this model in PyTorch.`;

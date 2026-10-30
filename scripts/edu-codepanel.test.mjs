@@ -254,7 +254,9 @@ test('an invalid model shows the codegen error and offers no notebook', async ()
     await render(h(WiredPanel));
     await act(() => useEduDataStore.getState().setDataset('iris'));
     await act(() => useArchitectureStore.getState().patchLayerParameters('in', { shape: '(5,)' }));
-    assert.ok(code().startsWith('# codegen error:'), code().slice(0, 120));
+    assert.match(code(), /^# No code yet: \S.* expects 4 input features but receives 5\.\n/, 'the friendly reason first');
+    assert.ok(code().includes('# codegen error: '), 'the validator text stays below it');
+    assert.ok(!code().includes(' at '), 'no JavaScript stack for an invalid model');
     assert.equal(target('code-notebook'), null);
     assert.deepEqual(jsdomErrors, []);
 });

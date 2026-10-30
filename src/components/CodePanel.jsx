@@ -7,6 +7,7 @@ import { generateArchitectureModule, generateTrainingScript } from '../codegen/i
 import { trainingNotebookText } from '../codegen/edu/notebook.js';
 import { onSourceRegistered, readSource, subscribeSource } from '../edu/bridge.js';
 import { getDataset } from '../edu/data/registry.js';
+import { firstGraphProblem } from '../edu/lessons/engine/feedback.js';
 
 const TABS = [
     { id: 'model', label: 'model.py' },
@@ -83,11 +84,12 @@ const CodePanel = ({ open, onClose, tab, onTabChange }) => {
                 ok: true,
             };
         } catch (err) {
-            return {
-                model: `# codegen error: ${err.message}\n${err.stack ?? ''}`,
-                train: `# codegen error: ${err.message}\n${err.stack ?? ''}`,
-                ok: false,
-            };
+            // An invalid model gets the lesson panel's plain explanation; other failures keep the stack for a report.
+            const problem = firstGraphProblem(archGraph, templates);
+            const text = problem
+                ? `# No code yet: ${problem}\n# Fix it on the canvas (Graph checks shows where), and the code appears here.\n#\n# codegen error: ${err.message}\n`
+                : `# codegen error: ${err.message}\n${err.stack ?? ''}`;
+            return { model: text, train: text, ok: false };
         }
     }, [open, archGraph, templates, trainGraph, data]);
 
