@@ -303,7 +303,7 @@ test('a locked TrainerCard disables Train and Check initial loss and says why; t
     await click($('[data-edu-target="trainer-run"]'));
     await untilRuns(1);
     assert.ok($('.edu-tr-card [data-edu-target="trainer-boundary"] canvas'), 'a boundary thumbnail for 2D data');
-    assert.match($('.edu-tr-card-final').textContent, /^val acc \d+% · val loss /);
+    assert.match($('.edu-tr-card-final').textContent, /^val acc \d+(\.\d)?% · val loss /, 'one decimal at most, as in the lesson reveals');
     await click($('.edu-tr-open'));
     assert.equal(useEduUiStore.getState().activeTab, 'training', 'Open Training switches the tab');
 

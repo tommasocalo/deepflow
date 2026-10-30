@@ -21,8 +21,12 @@ test('number formats: loss, accuracy, learning rate, ticks and durations', () =>
     assert.equal(formatLoss(0.00123), '0.0012');
     assert.equal(formatLoss(12.34), '12.3');
     assert.equal(formatLoss(null), '–');
-    assert.equal(formatAccuracy(0.966), '97%');
-    assert.equal(formatAccuracy(0.995), '99.5%', 'never rounds 99.5 % up to 100 %');
+    assert.equal(formatAccuracy(0.966), '96.6%');
+    assert.equal(formatAccuracy(0.975), '97.5%', '39 of 40 validation dots, as the lesson reveal says it');
+    assert.equal(formatAccuracy(28 / 30), '93.3%');
+    assert.equal(formatAccuracy(0.9), '90%');
+    assert.equal(formatAccuracy(0.995), '99.5%');
+    assert.equal(formatAccuracy(0.9996), '99.9%', 'never rounds up to 100 %');
     assert.equal(formatAccuracy(1), '100%');
     assert.equal(formatLr(0.0001), '0.0001');
     assert.equal(formatLr(0.03), '0.03');

@@ -3,6 +3,7 @@ import { resolveGraphLevel } from '../../../domain/architecture/operations.js';
 import { resolveRepeatCount, withGlobalParameters } from '../../../domain/expressions.js';
 import { countArchitectureParameters } from '../../../domain/optimization/parameterCount.js';
 import { effectiveObjective } from '../../objective.js';
+import { formatAccuracy } from '../../trainer/charts.js';
 import { friendlyIssues } from './feedback.js';
 import { formatNumber, hasText, paramLabel, t } from './i18n.js';
 import {
@@ -193,7 +194,7 @@ function runFailure(run, query, ctx) {
 
 function formatMetric(metric, value) {
     if (value === null || value === undefined || !Number.isFinite(Number(value))) return t('value.unknown');
-    return metric.endsWith('Accuracy') ? `${Math.round(Number(value) * 1000) / 10}%` : Number(value).toFixed(3);
+    return metric.endsWith('Accuracy') ? formatAccuracy(Number(value)) : Number(value).toFixed(3);
 }
 
 function describeMetricBound(metric, bound) {

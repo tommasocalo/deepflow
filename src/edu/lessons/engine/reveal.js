@@ -1,3 +1,4 @@
+import { formatAccuracy } from '../../trainer/charts.js';
 import { finalMetrics, isInitRun, trainerRuns } from './checks.js';
 
 /**
@@ -11,7 +12,7 @@ const METRICS = {
 };
 const LOWER_IS_BETTER = new Set(['gap', 'valLoss']);
 
-const formatMetric = (metric, value) => (metric === 'valAccuracy' ? `${(value * 100).toFixed(1)}%` : value.toFixed(3));
+const formatMetric = (metric, value) => (metric === 'valAccuracy' ? formatAccuracy(value) : value.toFixed(3));
 
 /** @returns {{ params: object, variant: 'better'|'notBetter'|null }} */
 export function revealValues(reveal, { trainer, enteredAtSeq = 0, runTags = {} } = {}) {
@@ -27,7 +28,7 @@ export function revealValues(reveal, { trainer, enteredAtSeq = 0, runTags = {} }
     }
     if (reveal.run === 'finalValAccuracy') {
         const value = finalMetrics([...runs].reverse().find((run) => !isInitRun(run)))?.valAccuracy;
-        if (Number.isFinite(value)) params.measured = `${(value * 100).toFixed(1)}%`;
+        if (Number.isFinite(value)) params.measured = formatAccuracy(value);
     }
     if (reveal.compare) {
         const { tag, metric } = reveal.compare;

@@ -15,12 +15,14 @@ export function formatLoss(value) {
     return value.toPrecision(2);
 }
 
-/** Accuracy in [0, 1] as a whole percentage ("97%"); keeps one decimal near 100 % so 99.5 % is not "100%". */
+/**
+ * Accuracy in [0, 1] as a percentage with at most one decimal ("97.5%", "93.3%", "100%"), the one format used by
+ * the trainer, the lesson reveals and the check messages. Below 1 it never rounds up to "100%".
+ */
 export function formatAccuracy(value) {
     if (!Number.isFinite(value)) return '–';
-    const percent = value * 100;
-    if (percent > 99 && percent < 100) return `${percent.toFixed(1)}%`;
-    return `${Math.round(percent)}%`;
+    const tenths = Math.round(value * 1000);
+    return `${(value < 1 ? Math.min(tenths, 999) : tenths) / 10}%`;
 }
 
 /** Learning rates as people write them: 0.0001, 0.03, 1, 3e-5. */
