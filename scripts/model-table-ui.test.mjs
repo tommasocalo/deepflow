@@ -523,3 +523,16 @@ test('read-only values explain themselves, and an input method keeps Enter', asy
     await key(input, 'Enter');
     assert.equal(rootNode('Dropout').parameters.p, 0.3);
 });
+
+test('the grid is reached from the toggle, before the canvas', async () => {
+    await openTable();
+    await nextFrame();
+    const active = document.activeElement;
+    assert.ok(mainTable().contains(active) && active.matches('[role="treegrid"] [data-col]'), 'Opening the table focuses its active cell');
+    assert.equal(byAria('Show model table').getAttribute('aria-controls'), mainTable().id);
+    const canvas = container.querySelector('[data-graph-pane="main"] [data-architecture-canvas]');
+    assert.ok(mainTable().compareDocumentPosition(canvas) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'Tab reaches the table before the canvas nodes');
+    await click(byAria('Close model table', mainTable()));
+    await nextFrame();
+    assert.equal(document.activeElement, byAria('Show model table'), 'Closing returns focus to the toggle');
+});

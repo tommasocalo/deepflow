@@ -399,6 +399,10 @@ const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = tru
     return (
         <div className="df-architecture-workspace" style={{ display: 'flex', width: '100%', height: '100%', minWidth: 0 }}>
             {children}
+            {/* A docked tool beside the canvas; it narrows the canvas, which keeps the graph
+                centred. It comes first in the DOM, so Tab reaches it before every canvas
+                node; CSS order draws it at the right. */}
+            {aside}
             <div
                 ref={wrapperRef}
                 data-architecture-canvas
@@ -503,8 +507,6 @@ const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = tru
                 {keyboardActive && spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
                 {clipboardNotice && !spacePressed && <div className="df-space-hint" role="status">{clipboardNotice}</div>}
             </div>
-            {/* A docked tool beside the canvas; it narrows the canvas, which keeps the graph centred. */}
-            {aside}
         </div>
     );
 };

@@ -62,7 +62,7 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
                 {onClose && <button type="button" className="df-side-close" onClick={onClose} aria-label="Close side view" title="Close side view"><X size={13} strokeWidth={3} /></button>}
             </div>
             <div className="df-architecture-body">
-                <ArchitectureCanvas paneId={id} keyboardActive={active} aside={showModelTable ? <ModelTablePanel /> : null} overlay={(
+                <ArchitectureCanvas paneId={id} keyboardActive={active} aside={showModelTable ? <ModelTablePanel paneId={id} /> : null} overlay={(
                     <>
                         <NodeInspector />
                         <CanvasCommandBridge paneId={id} register={registerCommands} />

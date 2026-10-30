@@ -157,7 +157,7 @@ function Footer({ metrics, assumptionsId, onShowError }) {
 }
 
 /** The whole model as a torchinfo-style table beside the canvas of one pane. */
-export default function ModelTablePanel() {
+export default function ModelTablePanel({ paneId = 'main' }) {
     const store = useArchitectureStoreApi();
     const { depth, share: lens, cells } = useArchitectureStore((state) => state.modelTable);
     const currentPath = useArchitectureStore((state) => state.currentPath);
@@ -429,7 +429,7 @@ export default function ModelTablePanel() {
         : 'Select a row');
     const metricColumn = lens === 'activation' ? 'activation' : 'macs';
 
-    return <aside ref={asideRef} className={`df-model-table nokey${sheet ? ' is-sheet' : ''}`} aria-label="Model table"
+    return <aside ref={asideRef} id={`df-model-table-${paneId}`} className={`df-model-table nokey${sheet ? ' is-sheet' : ''}`} aria-label="Model table"
         style={{ ...(width ? { '--model-table-width': `${width}px` } : {}), ...(height ? { '--model-table-height': `${height}px` } : {}) }}
         onKeyDown={(event) => {
             // Plain keys stay in the table: Delete, Backspace, Space and "/"
