@@ -58,7 +58,11 @@ const Category = ({ name, items, renderRow }) => {
     );
 };
 
+// On narrow screens the palette starts folded to its header, so it does not cover the training graph.
+const startsFolded = () => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 899px)').matches;
+
 const TrainingPalette = () => {
+    const [open, setOpen] = useState(() => !startsFolded());
     const addOptimizer = useTrainingStore((s) => s.addOptimizer);
     const addLoss = useTrainingStore((s) => s.addLoss);
     const addPhase = useTrainingStore((s) => s.addPhase);
@@ -111,15 +115,23 @@ const TrainingPalette = () => {
             className="df-panel-subtle absolute pointer-events-auto overflow-hidden"
             style={{ right: '1rem', top: '1rem', width: '240px', maxHeight: 'calc(100% - 2rem)', zIndex: 40 }}
         >
-            <div className="px-3 py-2 border-b border-black/15 bg-white shrink-0">
-                <div className="flex items-center justify-between px-1">
+            <button
+                type="button"
+                onClick={() => setOpen((value) => !value)}
+                aria-expanded={open}
+                className={`w-full px-3 py-2 bg-white shrink-0 text-left hover:bg-stone-50${open ? ' border-b border-black/15' : ''}`}
+            >
+                <div className="flex items-center justify-between gap-2 px-1">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-black">
                         Training
                     </div>
-                    <div className="text-[9px] font-mono text-text-secondary">blocks</div>
+                    <div className="flex items-center gap-1 text-[9px] font-mono text-text-secondary">
+                        blocks
+                        {open ? <ChevronDown size={11} strokeWidth={3} aria-hidden="true" /> : <ChevronRight size={11} strokeWidth={3} aria-hidden="true" />}
+                    </div>
                 </div>
-            </div>
-            <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8.5rem)' }}>
+            </button>
+            {open && <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8.5rem)' }}>
                 <div className="border-b border-black/15 bg-white">
                     <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-black">
                         Frequently Used
@@ -132,7 +144,7 @@ const TrainingPalette = () => {
                 <Category name="Optimizers" items={OPTIMIZERS} renderRow={renderOpt} />
                 <Category name="Losses"     items={LOSSES}     renderRow={renderLoss} />
                 <Category name="Schedule"   items={[phaseItem]} renderRow={(it) => it.render()} />
-            </div>
+            </div>}
         </div>
     );
 };

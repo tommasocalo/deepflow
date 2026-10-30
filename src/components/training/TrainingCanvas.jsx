@@ -20,8 +20,11 @@ const nodeTypes = {
 };
 
 const VIEWPORT_KEY = 'deepflow:training-viewport';
-// Fit beside the TrainingPalette (240 px wide, top right) and the Controls (bottom left), never above 100 %.
+// Fit beside the TrainingPalette (240 px wide, top right) and the Controls (bottom left), never above 100 %. A narrow
+// canvas has the palette folded to its header (TrainingPalette), so the graph fits below it.
 const FIT_OPTIONS = { padding: { top: '24px', bottom: '24px', left: '56px', right: '40%' }, maxZoom: 1 };
+const NARROW_FIT_OPTIONS = { padding: { top: '60px', bottom: '16px', left: '56px', right: '16px' }, maxZoom: 1 };
+const fitOptionsFor = (element) => ((element?.getBoundingClientRect().width ?? Infinity) < 600 ? NARROW_FIT_OPTIONS : FIT_OPTIONS);
 
 function toFlowNodes(graph, selectedSet) {
     return Object.values(graph.nodes).map((node) => ({
@@ -107,14 +110,14 @@ const Inner = ({ fitOnOpen = false }) => {
                 // A stale saved viewport falls back to fitting the graph below.
             }
         }
-        setTimeout(() => fitView({ ...FIT_OPTIONS, duration: 0 }), 0);
+        setTimeout(() => fitView({ ...fitOptionsFor(wrapperRef.current), duration: 0 }), 0);
     }, [setViewport, fitView, fitOnOpen]);
 
     // Edu canvas bridge (docs/edu/SPEC.md §6.12): "Where is it?" asks for the same fit.
     useEffect(() => {
         const onCommand = ({ detail = {} }) => {
             if (detail.command !== 'fit') return;
-            fitView({ ...FIT_OPTIONS, duration: 220 });
+            fitView({ ...fitOptionsFor(wrapperRef.current), duration: 220 });
             detail.result = true;
         };
         window.addEventListener('deepflow-edu:training-canvas', onCommand);
