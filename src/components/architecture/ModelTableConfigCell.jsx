@@ -15,7 +15,7 @@ function Prefix({ prefix }) {
 }
 
 /** A field as text: expressions in the expression colour, inherited defaults muted. */
-function FieldText({ field, cells, text, info, errors, more, onClick }) {
+function FieldText({ field, cells, text, info, errors, more }) {
     const shown = shownText(field, cells);
     const error = errors?.[0];
     const title = [
@@ -24,7 +24,7 @@ function FieldText({ field, cells, text, info, errors, more, onClick }) {
         field.unknownReason ? `?: ${field.unknownReason}` : null, error, info?.hint, more ? `Also: ${more}` : null,
     ].filter(Boolean).join('\n');
     return <span className={`df-mt-field is-${shown.tone}${info?.editable ? ' is-editable' : ''}${error ? ' is-invalid' : ''}`}
-        data-field={field.name} title={title} onClick={onClick}>
+        data-field={field.name} title={title}>
         <Prefix prefix={field.prefix} />{text}
     </span>;
 }
@@ -173,7 +173,6 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
                 className: `df-mt-input${error ? ' is-invalid' : ''}`,
                 onKeyDown: (event) => onKeyDown(event, index),
                 onClick: (event) => event.stopPropagation(),
-                onDoubleClick: (event) => event.stopPropagation(),
             };
             const bubble = <>
                 {error && <span id={`${errorId}-${part.name}`} className="df-mt-input-error">{error}</span>}
@@ -204,8 +203,12 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
     </span>;
 }
 
-/** The defining settings of a row, as written (Symbols) or resolved (Values). */
-export default function ModelTableConfigCell({ row, cells, targets, context, fieldErrors, editing, suggestions, budget, labelled = false, onStartEdit, onReadOnly, onDone, onMessage }) {
+/**
+ * The defining settings of a row, as written (Symbols) or resolved (Values).
+ * Clicks are handled by the cell around it: the first selects, a click on
+ * the selected cell edits the field under the pointer.
+ */
+export default function ModelTableConfigCell({ row, cells, targets, context, fieldErrors, editing, suggestions, budget, labelled = false, onDone, onMessage }) {
     if (editing) {
         return <ConfigEditor row={row} cells={cells} targets={targets} context={context} suggestions={suggestions}
             focusField={editing.fieldName} seed={editing.seed} onDone={onDone} onMessage={onMessage} />;
@@ -227,15 +230,7 @@ export default function ModelTableConfigCell({ row, cells, targets, context, fie
     return <span className="df-mt-config" aria-hidden={labelled || undefined}>
         {visible.map((part, index) => part.kind === 'field'
             ? <FieldText key={part.name} field={part} cells={cells} text={fit.texts[index]} info={targets[part.name]} errors={fieldErrors[part.name]}
-                more={lastCut && index === visible.length - 1 ? hiddenText : null}
-                onClick={(event) => {
-                    if (targets[part.name]?.editable) onStartEdit(part.name);
-                    else if (targets[part.name]) {
-                        // The row still becomes active; the reason replaces the usual focus line.
-                        event.stopPropagation();
-                        onReadOnly(`${part.name}: ${targets[part.name].hint}`);
-                    }
-                }} />
+                more={lastCut && index === visible.length - 1 ? hiddenText : null} />
             : <Separator key={index} part={part} />)}
         {hidden.length > 0 && !lastCut && <span className="df-mt-more-fields" title={hiddenText}>…</span>}
     </span>;

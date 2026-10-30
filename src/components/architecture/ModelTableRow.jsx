@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import { AlertCircle, AlertTriangle, Boxes, ChevronRight, GitFork, Repeat } from 'lucide-react';
 import { getEntry } from '../../domain/library/index.js';
 import { formatMetric } from '../../domain/metrics/index.js';
@@ -8,7 +8,7 @@ import { fitShapeText } from '../../domain/modelTable/fitText.js';
 import { FAMILY_ASSETS, styleFor } from './categoryStyle.js';
 import OperationIcon from './OperationIcon.jsx';
 import ModelTableConfigCell from './ModelTableConfigCell.jsx';
-import { fieldTargets } from './modelTableEdits.js';
+import { CONFIG_COLUMN, fieldTargets } from './modelTableEdits.js';
 import { partitionParameterErrors } from './inspectorIssues.js';
 
 /** The canvas vocabulary: operation marks, standard component icons, container icons. */
@@ -75,8 +75,13 @@ function rowFieldErrors(row) {
     return fields;
 }
 
+/** How long after a click opened an editor a double-click still means "open the level". */
+const DOUBLE_CLICK_GRACE = 700;
+
 function ModelTableRow({ row, index, cells, lens, modelTotal, modelPartial, context, selected, focusColumn, editing, suggestions, budgets, actions }) {
     const targets = fieldTargets(row, cells, context);
+    // Whether the pointer went down on the config cell while it already had focus.
+    const configArmed = useRef(false);
     const fieldErrors = useMemo(() => rowFieldErrors(row), [row]);
     const editable = Object.values(targets).some((target) => target.editable);
     const metric = lens === 'activation' ? 'activation' : 'macs';
@@ -105,7 +110,12 @@ function ModelTableRow({ row, index, cells, lens, modelTotal, modelPartial, cont
             if (event.detail > 1 && !event.target.closest?.('input, select')) event.preventDefault();
         }}
         onClick={(event) => actions.click(row, Number(event.target.closest?.('[data-col]')?.dataset.col ?? 0))}
-        onDoubleClick={(event) => { if (!event.target.closest?.('.df-mt-editor')) actions.open(row); }}>
+        onDoubleClick={(event) => {
+            // Anywhere on the row opens its level. An editor the first click of this
+            // double-click opened (on a selected setting) gives way; a real edit does not.
+            if (!event.target.closest?.('.df-mt-editor')) actions.open(row);
+            else if (editing?.byClick && performance.now() - editing.byClick < DOUBLE_CLICK_GRACE) actions.open(row, { cancelEdit: true });
+        }}>
         <th role="rowheader" scope="row" {...cell(0)} className="df-mt-layer" aria-invalid={hasErrors || undefined}
             title={layerLines(row).join('\n')}>
             <span className="df-mt-layer-inner" style={{ paddingLeft: `${row.depth * 14}px` }}>
@@ -133,13 +143,31 @@ function ModelTableRow({ row, index, cells, lens, modelTotal, modelPartial, cont
             {row.shape.unknown ? <span className="df-mt-unknown">?</span>
                 : <span aria-hidden="true"><CompactShape text={shapeText} />{knownMark && <span className="df-mt-known">{knownMark}</span>}</span>}
         </td>
-        <td role="gridcell" {...cell(3)} className={`df-mt-config-cell${editing ? ' is-editing' : ''}`} aria-readonly={!editable}
+        <td role="gridcell" {...cell(CONFIG_COLUMN)} className={`df-mt-config-cell${editing ? ' is-editing' : ''}`} aria-readonly={!editable}
             aria-label={editing ? undefined : configAccessibleText(row, cells) || undefined}
-            title={editing ? undefined : editableHints.join('\n') || undefined}>
+            title={editing ? undefined : editableHints.join('\n') || undefined}
+            onMouseDown={(event) => {
+                // Spreadsheet style: the first click selects the cell, a click on the selected cell edits it.
+                configArmed.current = !editing && focusColumn === CONFIG_COLUMN && event.currentTarget === event.currentTarget.ownerDocument.activeElement;
+            }}
+            onClick={(event) => {
+                const armed = configArmed.current;
+                configArmed.current = false;
+                if (editing) return;
+                const name = event.target.closest?.('[data-field]')?.dataset.field ?? null;
+                const target = name ? targets[name] : null;
+                if (target && !target.editable) {
+                    // A value that cannot be edited here says where to change it; the row still becomes active.
+                    event.stopPropagation();
+                    actions.click(row, CONFIG_COLUMN);
+                    actions.message(`${name}: ${target.hint}`);
+                } else if (armed && editable && event.detail <= 1) {
+                    event.stopPropagation();
+                    actions.startEdit(row, target ? name : null, null, { byClick: true });
+                }
+            }}>
             <ModelTableConfigCell row={row} cells={cells} targets={targets} context={context} fieldErrors={fieldErrors}
                 editing={editing} suggestions={suggestions} budget={budgets?.config} labelled={!!configAccessibleText(row, cells)}
-                onStartEdit={(fieldName) => actions.startEdit(row, fieldName)}
-                onReadOnly={(reason) => { actions.click(row, 3); actions.message(reason); }}
                 onDone={(edits, options) => actions.editDone(row, edits, options)} onMessage={actions.message} />
         </td>
         <td role="gridcell" {...cell(4)} className="df-mt-num"><MetricCell metric="params" summary={row.params} row={row} /></td>

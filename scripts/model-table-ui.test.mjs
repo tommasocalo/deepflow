@@ -515,6 +515,63 @@ test('the Activations lens shows bytes per row, and partial totals say so', asyn
     assert.match(mainTable().querySelector('.df-mt-alert').textContent, /^1 error · Transformer blocks: /);
 });
 
+/** A real click: the pointer goes down before the browser moves focus to the cell. */
+const press = (element, detail = 1) => act(() => {
+    assert.ok(element, 'Expected an element to press');
+    const options = { bubbles: true, cancelable: true, detail };
+    element.dispatchEvent(new dom.window.MouseEvent('mousedown', options));
+    element.closest('input, select, [tabindex]')?.focus();
+    element.dispatchEvent(new dom.window.MouseEvent('mouseup', options));
+    element.dispatchEvent(new dom.window.MouseEvent('click', options));
+});
+const doubleClickOn = (element) => act(() => element.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true, cancelable: true, detail: 2 })));
+
+test('a first click selects a setting, a click on the selected setting edits it, and a double-click anywhere opens the level', async () => {
+    await openTable();
+    const dropoutP = () => cellOf('Dropout', 3).querySelector('[data-field="p"]');
+    await press(dropoutP());
+    assert.equal(cellOf('Dropout', 3).querySelector('.df-mt-editor'), null, 'The first click only selects');
+    assert.deepEqual(useArchitectureStore.getState().selectedNodeIds, [rootNode('Dropout').id]);
+    assert.equal(cellOf('Dropout', 3).getAttribute('tabindex'), '0', 'The setting is the active cell');
+    await press(dropoutP());
+    const input = cellOf('Dropout', 3).querySelector('input[aria-label="Dropout p"]');
+    assert.ok(input, 'A click on the selected setting edits it');
+    await key(input, 'Escape');
+    assert.equal(history().undoCount, 0, 'Nothing was written');
+
+    // A double-click on a setting opens the row's level, as it does on the label.
+    const inFeatures = () => cellOf('mlp fc', 3).querySelector('[data-field="in_features"]');
+    await press(inFeatures());
+    await press(inFeatures(), 2);
+    assert.equal(cellOf('mlp fc', 3).querySelector('.df-mt-editor'), null, 'The second click of a double-click does not edit');
+    await doubleClickOn(inFeatures());
+    const blocks = rootNode('Transformer blocks').id;
+    assert.deepEqual(useArchitectureStore.getState().currentPath, [blocks]);
+    assert.deepEqual(useArchitectureStore.getState().selectedNodeIds, [blockNode('mlp fc').id]);
+
+    // On a setting that was already selected, the editor its first click opens gives way to the level.
+    await act(() => useArchitectureStore.getState().goToLevel(0));
+    await press(cellOf('mlp fc', 0));
+    await press(inFeatures());
+    await press(inFeatures());
+    const editorInput = cellOf('mlp fc', 3).querySelector('input[aria-label="mlp fc in_features"]');
+    assert.ok(editorInput, 'A click on the selected cell opens its editor');
+    await press(editorInput, 2);
+    await doubleClickOn(editorInput);
+    assert.deepEqual(useArchitectureStore.getState().currentPath, [blocks], 'The double-click still opens the level');
+    assert.equal(cellOf('mlp fc', 3).querySelector('.df-mt-editor'), null, 'and closes the editor it opened');
+    assert.equal(history().undoCount, 0);
+
+    // Inside an editor the user is typing in, a double-click selects text, as in any field.
+    await act(() => useArchitectureStore.getState().goToLevel(0));
+    const editor = await editConfig('Dropout');
+    const typed = editor.querySelector('input[aria-label="Dropout p"]');
+    await doubleClickOn(typed);
+    assert.ok(cellOf('Dropout', 3).querySelector('.df-mt-editor'), 'An editor opened from the keyboard stays open');
+    assert.deepEqual(useArchitectureStore.getState().currentPath, []);
+    await key(typed, 'Escape');
+});
+
 test('read-only values explain themselves, and an input method keeps Enter', async () => {
     await openTable();
     const fc = cellOf('mlp fc', 3);

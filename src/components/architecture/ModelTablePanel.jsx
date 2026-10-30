@@ -213,12 +213,16 @@ export default function ModelTablePanel({ paneId = 'main' }) {
                 reveal(row.nodeId);
             }
         },
-        open: (row) => openRow(row),
+        open: (row, { cancelEdit = false } = {}) => {
+            if (cancelEdit) setEditing(null);
+            openRow(row);
+        },
         toggle,
-        startEdit: (row, fieldName = null, seed = null) => {
+        startEdit: (row, fieldName = null, seed = null, { byClick = false } = {}) => {
             setActive({ key: row.key, column: CONFIG_COLUMN });
             setMessage('');
-            setEditing({ key: row.key, fieldName, seed });
+            // When a click opened it, a double-click that follows still opens the level instead.
+            setEditing({ key: row.key, fieldName, seed, byClick: byClick ? performance.now() : null });
         },
         editDone: (row, edits, { refocus = true } = {}) => {
             const result = edits?.length ? applyModelTableEdit(store, row, edits, { templateUses: contextRef.current.templateUses }) : { written: 0 };
@@ -365,7 +369,7 @@ export default function ModelTablePanel({ paneId = 'main' }) {
                             <th role="columnheader" scope="col" className="df-mt-layer" title="Esc returns to the canvas">Layer</th>
                             <th role="columnheader" scope="col" className="df-mt-num" title="Occurrences per forward pass: repeat and parallel counts multiply">×N</th>
                             <th ref={outputHeaderRef} role="columnheader" scope="col" title="Output shape of each occurrence; B = batch">Output</th>
-                            <th ref={configHeaderRef} role="columnheader" scope="col" title="Defining settings. Symbols: as written · Values: resolved. Click a setting to edit it.">Config</th>
+                            <th ref={configHeaderRef} role="columnheader" scope="col" title="Defining settings. Symbols: as written · Values: resolved. To edit one, click it in a selected cell, or press Enter or F2, or start typing.">Config</th>
                             <th role="columnheader" scope="col" className="df-mt-num" title="Learned parameters of every occurrence; the small figure is one instance">Params</th>
                             <th role="columnheader" scope="col" className="df-mt-num" title={metricColumn === 'activation' ? ACTIVATION_TITLE : MACS_TITLE}>
                                 {/* The sum of op outputs, not what training keeps for backward. */}
