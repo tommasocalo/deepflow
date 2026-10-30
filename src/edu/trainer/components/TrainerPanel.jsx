@@ -40,7 +40,8 @@ function ResultColumn({ record }) {
             </div>
             {!record?.history?.length && <p className="edu-tr-empty">{tr('boundary.empty')}</p>}
             {record?.history?.length > 0 && mode === 'boundary' && hasBoundary && <BoundaryView record={record} size={size} target={false} />}
-            {record?.history?.length > 0 && mode === 'confusion' && <ConfusionMatrix record={record} target={false} />}
+            {/* Ten classes fit the column only in the compact cells (digits 8×8 beside the lesson panel). */}
+            {record?.history?.length > 0 && mode === 'confusion' && <ConfusionMatrix record={record} target={false} compact={(record.confusion?.length ?? 0) > 6} />}
         </div>
     );
 }

@@ -8,7 +8,7 @@
 @container (max-width: 560px) { .edu-tr-panel { grid-template-columns: minmax(0, 1fr); } }
 
 .edu-tr-col { min-width: 0; }
-.edu-tr-col-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; margin-bottom: 6px; }
+.edu-tr-col-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; min-height: 22px; margin-bottom: 6px; }
 .edu-tr-col-head h3 { margin: 0; color: #333; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .edu-tr-head-value { overflow: hidden; color: #333; font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .edu-tr-empty { margin: 6px 0 0; color: #666; font-size: 11.5px; line-height: 1.45; }
@@ -97,7 +97,9 @@
 .edu-tr-corner-true { display: block; text-align: left; }
 .edu-tr-confusion td { min-width: 26px; height: 24px; padding: 2px 5px; border: 1px solid #fff; text-align: center; }
 .edu-tr-confusion td.is-diagonal { box-shadow: inset 0 0 0 1.5px #111; }
-.edu-tr-confusion.is-compact td { min-width: 22px; height: 20px; font-size: 10.5px; }
+.edu-tr-confusion.is-compact td { min-width: 20px; height: 20px; padding: 1px 3px; font-size: 10.5px; }
+.edu-tr-confusion.is-compact th { padding: 2px 3px; }
+.edu-tr-confusion.is-compact .edu-tr-corner { min-width: 34px; padding: 1px 2px; }
 
 /* TrainerCard (lesson embed) */
 .edu-tr-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; padding: 10px; border: 2px solid #111; border-radius: 8px; background: #fff; box-shadow: 3px 3px 0 #111; color: #111; font-size: 12px; }
