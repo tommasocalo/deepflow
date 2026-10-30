@@ -186,10 +186,11 @@ function buildConfig(row, list, templates, occurrenceLabels, instanceLabels) {
             values = list.flatMap((merged) => resolvedBinding(merged.metrics, name));
             labels = row.kind === 'repeat' ? instanceLabels : occurrenceLabels;
         }
-        if (part.hideDefault && values.every((value) => value === null || value === undefined || value === spec?.default)) continue;
+        // A default worth no words (exact GELU, groups 1) is not drawn, but the editor still offers it.
+        const concealed = !!part.hideDefault && values.every((value) => value === null || value === undefined || value === spec?.default);
         const resolved = summarizeValues(values, spec, labels);
         parts.push({
-            kind: 'field', name, source, spec, prefix: part.prefix ?? null, readOnly: part.readOnly ?? null,
+            kind: 'field', name, source, spec, prefix: part.prefix ?? null, readOnly: part.readOnly ?? null, concealed,
             raw, alias: alias ? { name: alias.name } : null,
             symbols: written, values: resolved,
         });

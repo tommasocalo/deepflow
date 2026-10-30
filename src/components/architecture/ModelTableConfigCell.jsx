@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react';
 import VariableInput from './VariableInput.jsx';
 import { parseCellValue, precheckCellValue, targetSpec } from '../../domain/modelTable/writeTargets.js';
 import { fitConfigParts } from '../../domain/modelTable/fitText.js';
-import { shownFieldText as shownText } from '../../domain/modelTable/configFields.js';
+import { drawnParts, shownFieldText as shownText } from '../../domain/modelTable/configFields.js';
 import { emptyAllowed, fieldScope, initialText } from './modelTableEdits.js';
 
 const widthOf = (text, placeholder) => `${Math.min(22, Math.max(4, String(text || placeholder || '').length + 1))}ch`;
@@ -147,6 +147,8 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
             const info = targets[part.name];
             const index = editable.indexOf(part);
             if (index < 0) {
+                // A concealed default that cannot be edited here stays out of the editor too.
+                if (part.concealed) return null;
                 const shown = shownText(part, cells);
                 return <span key={part.name} role="textbox" aria-readonly="true" aria-label={`${row.label} ${part.name}`} title={info?.hint ?? ''}
                     className={`df-mt-field is-${shown.tone} is-readonly`}><Prefix prefix={part.prefix} />{shown.text}</span>;
@@ -199,13 +201,14 @@ export default function ModelTableConfigCell({ row, cells, targets, context, fie
     }
     // Fit the cell without changing what it says: expressions are cut where the
     // ellipsis belongs to them, values stay whole, extra fields give way to "…".
-    const fit = fitConfigParts(row.config, {
+    const parts = drawnParts(row);
+    const fit = fitConfigParts(parts, {
         budget,
         display: (part) => shownText(part, cells).text,
         expression: (part) => shownText(part, cells).tone === 'expression',
     });
-    const visible = fit.hiddenFrom === null ? row.config : row.config.slice(0, fit.hiddenFrom);
-    const hidden = fit.hiddenFrom === null ? [] : row.config.slice(fit.hiddenFrom).filter((part) => part.kind !== 'text');
+    const visible = fit.hiddenFrom === null ? parts : parts.slice(0, fit.hiddenFrom);
+    const hidden = fit.hiddenFrom === null ? [] : parts.slice(fit.hiddenFrom).filter((part) => part.kind !== 'text');
     const hiddenText = hidden.map((part) => part.kind === 'field' ? `${part.name} ${shownText(part, cells).text}` : part.text).join(' · ');
     // A cut last field already ends in "…"; it names the hidden parts in its title instead.
     const lastCut = hidden.length > 0 && !!fit.texts[visible.length - 1]?.endsWith('…');

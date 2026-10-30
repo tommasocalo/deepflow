@@ -44,7 +44,7 @@ const fieldOf = (row, name) => {
     assert.ok(field, `${row.label} shows ${name}`);
     return field;
 };
-const cellText = (row, cells) => row.config.map((part) => part.kind === 'field' ? `${part.prefix && part.prefix !== '×' ? `${part.prefix} ` : part.prefix ?? ''}${part[cells].text}` : part.text).join(' ');
+const cellText = (row, cells) => row.config.filter((part) => !part.concealed).map((part) => part.kind === 'field' ? `${part.prefix && part.prefix !== '×' ? `${part.prefix} ` : part.prefix ?? ''}${part[cells].text}` : part.text).join(' ');
 const target = (ctx, row, name, cells) => resolveWriteTarget({ row, field: fieldOf(row, name), cells, rootGraph: ctx.graph, templates: ctx.templates });
 /** The row of a single layer fed by a model input. */
 const layerRow = (libraryKey, parameters) => {
@@ -387,7 +387,8 @@ test('config cells name tanh GELU, switched-off weights and convolutions without
     const gelu = fieldOf(find(blocks, 'gelu'), 'approximate');
     assert.deepEqual([gelu.prefix, gelu.values.text], ['approximate', 'tanh'], 'Shown as approximate=tanh');
     const exact = layerRow('torch.nn.GELU', { approximate: 'none' });
-    assert.equal(exact.config.length, 0, 'Exact GELU says nothing');
+    assert.deepEqual(exact.config.map((part) => [part.name, part.concealed]), [['approximate', true]], 'Exact GELU says nothing, yet stays editable');
+    assert.equal(configAccessibleText(exact, 'values'), '');
     assert.equal(configAccessibleText(find(blocks, 'mlp fc'), 'values'), 'in_features 768 to out_features 3072');
     assert.equal(configAccessibleText(find(blocks, 'lm_head'), 'values'), 'in_features 768 to out_features 50257, no bias');
     assert.equal(configAccessibleText(find(blocks, 'Transformer blocks'), 'symbols'), 'count $n_layers, mlp_width 4 * d_model');

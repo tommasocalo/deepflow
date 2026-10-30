@@ -536,3 +536,22 @@ test('the grid is reached from the toggle, before the canvas', async () => {
     await nextFrame();
     assert.equal(document.activeElement, byAria('Show model table'), 'Closing returns focus to the toggle');
 });
+
+test('a default the cell leaves out can still be edited', async () => {
+    await openTable();
+    let editor = await editConfig('gelu');
+    let select = editor.querySelector('select[aria-label="gelu approximate"]');
+    assert.equal(select.value, 'tanh');
+    await act(() => {
+        select.value = 'none';
+        select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    });
+    await key(select, 'Enter');
+    assert.equal(blockNode('gelu').parameters.approximate, 'none');
+    assert.equal(cellOf('gelu', 3).textContent, '', 'Exact GELU says nothing');
+    editor = await editConfig('gelu');
+    select = editor.querySelector('select[aria-label="gelu approximate"]');
+    assert.equal(select.value, 'none', 'Enter on the empty cell still offers the setting');
+    await key(select, 'Escape');
+    assert.equal(history().undoCount, 1);
+});

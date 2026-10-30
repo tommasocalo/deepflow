@@ -219,6 +219,9 @@ export function resolvesFalse(values) {
     return values.length > 0 && values.every((value) => value === false);
 }
 
+/** The parts a config cell draws: fields at a default worth no words stay out. */
+export const drawnParts = (row) => row.config.filter((part) => !part.concealed);
+
 /** The text a field shows: as written (Symbols) or resolved (Values), with its tone. */
 export function shownFieldText(field, cells) {
     return cells === 'symbols' ? field.symbols : { text: field.values.text, tone: field.values.varies ? 'varies' : 'value' };
@@ -235,7 +238,7 @@ const SEPARATOR_WORDS = { '→': 'to', '×': 'by', '↔': 'and' };
 export function configAccessibleText(row, cells) {
     const words = [];
     let previous = null;
-    for (const part of row.config) {
+    for (const part of drawnParts(row)) {
         if (part.kind === 'field') {
             // Fields side by side (k=3 s=1) are a list.
             if (previous && previous.kind !== 'text') words.push(',');
