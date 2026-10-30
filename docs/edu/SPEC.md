@@ -1901,11 +1901,16 @@ not a stranded chip block beside a second one.
 
 A `TargetRef` is a string. The registry resolves it to an element at render time. Node targets filter
 `.react-flow__node` elements in JavaScript by `dataset.id`, as GraphStatusPanel does, and never interpolate ids into
-selectors. A target that is not found shows no ring; after a second the panel offers "Where is it?", which switches
-to the step's tab, goes to the root level and centres a node target, opens the code panel for `code.*` targets and
-fits the Training canvas beside its palette for `training.*` targets. It is not offered while the main pane shows the
-inside of a block that a `nodeOpen` target names, at any depth (`reachedOpenTarget`): that target has been followed
-(M7 s4 at the attention-head level).
+selectors. The ring goes to the first target that is visible and not yet used (`isTargetDone`): a tab target is used
+once the learner visited that tab in this step, `toolbar.code` while the code panel is open, `code.tab:<id>` while
+it shows that tab, `data.dataset:<id>` while that row is shown, and a `nodeOpen` target while the main pane shows the
+inside of that block at any depth (`reachedOpenTarget`). So M3 s7 rings Data, then the MNIST row, Use this dataset,
+Code and train.py in turn. A target counts as visible only with its centre inside the window and inside every
+scrolling or clipping box around it, so a block panned off its canvas is missing. When an unused target is missing
+for a second, the panel offers "Where is it?", which switches to the step's tab, goes to the root level and centres
+a node target, opens the code panel for `code.*` targets, fits the Training canvas beside its palette for
+`training.*` targets, and scrolls a list or panel to any other target. It is not offered when every target is used
+(M7 s4 at the attention-head level only waits for the answer).
 
 | TargetRef | Element |
 |---|---|
@@ -2888,3 +2893,5 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-10-30 | Stage E | **Use this dataset** follows the step's `setOutput: false` (§3.4); M1 s5 now asks for Input 4 and Output 3 (it said "make sure Output is 3" because the button had set it). The lesson bridge source gains `datasetUse`. |
 | 2026-10-30 | Stage E | **Training canvas**: it fits beside the TrainingPalette (right 40%, at most 100% zoom; the Controls' fit button too), and in a lesson it fits when it opens instead of restoring a viewport saved in another workspace, so the loss block of M1 s6 is clickable at 1440×900 and 1024×768. Event `deepflow-edu:training-canvas` (`fit`) for "Where is it?". |
 | 2026-10-30 | Stage E | **Targets** (§6.6): `code.notebook` and `code.colabNote` added; "Where is it?" is not offered inside a level a `nodeOpen` target opened, opens the code panel for code targets and fits the Training canvas for training targets. §11.1 and §11.2 gained the in-browser trainer's measurements. |
+| 2026-10-30 | Stage E | **Spotlight follows the learner** (§6.6): used targets are skipped (`isTargetDone`), targets off screen count as missing, and "Where is it?" also scrolls lists and panels. M3 s7's targets add the MNIST row and Use this dataset. |
+| 2026-10-30 | Stage E | **QA fixes from the browser walk.** Show me keeps the column compact (lower blocks move only as far as the new rows need), so M3 and M4 stay readable after a fit. Check messages use articles ("connect an activation (such as ReLU)") and no "block(s)"; M6 s3's entry status asks to group the blocks (a standard Linear component is no grouping attempt). The code panel closes with Esc and explains an invalid model in plain words ("No code yet: …") instead of a stack trace. Below 900 px the TrainingPalette starts folded to its header. The Training tab's 10-class confusion matrix uses compact cells, and its result toggle wraps. M2 s7's done line no longer says "You built that network yourself", which was untrue after Show me. Dead exports and duplicate CSS in `src/edu` were removed. |
