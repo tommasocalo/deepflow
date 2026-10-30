@@ -7,13 +7,15 @@ import { splitIndices } from '../src/edu/data/split.js';
 import { resolveOptions } from '../src/edu/data/options.js';
 
 // The exported loaders must regenerate the browser's toy points and every split exactly (docs/edu/SPEC.md §5.3).
-// Runs the real loader source with `python3 -I`; torch is not needed because build_dataloaders is never called.
-const probe = spawnSync('python3', ['-I', '-c', 'import numpy'], { encoding: 'utf8' });
+// Runs the real loader source with `python3 -I` (or EDU_PYTHON); torch is not needed because build_dataloaders is
+// never called.
+const PYTHON = process.env.EDU_PYTHON || 'python3';
+const probe = spawnSync(PYTHON, ['-I', '-c', 'import numpy'], { encoding: 'utf8' });
 const skip = probe.status === 0 ? false : 'needs python3 with numpy';
 
 function runPython(source, body) {
     const program = `import json\nimport math\nimport numpy as np\n\n${source}\n${body}\n`;
-    return JSON.parse(execFileSync('python3', ['-I', '-c', program], { encoding: 'utf8', maxBuffer: 1 << 26 }));
+    return JSON.parse(execFileSync(PYTHON, ['-I', '-c', program], { encoding: 'utf8', maxBuffer: 1 << 26 }));
 }
 
 const sameIndices = (js, py) => JSON.stringify([...js]) === JSON.stringify(py);

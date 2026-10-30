@@ -29,7 +29,8 @@ const IMAGE_FACTS = {
     'fashion-mnist': { shape: [1, 28, 28], torchvision: 'FashionMNIST', classes: ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot'], train: 60000, test: 10000, mean: [0.2860], std: [0.3530], defaults: { epochs: 5, batchSize: 64 } },
     cifar10: { shape: [3, 32, 32], torchvision: 'CIFAR10', classes: ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'], train: 50000, test: 10000, mean: [0.4914, 0.4822, 0.4465], std: [0.2470, 0.2435, 0.2616], defaults: { epochs: 10, batchSize: 128 } },
 };
-const python = spawnSync('python3', ['--version']).status === 0 ? 'python3' : null;
+const PYTHON = process.env.EDU_PYTHON || 'python3';
+const python = spawnSync(PYTHON, ['--version']).status === 0 ? PYTHON : null;
 
 const graph = () => useArchitectureStore.getState().graph;
 
