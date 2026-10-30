@@ -105,10 +105,18 @@ export function fitConfigParts(parts, { budget, display, expression }) {
 
 /**
  * A shape label within `budget` characters: whole axes only, so
- * `B×64…256×32×32` becomes `B×64…256×…`, never `B×64…256×3…`.
+ * `B×64…256×32×32` becomes `B×64…256×…`, never `B×64…256×3…`. A collection
+ * (`12 tensors [B × 1024 × 64]`) is measured as drawn, `12×[B×1024×64]`,
+ * and cut inside its brackets.
  */
 export function fitShapeText(text, budget) {
     if (!text || !Number.isFinite(budget) || budget <= 0) return text;
+    const collection = text.match(/^(\d+) tensors(?: \[(.*)\])?$/);
+    if (collection) {
+        if (!collection[2]) return text;
+        const inner = fitShapeText(collection[2], budget - collection[1].length - 3);
+        return `${collection[1]} tensors [${inner}]`;
+    }
     const compact = text.replace(/ × /g, '×');
     if (compact.length <= budget) return text;
     const axes = text.split(' × ');
