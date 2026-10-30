@@ -1,3 +1,125 @@
+# DeepFlow Edu
+
+DeepFlow Edu is an educational fork of DeepFlow v2, the visual editor for neural-network architectures described in the second half of this file. It adds a guided course that starts from one neuron and ends inside a small Transformer. You work in the real editor; each lesson step is checked against the live model, its validation report, the training graph, the bound dataset and your training runs. Help comes as a ladder (a nudge, a specific hint, then **Show me**, which performs the step as one undoable edit). You predict a number, a shape or an outcome before the tool reveals it. Small models train in the browser, and every model exports to a complete PyTorch `train.py` that runs in Google Colab. The product and curriculum specification, with its change log, is [docs/edu/SPEC.md](docs/edu/SPEC.md).
+
+## Run DeepFlow Edu
+
+Use Node.js 20.19+, 22.13+ or 24+:
+
+```sh
+npm install
+npm run dev
+```
+
+Open the address Vite prints, http://localhost:5173/ by default (`npm run dev -- --port 5174` picks another port). For a production build run `npm run build`, then `npm run preview` (http://localhost:4173/).
+
+**What a learner sees first.** The app opens on the **Learn** tab: the heading "Learn to build neural networks", a **Start · 1 Your first neuron** button, **Open the sandbox**, and one card per module with its status, datasets and time. Modules are never locked; a card says which module it is recommended after. Module 1 opens with two myth-busting warm-up questions, then its first step in the lesson panel.
+
+**During a lesson** the panel is docked to the right of the Architecture, Data and Training tabs (360 px, 320 px below 1200 px, a bottom drawer below 900 px); it never covers the canvas. A step shows its subgoal (for example BUILD THE MODEL), up to 60 words of text, an optional "Why?", a pink ring around the control it names, a live status line, the hint ladder, and Back, Reset step, Skip and Next. Validation errors appear there rewritten in plain words, for example "Linear 1 expects 784 input features but receives 64." Prediction gates keep Train locked, or Dimensions hidden, until you answer. Each module ends with a short quiz and three takeaways. Exit (✕) saves the lesson and returns to Learn; Continue resumes where you left off, also after a reload.
+
+**The sandbox** (Open the sandbox) is the plain DeepFlow editor with the GPT-2 example, plus the Data and Training extras. The sandbox and each module keep their own workspace, so lessons never overwrite your own model.
+
+**Progress** stays in this browser (localStorage): nothing is sent over the network. The Learn footer has **Reset progress** (it keeps the sandbox) and **Download learning log** (`deepflow-edu-log.json`, the local event log for studies). A link such as `#/learn/m3/s4` opens a step directly.
+
+## The seven modules
+
+| # | Module | What you do | Datasets | Min |
+|---|---|---|---|---|
+| 1 | Your first neuron | Count a neuron's parameters, train it on two blobs, then turn it into a 3-class Iris classifier with cross-entropy, read its confusion matrix and find the train-split scaling in train.py | Two blobs, Iris | 20 |
+| 2 | Going non-linear | Watch one neuron and two stacked Linear blocks fail on a circle, add ReLU, find the smallest hidden width, open Linear down to MatMul, then build an XOR network yourself | Circle, XOR | 20 |
+| 3 | Shapes and parameters | Read (B, C, H, W) shapes, Flatten MNIST, build and hand-count an MLP, fix a planted shape bug, train a small version on Digits 8×8 and export it for MNIST | MNIST, Digits 8×8 | 25 |
+| 4 | Convolutions | Predict Conv2d and pooling output shapes with and without padding, build two convolution blocks, connect them to a classifier and count their shared weights | Fashion-MNIST | 20 |
+| 5 | Training well | Check the initial loss against ln C, sweep the learning rate, overfit on purpose, read the curves (early stopping), add Dropout and compare honestly, find `model.eval()` | Spiral (3 classes) | 25 |
+| 6 | Reusable blocks and residual connections | Add a skip connection, group it into a component, repeat it three times, see shared structure with separate weights and the gradient paths | CIFAR-10 | 20 |
+| 7 | Attention and a tiny Transformer | Predict a character-level GPT's output shape, open its embedding table, positions, causal attention heads and head width, sample with a temperature, then scale the same blocks to GPT-2 small | Tiny Shakespeare | 25 |
+
+Every module has 6–8 steps (50 in all) ordered read and predict, then modify, then a build of your own; modules 2–7 open with two retrieval questions on earlier modules, and every module ends by reading the exported code. Numbers in the copy come from a facts ledger that the tests recompute from the fixtures.
+
+## Datasets
+
+The **Data** tab lists the datasets in two groups. Each shows a preview, its class balance, the split (validation 10–50 %, test 0, 10 or 20 %) and seeds, the scaling (statistics fitted on the training split only), its source and licence. **Use this dataset** sets the model's Input shape and the last Linear's output size in one undoable edit; in a lesson step whose exercise is choosing the output size, it sets only the Input.
+
+**Trained in the browser** (generated or embedded; nothing is downloaded):
+
+| Dataset | Source | Licence |
+|---|---|---|
+| Two blobs, Circle, XOR, Spiral (2 classes), Plane (regression) | Seeded generators, adapted from TensorFlow Playground | Generated here; algorithm Apache-2.0 |
+| Spiral (3 classes) | Seeded generator, adapted from CS231n | Generated here; algorithm MIT |
+| Iris (150 flowers, 4 features, 3 species) | Fisher (1936); values as in scikit-learn's `load_iris()` (not the UCI copy, which has two wrong rows) | Public-domain measurements; file BSD-3-Clause (scikit-learn) |
+| Digits 8×8 (1,797 images, 10 classes) | scikit-learn's copy of the UCI optical digits (Alpaydin & Kaynak, 1998); loaded as a separate chunk | BSD-3-Clause (scikit-learn copy) |
+
+**Export only** (shapes, classes, sizes and licence in the app; `train.py` downloads the data when it runs):
+
+| Dataset | Downloaded by train.py from | Licence |
+|---|---|---|
+| MNIST (70,000 images) | torchvision `datasets.MNIST` | Not bundled; no licence stated by the authors |
+| Fashion-MNIST (70,000 images) | torchvision `datasets.FashionMNIST` | MIT, © 2017 Zalando SE |
+| CIFAR-10 (60,000 images, about 170 MB) | torchvision `datasets.CIFAR10` | Not bundled; no licence stated by the authors |
+| Tiny Shakespeare (1,115,394 characters, 65 distinct) | karpathy/char-rnn's `input.txt` | Public-domain text; file MIT |
+
+The exported Python regenerates the toy data and reproduces every split from the same seeds (`scripts/edu-python-parity.test.mjs` compares them with the browser's).
+
+## The in-browser trainer
+
+The **Training** tab keeps DeepFlow's training canvas (optimizer, loss and phase blocks) on top and adds the trainer below; lessons embed a compact card with the same controls. It uses the training canvas's optimizer and loss, shows train and validation loss and accuracy per epoch (epoch 0 is the untrained model, both measured with Dropout off), the chance level ln C, the best-validation epoch (▲), up to five earlier runs dimmed and labelled with what differed, a decision boundary for 2D data and a confusion matrix on the validation split. **Check initial loss** evaluates the untrained model once.
+
+- **Scope.** Graphs with one Input and one Output built from Linear (the layer or the editable component), ReLU, LeakyReLU, Tanh, Sigmoid, GELU, Softmax, LogSoftmax, Dropout, Flatten and the primitive operations the Linear and Norm components are made of. Losses: cross-entropy, BCE, MSE and L1. Optimizers: Adam, AdamW, SGD and RMSprop. Datasets: the browser group above.
+- **Limits.** No convolutions, pooling, BatchNorm, embeddings, attention or multi-phase training in the browser: the preflight says so and links to train.py, so modules 4, 6 and 7 train in Colab. At most 2,000,000 parameters and about 4,000,000 activation values per batch. Training runs on the main thread in short slices, so it suits small models: the digits MLP (9,610 parameters, 15 epochs) trains in about 2 s.
+- **Determinism and honesty.** Runs are seeded: the same settings give the same curves. The trainer computes in float64 with its own seeded initialisation and batch order, so PyTorch's curves are similar, not identical, on the same data and split. Lesson thresholds and the numbers quoted in the copy were measured with this trainer or a matching simulation (SPEC §11).
+
+## Export: train.py, the notebook and Colab
+
+**Code** (top right) shows `model.py` and `train.py`. With a dataset bound, `train.py` is one self-contained script: the model, a loader for the bound dataset (the seeded generator and split for toy data, scikit-learn for Iris and digits, torchvision for the image presets, a download for Tiny Shakespeare), the training canvas's optimizer and loss, a validation pass after every epoch under `model.eval()` and `torch.no_grad()`, accuracy, the first loss next to ln C, the best epoch's weights, one test evaluation where a test split exists, and generated text for Tiny Shakespeare. A "Check before running" header lists anything in the model that does not fit the data. **Download .ipynb** wraps the script in a two-cell notebook: in Google Colab choose File → Upload notebook and run both cells, or upload `train.py` and run `!python train.py`. A GPU is optional (faster for CIFAR-10 and Tiny Shakespeare). Without a bound dataset, `train.py` is DeepFlow's training skeleton.
+
+## Tests
+
+```sh
+npm test        # every suite in scripts/*.test.mjs (Node's test runner; UI suites use jsdom)
+npm run lint
+npm run build
+```
+
+The Edu suites (`scripts/edu-*.test.mjs`) cover the lesson engine (checks, actions, targets, feedback, progress, workspaces), the shell and the lesson UI, the datasets (generators, split, Iris and digits data, presets, Use this dataset), the trainer (autograd, optimizers, compile, store, charts, the lesson thresholds) and the export. `edu-content.test.mjs` validates the seven modules (schema, text budget, facts) and walks all 50 steps headlessly through the real session, engine and trainer: each step must fail on entry, give nothing away before its prediction is answered, and pass after its Show me.
+
+Tests that need Python use `python3`, or the interpreter in `EDU_PYTHON`. With NumPy, the exported generators and splits are compared with the browser's; with PyTorch, NumPy and scikit-learn, each browser dataset's `train.py` trains one epoch and the module 7 Transformer trains a few steps and samples text. Without them these tests are skipped.
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
+.venv/bin/pip install numpy scikit-learn
+EDU_PYTHON=.venv/bin/python npm test
+```
+
+Two Playwright checks run against a dev server on port 5174 and are not part of `npm test`: `node scripts/edu-learn-browser-check.mjs` (Learn home and lesson panel) and `node scripts/edu-data-browser-check.mjs` (Data tab, trainer and its timing budget).
+
+## Edu source layout
+
+```
+src/edu/
+  config.js             product name, storage prefix, locale
+  bridge.js             read-only sources and workspace slices that Edu parts share
+  useBridgeSource.js    React hook over a bridge source
+  objective.js          the training graph's effective optimizer and loss (trainer, checks and export)
+  shell/                tab and code-panel store, deep links, Save/Load of the Edu slices, layout CSS
+  components/           Learn home, module cards, lesson panel, step, prediction, quiz and recap views, hints,
+                        palette chips, spotlight
+  lessons/engine/       schema, checks, actions (Show me), spotlight targets, friendly validation feedback,
+                        session, progress, workspaces and storage, event log, UI text (text/en/ui.js)
+  lessons/modules/      the seven modules (m1-first-neuron.js … m7-transformer.js), fact helpers, lesson text
+                        (text/en/m1.js … m7.js, common.js with the misconception catalogue)
+  data/                 dataset registry, seeded generators, split and scaling, presets (toy, Iris, digits, MNIST,
+                        Fashion-MNIST, CIFAR-10, Tiny Shakespeare), Python loaders, the Data tab
+  trainer/              compile, tensors and autograd, losses, optimizers, runs and metrics, preflight, store,
+                        charts, TrainerPanel and TrainerCard (components/)
+src/codegen/edu/        train.py for a bound dataset, and the .ipynb wrapper
+scripts/edu-*.test.mjs  tests; scripts/fixtures/edu-test-module.js is a small demo module for the UI tests
+docs/edu/SPEC.md        product, curriculum and technical specification (§12: change log)
+```
+
+Edu also touches a few DeepFlow files: the navbar name, the tab bar and layout (`ToolbarStrip.jsx`, `Layout.jsx`), the Examples menu (it opens examples in the sandbox), the code panel (controlled tabs, the dataset's train.py, Download .ipynb, Esc to close), `codegen/training.js` (the bound-dataset script and two loss fixes), the canvas bridge in `ArchitectureWorkspace.jsx`, the training canvas and palette (fit beside the palette, fold it on narrow screens), a LogSoftmax block, and the parameter count of scalar Conv kernels. The default canvas shows no Edu text; everything Edu says lives in panels and tabs.
+
+---
+
 # DeepFlow v2
 
 A local visual editor for neural network architectures. Build graphs from PyTorch layers, group connected blocks into reusable templates, expose parameters, and repeat templates with per-iteration expressions.
@@ -76,7 +198,7 @@ If `python3` can import PyTorch, these also compare exported CPU outputs and gra
 
 ## Current scope
 
-This is a research prototype. Shape validation and PyTorch generation cover a subset of available modules; passing graph checks does not guarantee a runnable architecture. The Data workspace is pending, and generated training code requires user-supplied data loaders. The ResNet, DANN and GAN examples demonstrate editor concepts and are not complete reference implementations.
+This is a research prototype. Shape validation and PyTorch generation cover a subset of available modules; passing graph checks does not guarantee a runnable architecture. In plain DeepFlow the Data workspace was pending and generated training code required user-supplied data loaders; DeepFlow Edu adds both (above). The ResNet, DANN and GAN examples demonstrate editor concepts and are not complete reference implementations.
 
 Repeat counts must resolve to integers from 1–256. Validation/export limit template nesting to 8 levels and expansion to 20,000 nodes. Export rejects validation errors, including unresolved counts, indivisible splits, collection-count mismatches, and invalid named input ports. The GPT-2 example includes explicit causal attention; tied embedding/output weights and a verified end-to-end GPT-2 training pipeline remain outside the current scope.
 
