@@ -91,6 +91,27 @@ try {
         await page.close();
     }
 
+    // Short panes keep rows: the table stays beside the canvas when the pane is
+    // wide enough (720×450 is 1440×900 at 200%), else a sheet of three rows.
+    for (const [width, height, panes, sheet] of [[720, 450, 1, false], [1024, 560, 2, true]]) {
+        const { page, errors } = await open({ width, height });
+        if (panes === 2) {
+            await page.getByRole('button', { name: 'Open to the side' }).click();
+            await page.locator('[data-graph-pane="side"]').waitFor();
+            await page.locator('[data-graph-pane="main"]').click({ position: { x: 200, y: 60 } });
+        }
+        await page.getByRole('button', { name: 'Show model table' }).click();
+        await table(page).locator('tbody tr').first().waitFor();
+        await settle(page);
+        const measured = await layout(page, 'main');
+        assert.equal(measured.sheet, sheet, `${width}×${height}: ${sheet ? 'a bottom sheet' : 'beside the canvas'}`);
+        assert.ok(measured.rows >= 3, `${width}×${height}: ${measured.rows} rows visible, expected at least 3`);
+        assert.equal(await table(page).locator('.df-mt-scroll').evaluate((element) => element.scrollTop), 0, 'Opening leaves the first row in view');
+        await page.screenshot({ path: `${directory}/short-${width}x${height}.png` });
+        assert.deepEqual(errors, []);
+        await page.close();
+    }
+
     // The ribbon keeps one row from 1040px up, with one pane and with two, and
     // 10px labels from 1191px. Two panes always show which pane it acts on.
     {

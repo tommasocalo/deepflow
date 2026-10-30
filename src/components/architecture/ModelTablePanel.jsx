@@ -246,12 +246,14 @@ export default function ModelTablePanel({ paneId = 'main' }) {
     }), [revealKey, store]);
 
     // Opened from the toggle: focus the active cell, so the grid is one step
-    // away. The cells exist once mounted; focus already inside stays put.
+    // away. The cells exist once mounted; focus already inside stays put. The
+    // active cell is then the first one, already in view: a sheet still
+    // settling its height must not scroll it under the header.
     useEffect(() => {
         if (!takeModelTableFocus(paneId)) return;
         const aside = asideRef.current;
         if (!aside || aside.contains(document.activeElement)) return;
-        (aside.querySelector('[role="treegrid"] [data-col][tabindex="0"]') ?? aside.querySelector('[role="radio"][aria-checked="true"]'))?.focus();
+        (aside.querySelector('[role="treegrid"] [data-col][tabindex="0"]') ?? aside.querySelector('[role="radio"][aria-checked="true"]'))?.focus({ preventScroll: true });
     }, [paneId]);
 
     // Column widths and the fonts as rendered decide how much of a setting or a shape fits.

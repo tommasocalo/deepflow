@@ -13,8 +13,9 @@
 .df-architecture-split.is-split .df-import-source-full { display: none; }
 .df-architecture-split.is-split .df-import-source-short { display: inline; }
 @media (max-width: 700px) { .df-import-source { right: 8px; bottom: 8px; max-width: calc(100% - 16px); font-size: 9px; } .df-import-source-full { display: none; } .df-import-source-short { display: inline; } }
-/* Named, so tools docked inside (the Model table) can be containers of their own. */
-.df-architecture-body { container: df-architecture-body / inline-size; }
+/* Named, so tools docked inside (the Model table) can be containers of their own.
+   Sized in both axes: a short body keeps the table beside the canvas. */
+.df-architecture-body { container: df-architecture-body / size; }
 .df-architecture-split.is-split .df-levels { padding-left: 10px; padding-right: 8px; }
 .df-architecture-split.is-split .df-graph-pane.is-active .df-graph-pane-header { box-shadow: inset 2px 0 #111; }
 /* Where the ribbon has no room for its target cue, the pane it acts on says so in its header. */

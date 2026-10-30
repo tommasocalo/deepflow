@@ -4,10 +4,20 @@ const WIDTH_KEY = 'deepflow:model-table-width';
 export const MIN_WIDTH = 380;
 export const DEFAULT_WIDTH = 760;
 const MIN_HEIGHT = 160;
-/** A bottom sheet the user drags keeps this much canvas above it. */
+/** A bottom sheet the user drags keeps this much canvas above it... */
 const MIN_CANVAS = 120;
+/** ...except in a pane too short for that and three rows: there the sheet may
+ * take all but 90px, as its default does (see model-table.css). */
+const SHEET_ROWS = 190;
+const CANVAS_SLIVER = 90;
 const MAX_WIDTH_SHARE = 0.72;
 const KEY_STEP = 16;
+
+/** The heights a bottom sheet can take in a pane: [lowest, highest]. */
+function sheetRange(paneHeight) {
+    const highest = Math.max(0, paneHeight - MIN_CANVAS, Math.min(SHEET_ROWS, paneHeight - CANVAS_SLIVER));
+    return [Math.min(MIN_HEIGHT, highest), highest];
+}
 
 /** A width the user chose earlier, or null for the default. */
 function readWidth() {
@@ -36,7 +46,7 @@ function saveWidth(width) {
 export function useDockResize(asideRef) {
     const [width, setWidth] = useState(readWidth);
     const [height, setHeight] = useState(null);
-    const [layout, setLayout] = useState({ sheet: false, width: null, height: null, room: null });
+    const [layout, setLayout] = useState({ sheet: false, width: null, height: null, floor: null, room: null });
     const dragRef = useRef(null);
     const { sheet } = layout;
 
@@ -49,10 +59,11 @@ export function useDockResize(asideRef) {
             const box = aside.getBoundingClientRect();
             const sheet = getComputedStyle(workspace).flexDirection === 'column';
             const parent = workspace.getBoundingClientRect();
-            // The largest size a drag can reach, for the separator's value range.
-            const room = Math.round(sheet ? parent.height - MIN_CANVAS : parent.width * MAX_WIDTH_SHARE);
-            const next = { sheet, width: Math.round(box.width), height: Math.round(box.height), room };
-            setLayout((current) => current.sheet === next.sheet && current.width === next.width && current.height === next.height && current.room === next.room ? current : next);
+            // The sizes a drag can reach, for the separator's value range.
+            const [floor, room] = sheet ? sheetRange(parent.height).map(Math.round) : [MIN_WIDTH, Math.round(parent.width * MAX_WIDTH_SHARE)];
+            const next = { sheet, width: Math.round(box.width), height: Math.round(box.height), floor, room };
+            setLayout((current) => current.sheet === next.sheet && current.width === next.width && current.height === next.height
+                && current.floor === next.floor && current.room === next.room ? current : next);
         });
         observer.observe(workspace);
         observer.observe(aside);
@@ -61,7 +72,12 @@ export function useDockResize(asideRef) {
 
     const parentBox = () => asideRef.current?.parentElement?.getBoundingClientRect();
     const clampWidth = (value) => Math.max(MIN_WIDTH, Math.min((parentBox()?.width ?? 0) * MAX_WIDTH_SHARE || Infinity, value));
-    const clampHeight = (value) => Math.max(MIN_HEIGHT, Math.min((parentBox()?.height ?? 0) - MIN_CANVAS || Infinity, value));
+    const clampHeight = (value) => {
+        const paneHeight = parentBox()?.height;
+        if (!paneHeight) return Math.max(MIN_HEIGHT, value);
+        const [lowest, highest] = sheetRange(paneHeight);
+        return Math.max(lowest, Math.min(highest, value));
+    };
     const currentWidth = () => width ?? asideRef.current?.getBoundingClientRect().width ?? DEFAULT_WIDTH;
     const currentHeight = () => height ?? asideRef.current?.getBoundingClientRect().height ?? 320;
     const resizeBy = (delta) => {
@@ -74,7 +90,7 @@ export function useDockResize(asideRef) {
     };
 
     const size = sheet ? layout.height : layout.width;
-    const minimum = sheet ? MIN_HEIGHT : MIN_WIDTH;
+    const minimum = sheet ? layout.floor ?? MIN_HEIGHT : MIN_WIDTH;
     const separator = {
         role: 'separator',
         tabIndex: 0,
