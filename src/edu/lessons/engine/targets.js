@@ -31,6 +31,8 @@ const EDU_TARGETS = {
     'trainer.initLoss': 'trainer-init-loss',
     'code.tab:model': 'code-tab-model',
     'code.tab:train': 'code-tab-train',
+    'code.notebook': 'code-notebook',
+    'code.colabNote': 'code-colab-note',
     'lesson.palette': 'lesson-palette',
 };
 const TAB_TARGETS = ['tab.learn', 'tab.architecture', 'tab.data', 'tab.training'];
@@ -128,6 +130,26 @@ export function resolveTarget(ref, root = globalThis.document) {
     if (EDU_TARGETS[ref]) return byEduTarget(root, EDU_TARGETS[ref]);
     if (ref === 'training.loss') return trainingNodeElement(root, 'loss');
     if (ref === 'training.optimizer') return trainingNodeElement(root, 'optimizer');
+    return null;
+}
+
+/**
+ * The block whose inside the main pane shows (at any depth) when a `nodeOpen` target names it: that target has been
+ * reached, so a missing ring is not a lost target. Returns the node, or null.
+ */
+export function reachedOpenTarget(refs = []) {
+    const opens = refs.filter((ref) => ref && typeof ref === 'object' && ref.nodeOpen).map((ref) => ref.nodeOpen);
+    const architecture = useArchitectureStore.getState();
+    const path = architecture.currentPath ?? [];
+    if (!opens.length || !path.length) return null;
+    const templates = useTemplatesStore.getState().templates;
+    for (let depth = 0; depth < path.length; depth++) {
+        const level = resolveGraphLevel(architecture.graph, path.slice(0, depth), templates, architecture.inspectedIterations);
+        const node = level.graph?.nodes?.[path[depth]];
+        if (!node) return null;
+        const options = { templates, scope: level.isRoot ? withGlobalParameters(architecture.graph) : {}, graph: level.graph };
+        if (opens.some((match) => matchNodes(level.graph, match, options).some((item) => item.id === node.id))) return node;
+    }
     return null;
 }
 

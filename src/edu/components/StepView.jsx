@@ -3,10 +3,10 @@ import { ChevronLeft, ChevronRight, Crosshair, MapPin, RotateCcw, Undo2, X } fro
 import { useArchitectureHistory } from '../../stores/architectureHistory.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import TrainerCard from '../trainer/components/TrainerCard.jsx';
-import { focusNode, requestFit } from '../lessons/engine/canvasBridge.js';
+import { focusNode, requestFit, requestTrainingFit } from '../lessons/engine/canvasBridge.js';
 import { hasText, t } from '../lessons/engine/i18n.js';
 import { revealValues } from '../lessons/engine/reveal.js';
-import { resolveNodeTargetId } from '../lessons/engine/targets.js';
+import { reachedOpenTarget, resolveNodeTargetId } from '../lessons/engine/targets.js';
 import { useLessonSession } from '../lessons/engine/session.js';
 import { useEduUiStore } from '../shell/uiStore.js';
 import { useBridgeSource } from '../useBridgeSource.js';
@@ -23,19 +23,23 @@ const TAB_OF_TARGET = [
     [/^data\./, 'data'],
     [/^training\./, 'training'],
 ];
+const named = (refs, prefix) => refs.some((ref) => typeof ref === 'string' && ref.startsWith(prefix));
 
-/** "Where is it?": bring the step's target on screen. */
+/** "Where is it?": bring the step's target on screen, on its tab and at the root level where node targets start. */
 function revealTarget(step) {
     const ui = useEduUiStore.getState();
     const refs = step.target ?? [];
     const nodeRef = refs.find((ref) => typeof ref === 'object');
     if (step.tab) ui.setTab(step.tab);
     else {
-        const named = refs.find((ref) => typeof ref === 'string' && TAB_OF_TARGET.some(([pattern]) => pattern.test(ref)));
-        const tab = nodeRef ? 'architecture' : TAB_OF_TARGET.find(([pattern]) => pattern.test(named ?? ''))?.[1];
+        const first = refs.find((ref) => typeof ref === 'string' && TAB_OF_TARGET.some(([pattern]) => pattern.test(ref)));
+        const tab = nodeRef ? 'architecture' : TAB_OF_TARGET.find(([pattern]) => pattern.test(first ?? ''))?.[1];
         if (tab) ui.setTab(tab);
     }
-    if (refs.some((ref) => typeof ref === 'string' && ref.startsWith('code.tab:'))) ui.openCode(ui.codeTab);
+    // The notebook button and the Colab note sit on train.py; a tab target keeps the open tab so its ring shows.
+    if (named(refs, 'code.notebook') || named(refs, 'code.colabNote')) ui.openCode('train');
+    else if (named(refs, 'code.tab:')) ui.openCode(ui.codeTab);
+    if (named(refs, 'training.')) setTimeout(requestTrainingFit, 120);
     if (nodeRef) {
         const store = useArchitectureStore.getState();
         if (store.currentPath.length) store.goToLevel(0);
@@ -61,6 +65,8 @@ export default function StepView({ module, step, index, total, record, answers, 
     const [toastAt, setToastAt] = useState(null);
     const trainer = useBridgeSource('trainer');
     const canUndo = useArchitectureHistory((state) => state.canUndo);
+    // Re-render on navigation: inside a block a nodeOpen target names, the ring is gone because it was followed.
+    useArchitectureStore((state) => state.currentPath);
     const prefix = `${module.id}.${step.id}`;
     const status = record?.status;
     const done = status === 'passed' || status === 'skipped';
@@ -147,7 +153,7 @@ export default function StepView({ module, step, index, total, record, answers, 
                 <p className="edu-callout edu-callout-misconception"><strong>{t('panel.misconception')}: </strong><RichText inline text={t(`mis.${misconception}`)} /></p>
             )}
             {runtime?.error && <p className="edu-callout edu-callout-error" role="alert">{t('panel.actionFailed', { error: runtime.error })}</p>}
-            {targetMissing && !passing && (
+            {targetMissing && !passing && !reachedOpenTarget(step.target ?? []) && (
                 <button type="button" className="edu-link-button" onClick={() => revealTarget(step)}>
                     <MapPin size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.whereIsIt')}
                 </button>
