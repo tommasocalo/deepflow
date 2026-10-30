@@ -7,7 +7,7 @@ export { evaluateCheck, evaluateStep, createCheckContext } from './checks.js';
 export { buildCheckContext } from './context.js';
 export { runActions } from './actions.js';
 export { captureWorkspace, restoreWorkspace, loadSlot, saveSlot } from './workspace.js';
-export { resolveTarget, resolveFirstTarget } from './targets.js';
+export { isTargetDone, resolveTarget, resolveFirstTarget } from './targets.js';
 export { friendlyIssues } from './feedback.js';
 export { validateModule, moduleTextKeys } from './schema.js';
 export { readLog, learningLogExport } from './log.js';

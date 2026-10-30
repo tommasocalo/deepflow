@@ -2635,12 +2635,12 @@ Browser checks (`*-browser-check.mjs`) are run by hand or by Stage E against por
   - Screenshots at 1440×900 and 390×844 per module start and per training step.
   - Asserts: no console errors; no horizontal scroll; every spotlight target resolves at least once.
   - Reload mid-module resumes at the same step; Exit lesson restores the GPT-2 sandbox.
-- **Accessibility pass** (manual, recorded in QA.md)
+- **Accessibility pass** (manual; results in §12, Stage E)
   - Keyboard-only run of M1: Tab order, Enter and Space on all controls, focus visible.
   - Screen-reader labels via `getByRole` queries.
   - Contrast spot checks; reduced motion.
-- **Performance** (QA.md): the trainer timings of §6.10.7 measured in Chromium, and bundle size before and after.
-  The digits data is a separate chunk.
+- **Performance** (§12, Stage E): the trainer timings of §6.10.7 measured in Chromium
+  (`scripts/edu-data-browser-check.mjs`), and bundle size. The digits data is a separate chunk.
 - **Regression:** `npm test` (baseline 281 + all Edu tests, 0 failures, no Edu skips except the PyTorch-dependent
   ones), `npm run lint`, `npm run build`.
 
@@ -2894,4 +2894,5 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-10-30 | Stage E | **Training canvas**: it fits beside the TrainingPalette (right 40%, at most 100% zoom; the Controls' fit button too), and in a lesson it fits when it opens instead of restoring a viewport saved in another workspace, so the loss block of M1 s6 is clickable at 1440×900 and 1024×768. Event `deepflow-edu:training-canvas` (`fit`) for "Where is it?". |
 | 2026-10-30 | Stage E | **Targets** (§6.6): `code.notebook` and `code.colabNote` added; "Where is it?" is not offered inside a level a `nodeOpen` target opened, opens the code panel for code targets and fits the Training canvas for training targets. §11.1 and §11.2 gained the in-browser trainer's measurements. |
 | 2026-10-30 | Stage E | **Spotlight follows the learner** (§6.6): used targets are skipped (`isTargetDone`), targets off screen count as missing, and "Where is it?" also scrolls lists and panels. M3 s7's targets add the MNIST row and Use this dataset. |
+| 2026-10-30 | Stage E | **QA record.** `scripts/edu-walkthrough-browser-check.mjs` walks every module with Hint, Hint, Show me at 1440×900 and 390×844: each step with an unused target rings it at entry or, below the fold on the phone (the drawer's trainer card, the ribbon's edge), offers "Where is it?", which brings it into view; no console errors, no horizontal scroll; a reload resumes the step and Exit restores the sandbox. By hand in Chromium: first run → Learn → M1 by mouse and keyboard → quiz → recap → M2; sandbox and back; reload mid-step; Reset progress; tab switches mid-lesson; Undo of a Show me; 1440×900, 1024×768 and 390×844. Keyboard: Tab reaches every Edu control, Enter submits answers and runs chips, Space chooses options, Esc closes menus and the code panel (never the lesson), focus rings are 2 px #e91e63, focus moves to the step heading and to the reveal. Text contrast: every Edu text element met WCAG AA in the audited states (disabled controls excepted). Trainer timings in Chromium (§6.10.7 budgets): circle 2-8-1 about 30 ms, spiral3 overfit about 3.5–4 s, digits MLP about 1.1–1.5 s; the UI keeps about 40 frames per second while training. |
 | 2026-10-30 | Stage E | **QA fixes from the browser walk.** Show me keeps the column compact (lower blocks move only as far as the new rows need), so M3 and M4 stay readable after a fit. Check messages use articles ("connect an activation (such as ReLU)") and no "block(s)"; M6 s3's entry status asks to group the blocks (a standard Linear component is no grouping attempt). The code panel closes with Esc and explains an invalid model in plain words ("No code yet: …") instead of a stack trace. Below 900 px the TrainingPalette starts folded to its header. The Training tab's 10-class confusion matrix uses compact cells, and its result toggle wraps. M2 s7's done line no longer says "You built that network yourself", which was untrue after Show me. Dead exports and duplicate CSS in `src/edu` were removed. |

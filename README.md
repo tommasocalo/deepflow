@@ -90,7 +90,7 @@ python3 -m venv .venv
 EDU_PYTHON=.venv/bin/python npm test
 ```
 
-Two Playwright checks run against a dev server on port 5174 and are not part of `npm test`: `node scripts/edu-learn-browser-check.mjs` (Learn home and lesson panel) and `node scripts/edu-data-browser-check.mjs` (Data tab, trainer and its timing budget).
+Three Playwright checks run against a dev server on port 5174 (`npx vite --host 127.0.0.1 --port 5174 --strictPort`) and are not part of `npm test`: `node scripts/edu-learn-browser-check.mjs` (Learn home and lesson panel), `node scripts/edu-data-browser-check.mjs` (Data tab, trainer and its timing budget) and `node scripts/edu-walkthrough-browser-check.mjs` (every module with Hint, Hint, Show me at 1440×900 and 390×844, about ten minutes per size).
 
 ## Edu source layout
 
