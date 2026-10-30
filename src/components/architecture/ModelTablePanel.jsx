@@ -6,7 +6,8 @@ import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { isValidLevelPath, sameLevelPath } from '../../domain/architecture/levelNavigation.js';
 import { ancestorKeys, buildModelTableRows, rowKey } from '../../domain/modelTable/rows.js';
-import { ACTIVATION_TITLE, cellStatus, MACS_TITLE } from '../../domain/modelTable/cellText.js';
+import { ACTIVATION_TITLE, cellStatus, knownShapeMark, MACS_TITLE } from '../../domain/modelTable/cellText.js';
+import { drawnShapeLength } from '../../domain/modelTable/fitText.js';
 import { formatExact, formatMetric } from '../../domain/metrics/index.js';
 import { parameterSuggestions } from '../../domain/parameterBindings.js';
 import { useModelMetrics } from '../../hooks/useModelMetrics.js';
@@ -112,6 +113,8 @@ export default function ModelTablePanel({ paneId = 'main' }) {
     const budgets = useMemo(() => ({
         output: columnWidths.output ? Math.floor((columnWidths.output - CELL_PADDING) / columnWidths.chars.shape) : Infinity,
         config: columnWidths.config ? Math.floor((columnWidths.config - CELL_PADDING) / columnWidths.chars.config) : Infinity,
+        // Shape separators are drawn with margins (see .df-mt-times and .df-mt-known).
+        glyphs: { times: 1 + 2 / columnWidths.chars.shape, collection: 1 + 5 / columnWidths.chars.shape, mark: 4 / columnWidths.chars.shape },
     }), [columnWidths]);
     const activeEntry = byKey.get(active.key) ?? (rows.length ? { row: rows[0], index: 0 } : null);
     const activeRow = activeEntry?.row ?? null;
@@ -293,7 +296,13 @@ export default function ModelTablePanel({ paneId = 'main' }) {
     const modelPartial = (totals?.unresolved?.[lens]?.size ?? 0) > 0;
     // With nothing countable, the denominator is unknown rather than zero.
     const lensTotal = modelPartial && !modelTotal ? '?' : `${modelPartial ? '≥' : ''}${formatMetric(lens, modelTotal) ?? '0'}`;
-    const visibleRows = rows.slice(0, limit);
+    const visibleRows = useMemo(() => rows.slice(0, limit), [rows, limit]);
+    // The Output column grows (within bounds, see the CSS) to fit its longest label and mark.
+    const outputNeed = useMemo(() => visibleRows.reduce((longest, row) => {
+        if (row.shape.unknown) return longest;
+        const mark = knownShapeMark(row);
+        return Math.max(longest, drawnShapeLength(row.shape.text, budgets.glyphs) + (mark ? mark.length + budgets.glyphs.mark : 0));
+    }, 0), [visibleRows, budgets]);
     const breadcrumb = activeRow ? ['main', ...ancestorKeys(activeRow.path).map((key) => byKey.get(key)?.row.label ?? '…'), activeRow.label].join(' › ') : '';
     const sameLevel = activeRow && sameLevelPath(activeRow.levelPath, currentPath);
     const owner = activeRow?.ownerIds.length === 1 ? templates[activeRow.ownerIds[0]] : null;
@@ -344,7 +353,9 @@ export default function ModelTablePanel({ paneId = 'main' }) {
                     }
                     setCovered((current) => current === under ? current : under);
                 }}>
-                <table className={`df-mt-table is-${metricColumn}`} role="treegrid" aria-label="Model layers" aria-rowcount={rows.length + 1} aria-describedby={assumptionsId}>
+                <table className={`df-mt-table is-${metricColumn}`} role="treegrid" aria-label="Model layers" aria-rowcount={rows.length + 1} aria-describedby={assumptionsId}
+                    // Whole characters, so the budget measured from the column covers the longest label.
+                    style={{ '--mt-output-need': `${Math.ceil(Math.ceil(outputNeed) * columnWidths.chars.shape) + CELL_PADDING + 1}px` }}>
                     <colgroup>
                         <col className="df-mt-col-layer" /><col className="df-mt-col-count" /><col className="df-mt-col-output" />
                         <col className="df-mt-col-config" /><col className="df-mt-col-params" /><col className="df-mt-col-metric" /><col className="df-mt-col-share" />

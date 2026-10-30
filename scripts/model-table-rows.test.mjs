@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { computeModelMetrics, formatShare } from '../src/domain/metrics/index.js';
 import { buildModelTableRows, readingOrder, rowKey } from '../src/domain/modelTable/rows.js';
 import { configAccessibleText } from '../src/domain/modelTable/configFields.js';
-import { cellStatus, eachText, failingText, metricLines, SHAPE_GUESS_NOTE, shareInfo } from '../src/domain/modelTable/cellText.js';
+import { cellStatus, eachText, failingText, knownShapeMark, metricLines, SHAPE_GUESS_NOTE, shareInfo } from '../src/domain/modelTable/cellText.js';
 import { cutExpression, fitConfigParts, fitShapeText } from '../src/domain/modelTable/fitText.js';
 import { describeTarget, followReference, parseCellValue, precheckCellValue, resolveWriteTarget, targetSummary, targetTag } from '../src/domain/modelTable/writeTargets.js';
 import { createEdge, createLayerNode, createRepeatNode, createSuperNodeInstance, createTemplate } from '../src/domain/architecture/index.js';
@@ -382,6 +382,7 @@ test('values that differ per instance read as their range, whichever instance di
     assert.equal(cellText(find(rows, 'mlp proj'), 'values'), '1536…3072 → 768');
     assert.deepEqual(narrow.params.perInstance.map((run) => [run.from, run.to, run.value]),
         [['i=0', 'i=3', 2362368], ['i=4', 'i=4', 1181184], ['i=5', 'i=11', 2362368]], 'Metric tooltips list which instances differ');
+    assert.equal(fitShapeText(narrow.shape.text, 15), 'B × … × 1536…3072', 'A cut keeps the axis that varies');
 
     const resnet = load(resnetStoryboard);
     const stages = find(rowsAt(resnet, 'blocks'), 'ResNet stages');
@@ -520,6 +521,9 @@ test('shares of a partial total are upper bounds, or unknown where the row is pa
 
     // Shared definitions name the instances that fail.
     const ln1 = find(rows, 'ln_1');
+    assert.deepEqual([ln1.shape.text, ln1.shape.known, ln1.shape.count, knownShapeMark(ln1)], ['B × 1024 × 768', 1, 12, '1/12'],
+        'A shape known in block 0 only says so in the cell');
+    assert.equal(knownShapeMark(find(rows, 'token embedding')), null);
     assert.equal(failingText(ln1), 'Fails in i=1–11 (11 of 12)', 'Block 0 still reads 768 wide');
     assert.match(cellStatus(ln1, 0, { lens: 'params' }), /internal errors: Element-wise dim 2 mismatch: 1024 vs 768 · Fails in i=1–11 \(11 of 12\)$/);
     const lnF = find(rows, 'ln_f');

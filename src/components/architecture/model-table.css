@@ -51,7 +51,8 @@
 /* At the default 760px the Layer column fits a 24-character name one level deep. */
 .df-mt-col-layer { width: clamp(160px, 28.5cqw, 260px); }
 .df-mt-col-count { width: 38px; }
-.df-mt-col-output { width: 108px; }
+/* Wide enough for a per-instance range such as B×1024×1536…3072 when the rows need it. */
+.df-mt-col-output { width: clamp(108px, var(--mt-output-need, 0px), 132px); }
 .df-mt-col-params, .df-mt-col-metric { width: 66px; }
 /* Bytes and their ranges are wider than counts: 0.79–3.15 MB. */
 .df-mt-table.is-activation { min-width: 584px; }
@@ -105,6 +106,8 @@
 .df-mt-fused { color: #a3a39c; cursor: help; }
 .df-mt-shape { color: #333; font: 10px/1 var(--mt-mono); font-variant-numeric: tabular-nums; }
 .df-mt-times { margin: 0 1px; color: #9a9a94; }
+/* Known in only some occurrences: the label covers 1/12 of them. */
+.df-mt-known { margin-left: 4px; color: #b45309; font-weight: 600; cursor: help; }
 .df-mt-times.is-collection { margin: 0 3px 0 2px; }
 
 .df-mt-share { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; }
@@ -133,7 +136,7 @@
 /* Narrow panels: tighter fixed columns, so all seven fit beside the canvas. */
 @container df-model-table (max-width: 699px) {
     .df-mt-col-count { width: 36px; }
-    .df-mt-col-output { width: 88px; }
+    .df-mt-col-output { width: clamp(88px, var(--mt-output-need, 0px), 108px); }
     .df-mt-col-share { width: 76px; }
     .df-mt-bar { width: 18px; }
     .df-mt-share { gap: 4px; }

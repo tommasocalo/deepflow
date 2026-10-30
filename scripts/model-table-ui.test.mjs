@@ -611,6 +611,10 @@ test('the footer counts errors across the model and says how the canvas counts t
     assert.equal(cellOf('token embedding', 6).textContent, '≤26.3%', 'Exact rows of a partial total are at most their share');
     assert.equal(cellOf('Transformer blocks', 6).textContent, '?', 'A partial row of a partial total has no share');
     assert.match(rowOf('ln_1').querySelector('[data-col="0"]').getAttribute('title'), /Fails in i=1–11 \(11 of 12\)/);
+    const shape = cellOf('ln_1', 2);
+    assert.equal(shape.querySelector('.df-mt-known').textContent, '1/12', 'The Output cell says its shape covers one block of twelve');
+    assert.equal(shape.getAttribute('aria-label'), 'B × 1024 × 768, known in 1 of 12 occurrences');
+    assert.equal(cellOf('lm_head', 2).textContent, '?', 'After the mismatch the shape is unknown');
 });
 
 test('the totals keep one line and fold their details and assumptions', async () => {

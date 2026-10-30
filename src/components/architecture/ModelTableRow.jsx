@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react';
 import { AlertCircle, AlertTriangle, Boxes, ChevronRight, GitFork, Repeat } from 'lucide-react';
 import { getEntry } from '../../domain/library/index.js';
 import { formatMetric } from '../../domain/metrics/index.js';
-import { eachText, FUSED_NOTE, isPartial, layerLines, metricLines, multiplicityInfo, shapeLines, shareInfo } from '../../domain/modelTable/cellText.js';
+import { eachText, FUSED_NOTE, isPartial, knownShapeMark, layerLines, metricLines, multiplicityInfo, shapeLines, shareInfo } from '../../domain/modelTable/cellText.js';
 import { configAccessibleText } from '../../domain/modelTable/configFields.js';
 import { fitShapeText } from '../../domain/modelTable/fitText.js';
 import { FAMILY_ASSETS, styleFor } from './categoryStyle.js';
@@ -90,8 +90,13 @@ function ModelTableRow({ row, index, cells, lens, modelTotal, modelPartial, cont
     const editableHints = Object.values(targets).filter((target) => target.editable).map((target) => `${target.field.name}: ${target.hint}`);
     const count = multiplicityInfo(row);
     const off = row.config.some((part) => part.kind === 'note' && part.text === 'off');
-    const shapeText = row.shape.unknown ? null : fitShapeText(row.shape.text, budgets?.output);
+    // A label that covers only some occurrences says how many: B×1024×768 1/12.
+    const knownMark = knownShapeMark(row);
+    const markWidth = knownMark ? knownMark.length + (budgets?.glyphs?.mark ?? 1) : 0;
+    const shapeText = row.shape.unknown ? null : fitShapeText(row.shape.text, (budgets?.output ?? Infinity) - markWidth, budgets?.glyphs);
     const shapeTitle = shapeLines(row).join('\n');
+    const shapeLabel = row.shape.unknown ? 'unknown'
+        : row.shape.text && knownMark ? `${row.shape.text}, known in ${row.shape.known} of ${row.shape.count} occurrences` : row.shape.text ?? undefined;
     return <tr role="row" data-row-key={row.key} aria-rowindex={index + 2} aria-level={row.depth + 1} aria-posinset={row.posInSet} aria-setsize={row.setSize}
         aria-expanded={row.expandable ? row.expanded : undefined} aria-selected={selected}
         className={`df-mt-row${selected ? ' is-selected' : ''}${row.kind !== 'layer' ? ' is-container' : ''}${row.expanded ? ' is-expanded' : ''}${hasErrors ? ' has-error' : ''}${off ? ' is-off' : ''}`}
@@ -124,9 +129,9 @@ function ModelTableRow({ row, index, cells, lens, modelTotal, modelPartial, cont
             {count.unknown ? <span className="df-mt-unknown">?</span> : count.text}
         </td>
         {/* The label reads the shape as words; the drawn digits are hidden from screen readers. */}
-        <td role="gridcell" {...cell(2)} className="df-mt-shape" title={shapeTitle || undefined}
-            aria-label={row.shape.unknown ? 'unknown' : row.shape.text ?? undefined}>
-            {row.shape.unknown ? <span className="df-mt-unknown">?</span> : <span aria-hidden="true"><CompactShape text={shapeText} /></span>}
+        <td role="gridcell" {...cell(2)} className="df-mt-shape" title={shapeTitle || undefined} aria-label={shapeLabel}>
+            {row.shape.unknown ? <span className="df-mt-unknown">?</span>
+                : <span aria-hidden="true"><CompactShape text={shapeText} />{knownMark && <span className="df-mt-known">{knownMark}</span>}</span>}
         </td>
         <td role="gridcell" {...cell(3)} className={`df-mt-config-cell${editing ? ' is-editing' : ''}`} aria-readonly={!editable}
             aria-label={editing ? undefined : configAccessibleText(row, cells) || undefined}

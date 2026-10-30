@@ -104,22 +104,52 @@ export function fitConfigParts(parts, { budget, display, expression }) {
 }
 
 /**
- * A shape label within `budget` characters: whole axes only, so
- * `B×64…256×32×32` becomes `B×64…256×…`, never `B×64…256×3…`. A collection
- * (`12 tensors [B × 1024 × 64]`) is measured as drawn, `12×[B×1024×64]`,
- * and cut inside its brackets.
+ * Widths, in characters of the shape font, of the glyphs a shape label draws
+ * with margins: the × between axes, the × after a collection count, and the
+ * gap before a "known in 1/12" mark. One character each unless measured.
  */
-export function fitShapeText(text, budget) {
+export const PLAIN_GLYPHS = Object.freeze({ times: 1, collection: 1, mark: 1 });
+
+/** Width of a shape label as drawn, in characters: `B×1024×768`, `12×[B×1024×64]`. */
+export function drawnShapeLength(text, glyphs = PLAIN_GLYPHS) {
+    if (!text) return 0;
+    const collection = text.match(/^(\d+) tensors(?: \[(.*)\])?$/);
+    if (collection) return collection[2] ? collection[1].length + glyphs.collection + 2 + drawnShapeLength(collection[2], glyphs) : text.length;
+    const axes = text.split(' × ');
+    return axes.join('').length + (axes.length - 1) * glyphs.times;
+}
+
+/**
+ * A shape label within `budget` characters: whole axes only, so
+ * `B×64…256×32×32` becomes `B×64…256×…`, never `B×64…256×3…`. An axis that
+ * varies across instances says the most, so axes that do not give way first:
+ * `B×1024×1536…3072` becomes `B×…×1536…3072`, not `B×1024×…`. A collection
+ * (`12 tensors [B × 1024 × 64]`) is measured as drawn, `12×[B×1024×64]`,
+ * and cut inside its brackets. `glyphs` gives the drawn width of separators.
+ */
+export function fitShapeText(text, budget, glyphs = PLAIN_GLYPHS) {
     if (!text || !Number.isFinite(budget) || budget <= 0) return text;
     const collection = text.match(/^(\d+) tensors(?: \[(.*)\])?$/);
     if (collection) {
         if (!collection[2]) return text;
-        const inner = fitShapeText(collection[2], budget - collection[1].length - 3);
+        const inner = fitShapeText(collection[2], budget - collection[1].length - 2 - glyphs.collection, glyphs);
         return `${collection[1]} tensors [${inner}]`;
     }
-    const compact = text.replace(/ × /g, '×');
-    if (compact.length <= budget) return text;
+    if (drawnShapeLength(text, glyphs) <= budget) return text;
     const axes = text.split(' × ');
-    while (axes.length > 1 && `${axes.join('×')}×…`.length > budget) axes.pop();
-    return `${axes.join(' × ')} × …`;
+    const width = (parts) => parts.join('').length + (parts.length - 1) * glyphs.times;
+    const trailing = [...axes];
+    while (trailing.length > 1 && width([...trailing, '…']) > budget) trailing.pop();
+    const ranges = axes.map((axis, index) => axis.includes('…') ? index : -1).filter((index) => index > 0);
+    // The trailing cut drops a range: keep the batch axis and the ranges, eliding fixed axes in between.
+    if (ranges.length && ranges.at(-1) >= trailing.length) {
+        const kept = [];
+        axes.forEach((axis, index) => {
+            const keep = index === 0 || ranges.includes(index);
+            if (keep) kept.push(axis);
+            else if (kept.at(-1) !== '…') kept.push('…');
+        });
+        if (width(kept) <= budget) return kept.join(' × ');
+    }
+    return `${trailing.join(' × ')} × …`;
 }

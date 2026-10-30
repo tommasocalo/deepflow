@@ -90,9 +90,12 @@ function singleShapeText(shape) {
  * One label for the output of every merged occurrence, B = batch. Shapes
  * that differ in some axes read as a range there: `B × 64…256 × 32 × 32`.
  * `null` marks an occurrence whose shape is unknown; `unknownReason` says why.
+ * `known` of `count` occurrences have a known shape, so a label that covers
+ * only some of them can say so.
  */
 export function shapeSummary(shapes, { unknownReason = null } = {}) {
     const unknown = shapes.filter((shape) => shape === null || shape === undefined).length;
+    const counts = { known: shapes.length - unknown, count: shapes.length };
     const distinct = [];
     const seen = new Set();
     for (const shape of shapes) {
@@ -103,14 +106,14 @@ export function shapeSummary(shapes, { unknownReason = null } = {}) {
         distinct.push(shape);
     }
     const unknownNote = unknown && distinct.length ? `\nUnknown in ${unknown} of ${shapes.length} occurrences${unknownReason ? `: ${unknownReason}` : ''}` : '';
-    if (!distinct.length) return { text: null, varies: false, unknown: shapes.length > 0, title: unknownReason ? `Unknown: ${unknownReason}` : '' };
+    if (!distinct.length) return { text: null, varies: false, unknown: shapes.length > 0, title: unknownReason ? `Unknown: ${unknownReason}` : '', ...counts };
     const labels = distinct.map((shape) => singleShapeText(shape) ?? '?');
-    if (distinct.length === 1) return { text: singleShapeText(distinct[0]), varies: false, unknown: false, title: `${labels[0]}${unknownNote}` };
+    if (distinct.length === 1) return { text: singleShapeText(distinct[0]), varies: false, unknown: false, title: `${labels[0]}${unknownNote}`, ...counts };
     const ranks = distinct.map((shape) => Array.isArray(shape) ? shape.length : -1);
     const text = ranks.every((rank) => rank > 0 && rank === ranks[0])
         ? Array.from({ length: ranks[0] }, (_, axis) => axisText(distinct.map((shape) => shape[axis]), axis)).join(' × ')
         : `${labels[0]} …`;
-    return { text, varies: true, unknown: false, title: `${labels.join(' · ')}${unknownNote}` };
+    return { text, varies: true, unknown: false, title: `${labels.join(' · ')}${unknownNote}`, ...counts };
 }
 
 const unique = (values) => [...new Set(values)];

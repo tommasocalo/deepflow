@@ -105,6 +105,12 @@ export const SHAPE_ERROR_NOTE = 'Totals use the declared settings. A layer whose
     + 'later MACs, activations and widths inferred from it (such as an attention D) read ? too. '
     + 'The canvas still draws the shapes validation carries on with; the table counts nothing from them.';
 
+/** `1/12`: how many occurrences a shape label covers, when it does not cover them all. */
+export function knownShapeMark(row) {
+    const { known, count } = row.shape;
+    return !row.shape.unknown && known < count ? `${known}/${count}` : null;
+}
+
 /** The Output cell explained. */
 export function shapeLines(row) {
     if (row.shape.unknown) return [row.shape.title || 'Unknown', SHAPE_GUESS_NOTE];
