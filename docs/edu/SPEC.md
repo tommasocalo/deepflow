@@ -2763,6 +2763,13 @@ are the values learners see:
 The NumPy rows above for one neuron and for two stacked Linears are lower (0.477 and 0.447): both sit near chance,
 the browser runs a little above it.
 
+**The in-browser trainer on the M5 fixtures** (Stage E, `stageE/m5-claims.mjs`). s2, `m5.start`, 60 epochs, training
+seeds 5 (the fixture), 1, 2, 3: lr 0.0001 moves the validation loss only from 1.10 to 0.97–0.99; lr 0.01 ends at
+0.117–0.122 (accuracy 0.967); lr 1.0 jumps up by more than 1.2 between epochs and ends at 0.45–0.75. s3, `m5.big`,
+seeds 1–8: training accuracy 1.000 on 7 of 8 seeds (0.947 on seed 3, which then fails the step's 0.97 bar), final
+training loss ≤ 0.004 on those 7, final/min validation loss 2.4–8.3; validation accuracy falls from 0.947–0.987 at the
+best epoch to 0.81–0.95 at the end (seed 5: 0.960 → 0.920), the "few points" of s4.
+
 Overfitting (M5 s3; spiral3 50/class, noise 0.3, val 0.5 → 75 train points; 2-128-128-3, Adam 0.01, batch 16, 300
 epochs; 8 seeds): train accuracy 0.990 [0.987, 1.000]. Final/min validation-loss ratio
 [2.51, 3.09, 6.56, 2.00, 1.39, 4.01, 2.29, 2.68] (threshold 1.25). Best epochs 11–106. Validation accuracy stays
