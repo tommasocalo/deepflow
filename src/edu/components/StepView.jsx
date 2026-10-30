@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Crosshair, MapPin, RotateCcw, Undo2, X } from 'lucide-react';
 import { useArchitectureHistory } from '../../stores/architectureHistory.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
@@ -6,7 +6,7 @@ import TrainerCard from '../trainer/components/TrainerCard.jsx';
 import { focusNode, requestFit, requestTrainingFit } from '../lessons/engine/canvasBridge.js';
 import { hasText, t } from '../lessons/engine/i18n.js';
 import { revealValues } from '../lessons/engine/reveal.js';
-import { isTargetDone, resolveNodeTargetId } from '../lessons/engine/targets.js';
+import { isTargetDone, isVisible, resolveNodeTargetId, resolveTarget } from '../lessons/engine/targets.js';
 import { useLessonSession } from '../lessons/engine/session.js';
 import { useEduUiStore } from '../shell/uiStore.js';
 import { useBridgeSource } from '../useBridgeSource.js';
@@ -25,8 +25,11 @@ const TAB_OF_TARGET = [
 ];
 const named = (refs, prefix) => refs.some((ref) => typeof ref === 'string' && ref.startsWith(prefix));
 
-/** "Where is it?": bring the step's target on screen, on its tab and at the root level where node targets start. */
-function revealTarget(step) {
+/**
+ * "Where is it?": bring the step's next target on screen: its tab, the root level where node targets start (centred
+ * on the canvas), the code panel, the Training canvas fitted beside its palette, or a list or panel scrolled to it.
+ */
+function revealTarget(step, options) {
     const ui = useEduUiStore.getState();
     const refs = step.target ?? [];
     const nodeRef = refs.find((ref) => typeof ref === 'object');
@@ -48,6 +51,12 @@ function revealTarget(step) {
             if (id) focusNode(id); else requestFit();
         }, 80);
     }
+    // A target scrolled out of its list or panel (not a canvas node: the canvases above handle those).
+    setTimeout(() => {
+        const element = refs.filter((ref) => !isTargetDone(ref, globalThis.document, options))
+            .map((ref) => resolveTarget(ref, globalThis.document, { rendered: true })).find(Boolean);
+        if (element && !isVisible(element) && !element.closest('.react-flow')) element.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }, 160);
 }
 
 function statusText(result, busy) {
@@ -78,6 +87,9 @@ export default function StepView({ module, step, index, total, record, answers, 
     const live = revealValues(step.reveal, { trainer, enteredAtSeq: runtime?.enteredAtSeq ?? 0, runTags });
     const params = { ...facts, ...live.params };
     const showMeAt = runtime?.showMe?.at ?? null;
+    // Tabs visited in this step count as used targets, so the ring moves on to what comes next.
+    const visitedTabs = runtime?.visitedTabs;
+    const targetOptions = useMemo(() => ({ visitedTabs: visitedTabs ?? [] }), [visitedTabs]);
 
     useEffect(() => { headingRef.current?.focus({ preventScroll: false }); }, [module.id, step.id]);
     useEffect(() => {
@@ -153,8 +165,8 @@ export default function StepView({ module, step, index, total, record, answers, 
                 <p className="edu-callout edu-callout-misconception"><strong>{t('panel.misconception')}: </strong><RichText inline text={t(`mis.${misconception}`)} /></p>
             )}
             {runtime?.error && <p className="edu-callout edu-callout-error" role="alert">{t('panel.actionFailed', { error: runtime.error })}</p>}
-            {targetMissing && !passing && (step.target ?? []).some((ref) => !isTargetDone(ref)) && (
-                <button type="button" className="edu-link-button" onClick={() => revealTarget(step)}>
+            {targetMissing && !passing && (step.target ?? []).some((ref) => !isTargetDone(ref, globalThis.document, targetOptions)) && (
+                <button type="button" className="edu-link-button" onClick={() => revealTarget(step, targetOptions)}>
                     <MapPin size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.whereIsIt')}
                 </button>
             )}
@@ -184,7 +196,7 @@ export default function StepView({ module, step, index, total, record, answers, 
                 </button>
             </footer>
             <p className="edu-sr-only">{t('panel.step', { index: index + 1, total })}</p>
-            <Spotlight targets={step.target ?? []} active={!passing && !done} onResolve={onResolve} />
+            <Spotlight targets={step.target ?? []} active={!passing && !done} onResolve={onResolve} options={targetOptions} />
         </article>
     );
 }

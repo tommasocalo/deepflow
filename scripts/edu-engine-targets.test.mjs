@@ -61,6 +61,9 @@ test('a used target is done, so the ring moves on: the open tab, the open code p
     assert.equal(isTargetDone('tab.data'), false);
     useEduUiStore.getState().setTab('data');
     assert.equal(isTargetDone('tab.data'), true);
+    assert.equal(isTargetDone('tab.data', undefined, { visitedTabs: ['architecture'] }), false, 'in a step: not visited yet');
+    useEduUiStore.getState().setTab('architecture');
+    assert.equal(isTargetDone('tab.data', undefined, { visitedTabs: ['architecture', 'data'] }), true, 'visited in this step, so the ring moves on after the learner leaves it');
     assert.equal(isTargetDone('toolbar.code'), false);
     useEduUiStore.getState().openCode('model');
     assert.equal(isTargetDone('toolbar.code'), true);

@@ -51,29 +51,42 @@ export function isValidTargetRef(ref) {
     return !!ref && typeof ref === 'object' && (typeof ref.node === 'object' || typeof ref.nodeOpen === 'object');
 }
 
-/** Rendered and not display:none or visibility:hidden. */
-export function isVisible(element) {
+const isJsdom = (view) => view?.navigator?.userAgent?.includes('jsdom') === true;
+
+/** Rendered: connected and not display:none, visibility:hidden or [hidden]. */
+export function isRendered(element) {
     if (!element?.isConnected) return false;
     if (element.closest?.('[hidden]')) return false;
     const view = element.ownerDocument?.defaultView;
     const style = view?.getComputedStyle?.(element);
     if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
-    const rects = element.getClientRects?.();
-    // jsdom has no layout: treat connected, styled-visible elements as visible there.
-    if (rects && rects.length === 0 && view?.navigator?.userAgent?.includes('jsdom') !== true) return false;
+    // jsdom has no layout: treat connected, styled-visible elements as rendered there.
+    return isJsdom(view) || (element.getClientRects?.().length ?? 1) > 0;
+}
+
+/**
+ * Rendered with its centre on screen: inside the window and inside every scrolling or clipping box around it. A
+ * canvas node panned out of its canvas, or a panel row scrolled away, is not visible, so the panel offers
+ * "Where is it?".
+ */
+export function isVisible(element) {
+    if (!isRendered(element)) return false;
+    const view = element.ownerDocument.defaultView;
+    if (isJsdom(view) || !element.getBoundingClientRect) return true;
+    const box = element.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    const inside = (area) => x >= area.left && x <= area.right && y >= area.top && y <= area.bottom;
+    if (!inside({ left: 0, top: 0, right: view.innerWidth, bottom: view.innerHeight })) return false;
+    for (let node = element.parentElement; node && node !== element.ownerDocument.body; node = node.parentElement) {
+        const style = view.getComputedStyle(node);
+        if (/auto|scroll|hidden|clip/.test(`${style.overflowX} ${style.overflowY}`) && !inside(node.getBoundingClientRect())) return false;
+    }
     return true;
 }
 
 const all = (root, selector) => [...(root?.querySelectorAll?.(selector) ?? [])];
-const firstVisible = (elements) => elements.find(isVisible) ?? null;
-
-function byAriaLabel(root, label) {
-    return firstVisible(all(root, '[aria-label]').filter((element) => element.getAttribute('aria-label') === label));
-}
-
-function byEduTarget(root, value) {
-    return firstVisible(all(root, '[data-edu-target]').filter((element) => element.dataset.eduTarget === value));
-}
+const first = (elements, test) => elements.find((element) => test(element)) ?? null;
 
 function mainPane(root) {
     return all(root, '[data-graph-pane]').find((element) => element.dataset.graphPane === 'main') ?? null;
@@ -93,45 +106,43 @@ function flowNode(container, id) {
     return all(container, '.react-flow__node').find((element) => element.dataset.id === id) ?? null;
 }
 
-function trainingNodeElement(root, kind) {
+function trainingNode(root, kind) {
     const objective = effectiveObjective(useTrainingStore.getState().graph, useArchitectureStore.getState().graph);
     const node = kind === 'loss' ? objective.loss : objective.optimizer;
-    if (!node) return null;
-    return firstVisible(all(root, '.react-flow__node').filter((element) => element.dataset.id === node.id));
+    return node ? all(root, '.react-flow__node').filter((element) => element.dataset.id === node.id) : [];
 }
 
-/** Resolve one TargetRef to an element, or null. */
-export function resolveTarget(ref, root = globalThis.document) {
-    if (!root || !ref) return null;
+/** Every element a TargetRef can name, in document order (the first one the test accepts wins). */
+function candidates(ref, root) {
     if (typeof ref === 'object') {
-        const match = ref.node ?? ref.nodeOpen;
-        const element = flowNode(mainPane(root), resolveNodeTargetId(match));
-        if (!element) return null;
-        if (!ref.nodeOpen) return isVisible(element) ? element : null;
+        const element = flowNode(mainPane(root), resolveNodeTargetId(ref.node ?? ref.nodeOpen));
+        if (!element || !ref.nodeOpen) return element ? [element] : [];
         const node = useArchitectureStore.getState().getViewGraph().nodes[element.dataset.id];
         const label = `Open ${node?.label ?? ''}`;
-        return firstVisible(all(element, '[aria-label]').filter((button) => button.getAttribute('aria-label') === label));
+        return all(element, '[aria-label]').filter((button) => button.getAttribute('aria-label') === label);
     }
-    if (TAB_TARGETS.includes(ref)) {
-        const tab = ref.slice('tab.'.length);
-        return firstVisible(all(root, '.df-toolbar-tabs [data-tab]').filter((element) => element.dataset.tab === tab));
-    }
-    if (ref === 'toolbar.code') return firstVisible(all(root, '.df-action-segment').filter((element) => element.getAttribute('aria-label') === 'Code'));
-    if (RIBBON_LABELS[ref]) return byAriaLabel(root, RIBBON_LABELS[ref]);
-    if (ref === 'ribbon.instances') return firstVisible(all(root, '.df-ribbon-instance-button'));
-    if (ref === 'graph.checks') {
-        const pane = mainPane(root);
-        return firstVisible(all(pane, '[aria-label]').filter((element) => element.getAttribute('aria-label').startsWith('Graph checks:')));
-    }
-    if (ref.startsWith('field:')) {
-        const name = ref.slice('field:'.length);
-        return firstVisible(all(root, '.df-inspector [data-parameter]').filter((element) => element.dataset.parameter === name));
-    }
-    if (ref.startsWith('data.dataset:')) return byEduTarget(root, `dataset-${ref.slice('data.dataset:'.length)}`);
-    if (EDU_TARGETS[ref]) return byEduTarget(root, EDU_TARGETS[ref]);
-    if (ref === 'training.loss') return trainingNodeElement(root, 'loss');
-    if (ref === 'training.optimizer') return trainingNodeElement(root, 'optimizer');
-    return null;
+    const byAria = (label) => all(root, '[aria-label]').filter((element) => element.getAttribute('aria-label') === label);
+    const byEdu = (value) => all(root, '[data-edu-target]').filter((element) => element.dataset.eduTarget === value);
+    if (TAB_TARGETS.includes(ref)) return all(root, '.df-toolbar-tabs [data-tab]').filter((element) => element.dataset.tab === ref.slice('tab.'.length));
+    if (ref === 'toolbar.code') return all(root, '.df-action-segment').filter((element) => element.getAttribute('aria-label') === 'Code');
+    if (RIBBON_LABELS[ref]) return byAria(RIBBON_LABELS[ref]);
+    if (ref === 'ribbon.instances') return all(root, '.df-ribbon-instance-button');
+    if (ref === 'graph.checks') return all(mainPane(root), '[aria-label]').filter((element) => element.getAttribute('aria-label').startsWith('Graph checks:'));
+    if (ref.startsWith('field:')) return all(root, '.df-inspector [data-parameter]').filter((element) => element.dataset.parameter === ref.slice('field:'.length));
+    if (ref.startsWith('data.dataset:')) return byEdu(`dataset-${ref.slice('data.dataset:'.length)}`);
+    if (EDU_TARGETS[ref]) return byEdu(EDU_TARGETS[ref]);
+    if (ref === 'training.loss') return trainingNode(root, 'loss');
+    if (ref === 'training.optimizer') return trainingNode(root, 'optimizer');
+    return [];
+}
+
+/**
+ * Resolve one TargetRef to a visible element, or null. With `{ rendered: true }` an element scrolled or panned off
+ * screen counts too ("Where is it?" scrolls it into view).
+ */
+export function resolveTarget(ref, root = globalThis.document, { rendered = false } = {}) {
+    if (!root || !ref) return null;
+    return first(candidates(ref, root), rendered ? isRendered : isVisible);
 }
 
 /**
@@ -155,24 +166,28 @@ export function reachedOpenTarget(refs = []) {
 }
 
 /**
- * A target the learner has already used, so the ring moves on to the next one: its tab is open, the code panel is
- * open (on that tab), the dataset row is the one shown, or the main pane is inside the block a nodeOpen target names.
+ * A target the learner has already used, so the ring moves on to the next one: its tab was visited in this step
+ * (`visitedTabs`; without it, the tab is open), the code panel is open (on that tab), the dataset row is the one
+ * shown, or the main pane is inside the block a nodeOpen target names.
  */
-export function isTargetDone(ref, root = globalThis.document) {
+export function isTargetDone(ref, root = globalThis.document, { visitedTabs } = {}) {
     if (ref && typeof ref === 'object') return !!ref.nodeOpen && reachedOpenTarget([ref]) !== null;
     if (typeof ref !== 'string') return false;
     const ui = useEduUiStore.getState();
-    if (TAB_TARGETS.includes(ref)) return ui.activeTab === ref.slice('tab.'.length);
+    if (TAB_TARGETS.includes(ref)) {
+        const tab = ref.slice('tab.'.length);
+        return Array.isArray(visitedTabs) ? visitedTabs.includes(tab) : ui.activeTab === tab;
+    }
     if (ref === 'toolbar.code') return !!ui.codeOpen;
     if (ref.startsWith('code.tab:')) return !!ui.codeOpen && ui.codeTab === ref.slice('code.tab:'.length);
-    if (ref.startsWith('data.dataset:')) return byEduTarget(root, `dataset-${ref.slice('data.dataset:'.length)}`)?.getAttribute('aria-current') === 'true';
+    if (ref.startsWith('data.dataset:')) return candidates(ref, root)[0]?.getAttribute('aria-current') === 'true';
     return false;
 }
 
 /** The first visible target of a step's list that is not done yet, with the index of the ref that matched. */
-export function resolveFirstTarget(refs = [], root = globalThis.document) {
+export function resolveFirstTarget(refs = [], root = globalThis.document, options = {}) {
     for (let index = 0; index < refs.length; index++) {
-        if (isTargetDone(refs[index], root)) continue;
+        if (isTargetDone(refs[index], root, options)) continue;
         const element = resolveTarget(refs[index], root);
         if (element) return { element, index, ref: refs[index] };
     }

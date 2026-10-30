@@ -12,14 +12,16 @@ const sameRect = (a, b) => a && b && a.top === b.top && a.left === b.left && a.w
  * It never adds text, never takes pointer events and is hidden from assistive technology; the step text names
  * the control in words. It follows the target while the canvas pans and re-resolves when the UI changes.
  */
-export default function Spotlight({ targets = [], active = true, onResolve }) {
+export default function Spotlight({ targets = [], active = true, onResolve, options }) {
     const [rect, setRect] = useState(null);
     const [pulse, setPulse] = useState(0);
     const elementRef = useRef(null);
     const onResolveRef = useRef(onResolve);
+    const optionsRef = useRef(options);
     const targetKey = JSON.stringify(targets ?? []);
 
     useEffect(() => { onResolveRef.current = onResolve; }, [onResolve]);
+    useEffect(() => { optionsRef.current = options; }, [options]);
 
     useEffect(() => {
         const refs = JSON.parse(targetKey);
@@ -31,7 +33,7 @@ export default function Spotlight({ targets = [], active = true, onResolve }) {
         let frame = 0;
         let last;
         const resolve = () => {
-            const found = resolveFirstTarget(refs);
+            const found = resolveFirstTarget(refs, globalThis.document, optionsRef.current);
             const element = found?.element ?? null;
             if (element !== last) {
                 last = element;
