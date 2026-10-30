@@ -22,7 +22,7 @@ export default function ConfusionMatrix({ record, compact = false, target = true
                 <thead>
                     <tr>
                         <th scope="col" className="edu-tr-corner">
-                            <span className="edu-tr-sr">{tr('confusion.corner')}</span>
+                            <span className="edu-sr-only">{tr('confusion.corner')}</span>
                             <span aria-hidden="true" className="edu-tr-corner-pred">{tr('confusion.predicted')} →</span>
                             <span aria-hidden="true" className="edu-tr-corner-true">{tr('confusion.true')} ↓</span>
                         </th>

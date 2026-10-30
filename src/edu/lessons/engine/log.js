@@ -7,13 +7,8 @@ import { eduKey, readJSON, removeKey, writeJSON } from './storage.js';
  */
 export const LOG_LIMIT = 2000;
 export const LOG_KEY = eduKey('log:v1');
-export const EVENT_TYPES = Object.freeze([
-    'module-start', 'step-enter', 'step-pass', 'step-skip', 'hint', 'show-me', 'reset-step', 'predict', 'warmup',
-    'quiz', 'run', 'code-open', 'module-complete', 'palette-insert', 'step-button',
-]);
 
 let events = null;
-const listeners = new Set();
 
 function load() {
     if (!events) {
@@ -30,7 +25,6 @@ export function logEvent(type, { module = null, step, data } = {}, now = Date.no
     const next = [...load(), event];
     events = next.length > LOG_LIMIT ? next.slice(next.length - LOG_LIMIT) : next;
     writeJSON(LOG_KEY, events);
-    for (const listener of listeners) listener(events);
     return event;
 }
 
@@ -41,12 +35,6 @@ export function readLog() {
 export function clearLog() {
     events = [];
     removeKey(LOG_KEY);
-    for (const listener of listeners) listener(events);
-}
-
-export function subscribeLog(listener) {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
 }
 
 /** The "Download learning log" payload. */

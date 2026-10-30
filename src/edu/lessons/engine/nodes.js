@@ -52,10 +52,6 @@ export function typeMatches(type, wanted) {
     return list.some((item) => item === type || (TYPE_GROUPS[item]?.includes(type) ?? false));
 }
 
-export function isGroupType(name) {
-    return Object.hasOwn(TYPE_GROUPS, name);
-}
-
 function sameScalar(left, right) {
     if (left === right) return true;
     const numeric = (value) => typeof value === 'number' || (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)));
@@ -185,14 +181,6 @@ export function matchNodes(graph, match = {}, options = {}) {
     const matches = order.map((id) => graph.nodes[id]).filter((node) => nodeMatches(node, match, { ...options, graph }));
     if (Number.isInteger(match.nth)) return matches[match.nth] ? [matches[match.nth]] : [];
     return matches;
-}
-
-export function findNode(graph, match, options = {}) {
-    return matchNodes(graph, match, options)[0] ?? null;
-}
-
-export function firstNodeOfType(graph, type, options = {}) {
-    return findNode(graph, { type }, options);
 }
 
 /** A display name for a NodeMatch in check details: its label, id or type. */

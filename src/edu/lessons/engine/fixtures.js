@@ -9,7 +9,6 @@ import { createLossNode, createOptimizerNode, createTrainingEdge, LOSS_DEFAULTS,
  * rows 130 px apart; side inputs go to x = 820.
  */
 export const COLUMN_X = 400;
-export const SIDE_X = 820;
 export const ROW_GAP = 130;
 
 /** A minimal stand-in for useTemplatesStore, enough for ensureStandardTemplate. */

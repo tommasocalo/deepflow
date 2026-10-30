@@ -13,7 +13,7 @@ function chanceLabel(record) {
 
 export function LossTable({ history }) {
     return (
-        <table className="edu-tr-sr">
+        <table className="edu-sr-only">
             <caption>{tr('loss.title')}</caption>
             <thead><tr><th scope="col">{tr('table.epoch')}</th><th scope="col">{tr('table.trainLoss')}</th><th scope="col">{tr('table.valLoss')}</th></tr></thead>
             <tbody>

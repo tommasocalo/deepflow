@@ -106,12 +106,6 @@ export function pyGeneratorCall(id, options, seedExpression = 'data_seed') {
     return `generate_${id}(${pyNumber(size)}, ${pyNumber(options.noise ?? 0)}, ${seedExpression})`;
 }
 
-/** Torch-free source: helpers, points_to_arrays and the generator (used by the parity test). */
-export function toyGeneratorSource(id) {
-    if (!PY_GENERATORS[id]) throw new Error(`No Python generator for "${id}"`);
-    return joinBlocks(PY_PRNG, PY_SPLIT, POINTS, PY_GENERATORS[id]);
-}
-
 /** The PythonLoader of §6.11.1 for a toy dataset spec. */
 export function toyPythonLoader(spec, { options = {}, split = {} } = {}) {
     const regression = spec.target.kind === 'regression';

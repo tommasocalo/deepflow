@@ -39,10 +39,6 @@ export function nextModule(id) {
 }
 
 /** "1", "2", …: the module's order, used in titles such as "2 · Going non-linear". */
-export function moduleNumber(module) {
-    return module?.order ?? (registry.modules.indexOf(module) + 1);
-}
-
 export function subscribeModuleRegistry(listener) {
     listeners.add(listener);
     return () => listeners.delete(listener);

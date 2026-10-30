@@ -26,7 +26,7 @@ export default function AccuracyChart({ record, height = 170 }) {
                 title={tr('acc.title')}
                 desc={tr('acc.summary', { epoch: last.epoch, train: formatAccuracy(last.trainAccuracy), val: formatAccuracy(last.valAccuracy) })}
                 table={(
-                    <table className="edu-tr-sr">
+                    <table className="edu-sr-only">
                         <caption>{tr('acc.title')}</caption>
                         <thead><tr><th scope="col">{tr('table.epoch')}</th><th scope="col">{tr('table.trainAcc')}</th><th scope="col">{tr('table.valAcc')}</th></tr></thead>
                         <tbody>

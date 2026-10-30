@@ -34,8 +34,3 @@ export const useEduUiStore = create((set, get) => ({
 useEduUiStore.subscribe((state, previous) => {
     if (state.activeTab !== previous.activeTab) writeJSON(UI_KEY, { activeTab: state.activeTab });
 });
-
-/** Tests only: return to the first-start state. */
-export function resetUiStoreForTests() {
-    useEduUiStore.setState({ activeTab: 'learn', codeOpen: false, codeTab: 'model', drawerOpen: true });
-}

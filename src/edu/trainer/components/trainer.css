@@ -12,7 +12,6 @@
 .edu-tr-col-head h3 { margin: 0; color: #333; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .edu-tr-head-value { overflow: hidden; color: #333; font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .edu-tr-empty { margin: 6px 0 0; color: #666; font-size: 11.5px; line-height: 1.45; }
-.edu-tr-sr { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* Run settings */
 .edu-tr-settings { display: grid; gap: 9px; }

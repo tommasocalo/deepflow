@@ -81,7 +81,7 @@ export default function TrainerCard({ locked = false, lockedReason = '' }) {
             <button type="button" className="edu-tr-link edu-tr-open" onClick={() => useEduUiStore.getState().setTab('training')}>
                 {tr('card.openTraining')} <span aria-hidden="true">↗</span>
             </button>
-            <p className="edu-tr-sr" aria-live="polite">{announcement}</p>
+            <p className="edu-sr-only" aria-live="polite">{announcement}</p>
         </section>
     );
 }

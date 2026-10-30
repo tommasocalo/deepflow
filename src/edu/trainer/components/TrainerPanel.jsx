@@ -85,7 +85,7 @@ export default function TrainerPanel() {
                 </div>
                 <ResultColumn record={record} />
             </div>
-            <p className="edu-tr-sr" aria-live="polite">{announcement}</p>
+            <p className="edu-sr-only" aria-live="polite">{announcement}</p>
         </section>
     );
 }

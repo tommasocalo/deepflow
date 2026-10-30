@@ -28,11 +28,6 @@ export function exportDatasets() {
     return DATASETS.filter((spec) => spec.training === 'export');
 }
 
-/** Number of classes, or null for regression and next-token targets. */
-export function classCount(spec) {
-    return spec?.target?.kind === 'classes' ? spec.target.size : null;
-}
-
 /** The shape after the batch axis, e.g. '(1, 8, 8)' → [1, 8, 8]. */
 export function parseInputShape(shape) {
     if (typeof shape !== 'string') return null;

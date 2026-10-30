@@ -5,8 +5,6 @@ import { CURRICULUM_VERSION } from '../../config.js';
  * never mutates its input. The session store persists the result under deepflow-edu:progress:v1.
  */
 export const PROGRESS_VERSION = 1;
-export const STEP_STATUSES = Object.freeze(['visited', 'passed', 'skipped']);
-
 export function emptyProgress() {
     return { version: PROGRESS_VERSION, curriculumVersion: CURRICULUM_VERSION, lastModuleId: null, modules: {} };
 }

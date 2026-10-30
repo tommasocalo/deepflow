@@ -12,7 +12,6 @@ import { eduKey, readJSON, removeKey, writeJSON } from './storage.js';
  * templates, the training graph, every registered workspace slice (data binding, trainer settings) and two view
  * flags. Restoring one replaces the live stores and starts a fresh undo history, as loading an example does.
  */
-export const SLOT_IDS = Object.freeze(['sandbox', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7']);
 export const slotKey = (id) => eduKey(`slot:${id}:v1`);
 export const STEP_ENTRY_KEY = eduKey('step-entry:v1');
 

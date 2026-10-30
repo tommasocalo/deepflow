@@ -73,8 +73,8 @@ export default function BoundaryView({ record, size = 220, thumbnail = false, ta
                 <canvas ref={canvasRef} width={boundary.size} height={boundary.size} aria-hidden="true" />
                 <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" focusable="false">{points}</svg>
             </div>
-            <figcaption className={thumbnail ? 'edu-tr-sr' : 'edu-tr-caption'}>
-                <span className="edu-tr-sr">{tr('boundary.title')}. </span>{summary}
+            <figcaption className={thumbnail ? 'edu-sr-only' : 'edu-tr-caption'}>
+                <span className="edu-sr-only">{tr('boundary.title')}. </span>{summary}
             </figcaption>
         </figure>
     );
