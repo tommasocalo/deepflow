@@ -162,7 +162,7 @@ test('chain follows directed paths, with and without allow', () => {
     assert.ok(passes({ chain }, contextOf(mlp())));
     const missing = evaluateCheck({ chain }, contextOf(mlp({ relu: false })));
     assert.equal(missing.pass, false);
-    assert.equal(detail(missing), 'After **hidden**, connect **activation (such as ReLU)**.');
+    assert.equal(detail(missing), 'After **hidden**, connect an **activation (such as ReLU)**.');
     const withDropout = contextOf(mlp({ dropout: true }));
     assert.ok(!passes({ chain }, withDropout), 'Dropout breaks adjacency');
     assert.ok(passes({ chain, allow: ['Dropout'] }, withDropout));

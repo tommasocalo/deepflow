@@ -86,6 +86,12 @@ function matchName(match = {}) {
     return typeName(match.type ?? 'block');
 }
 
+/** The article before a type name in check details ("an activation", "a Flatten"); none before a block's label. */
+function articleOf(match = {}) {
+    if (match.label || match.id || match.name) return '';
+    return /^[aeiou]/i.test(matchName(match)) ? 'an ' : 'a ';
+}
+
 function valueText(value) {
     if (value === null || value === undefined || value === '') return t('value.none');
     if (typeof value === 'boolean') return t(value ? 'value.true' : 'value.false');
@@ -278,12 +284,12 @@ const handlers = {
         const wanted = typeof spec.count === 'number' ? { min: spec.count, max: spec.count } : spec.count ?? { min: 1 };
         const ok = (wanted.min === undefined || nodes >= wanted.min) && (wanted.max === undefined || nodes <= wanted.max);
         if (ok) return pass('has');
-        if (!nodes) return fail('has', 'check.has.none', { type: matchName(match) });
+        if (!nodes) return fail('has', 'check.has.none', { type: matchName(match), a: articleOf(match) });
         return fail('has', 'check.has', { type: matchName(match), actual: nodes, expected: describeCondition(wanted) });
     },
     param(spec, ctx) {
         const nodes = matchNodes(ctx.graph, spec.node ?? {}, matchOptions(ctx));
-        if (!nodes.length) return fail('param', 'check.nodeMissing', { type: matchName(spec.node) });
+        if (!nodes.length) return fail('param', 'check.nodeMissing', { type: matchName(spec.node), a: articleOf(spec.node) });
         const wanted = condition(spec);
         for (const node of spec.every ? nodes : nodes.slice(0, 1)) {
             const value = paramValue(node, spec.name, matchOptions(ctx));
@@ -316,7 +322,7 @@ const handlers = {
     },
     shapeAt(spec, ctx) {
         const node = matchNodes(ctx.graph, spec.node ?? {}, matchOptions(ctx))[0];
-        if (!node) return fail('shapeAt', 'check.nodeMissing', { type: matchName(spec.node) });
+        if (!node) return fail('shapeAt', 'check.nodeMissing', { type: matchName(spec.node), a: articleOf(spec.node) });
         const actual = ctx.report.shapes?.[node.id] ?? null;
         return sameShape(actual, spec.equals) ? pass('shapeAt')
             : fail('shapeAt', 'check.shapeAt', { label: node.label ?? matchName(spec.node), actual: formatShape(actual), expected: formatShape(spec.equals) }, { nodeId: node.id });
@@ -491,11 +497,12 @@ function chainCheck(list, allow, ctx) {
     const starts = ctx.order.filter((id) => matchesAt(id, 0));
     if (Number.isInteger(list[0].nth)) starts.splice(0, starts.length, ...matchNodes(ctx.graph, list[0], options).map((node) => node.id));
     for (const start of starts) if (search(start, 0, new Set([start]))) return pass('chain');
-    if (best.depth < 0) return fail('chain', 'check.chain.start', { type: matchName(list[0]) });
+    if (best.depth < 0) return fail('chain', 'check.chain.start', { type: matchName(list[0]), a: articleOf(list[0]) });
     const after = nodes[best.nodeId];
     return fail('chain', 'check.chain.next', {
         after: after?.label ?? matchName(list[best.depth]),
         next: matchName(list[best.depth + 1]),
+        a: articleOf(list[best.depth + 1]),
         expected: list.map(matchName).join(' → '),
     }, { nodeId: best.nodeId });
 }

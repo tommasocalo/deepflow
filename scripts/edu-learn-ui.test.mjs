@@ -295,7 +295,7 @@ test('a number prediction is committed, revealed with its misconception and neve
 
 test('the hint ladder goes Hint → Another hint → Show me, one undoable edit with an Undo toast', async () => {
     await openStep(2);
-    assert.equal(status(), 'Not yet: After hidden, connect activation (such as ReLU).');
+    assert.equal(status(), 'Not yet: After hidden, connect an activation (such as ReLU).');
     assert.ok(panel().querySelector('[data-edu-target="lesson-palette"]'), 'the palette lists the blocks');
     await click(button('Hint'));
     assert.match(text(panel().querySelector('.edu-hints')), /Hint 1\s*Use the ReLU chip below/);
