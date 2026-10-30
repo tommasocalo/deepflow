@@ -7,7 +7,8 @@ const PAGE = 10;
  * Keys of the treegrid while no editor is open: arrows, Home/End and Page keys
  * move the active cell (Ctrl/⌘ with Home/End to the first or last row); Right
  * and Left open and close rows; Enter and F2 edit a setting or open the row's
- * level; typing on a setting starts editing it; Escape returns to the canvas.
+ * level; typing on a setting starts editing it; Escape returns to the canvas;
+ * Ctrl/⌘+A selects nothing.
  */
 export function useGridKeyboard({ rows, byKey, limit, editing, cells, context, actions, openRow, focusCell, setActive, setMessage, focusCanvas }) {
     return useCallback((event) => {
@@ -31,6 +32,11 @@ export function useGridKeyboard({ rows, byKey, limit, editing, cells, context, a
         // A setting that cannot be edited here says where to change it.
         const explain = () => setMessage(targets.map((target) => `${target.field.name}: ${target.hint}`).join(' · '));
         const modifier = event.ctrlKey || event.metaKey;
+        // Select all would select the whole page's text; in the grid it does nothing.
+        if (modifier && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
+            event.preventDefault();
+            return;
+        }
         switch (event.key) {
             case 'ArrowDown': go(index + 1); break;
             case 'ArrowUp': go(index - 1); break;

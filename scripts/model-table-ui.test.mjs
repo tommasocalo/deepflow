@@ -372,6 +372,23 @@ test('keys typed in the table never reach the canvas', async () => {
     assert.equal(graph().nodes[head.id], undefined, 'Control: Delete on the canvas removes the selected node');
 });
 
+test('Ctrl+A or ⌘A in the grid selects nothing, and an editor keeps it for its text', async () => {
+    await openTable();
+    const selectAll = async (element, modifier) => {
+        const event = new dom.window.KeyboardEvent('keydown', { key: 'a', code: 'KeyA', [modifier]: true, bubbles: true, cancelable: true });
+        await act(() => element.dispatchEvent(event));
+        return event.defaultPrevented;
+    };
+    const cell = cellOf('Dropout', 0);
+    await act(() => cell.focus());
+    for (const modifier of ['ctrlKey', 'metaKey']) assert.equal(await selectAll(cell, modifier), true, `${modifier}+A does not select the page's text`);
+    assert.equal(document.activeElement, cell);
+    const editor = await editConfig('Dropout');
+    const input = editor.querySelector('input[aria-label="Dropout p"]');
+    assert.equal(await selectAll(input, 'ctrlKey'), false);
+    await key(input, 'Escape');
+});
+
 test('selection follows the table and the canvas', async () => {
     await openTable();
     await click(cellOf('ln_f', 2));
