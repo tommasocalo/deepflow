@@ -225,7 +225,7 @@ test('a root setting is edited in place as one undo step', async () => {
     assert.equal(cellOf('Dropout', 3).querySelector('.df-mt-editor'), null, 'Enter commits and closes the editor');
     assert.equal(rootNode('Dropout').parameters.p, 0.2);
     assert.equal(history().undoCount, 1);
-    assert.equal(history().undoLabel, 'Set Dropout p');
+    assert.equal(history().undoLabel, 'Set Dropout p = 0.2');
     assert.match(cellOf('Dropout', 3).textContent, /0\.2/);
     await act(() => history().undo());
     assert.equal(rootNode('Dropout').parameters.p, 0.1);
@@ -284,10 +284,15 @@ test('Values mode follows a reference to its source and keeps formulas read-only
     const editor = await editConfig('ln_1');
     const input = editor.querySelector('input[aria-label="ln_1 normalized_shape"]');
     assert.equal(input.value, '768');
+    const tag = editor.querySelector('.df-mt-editor-target');
+    assert.equal(tag?.textContent, 'writes global d_model', 'The editor names the value it writes');
+    assert.ok(input.getAttribute('aria-describedby').split(' ').includes(tag.id));
     await typeText(input, '1024');
     await key(input, 'Enter');
     assert.equal(globalValue('d_model'), 1024);
     assert.equal(history().undoCount, 1);
+    assert.match(history().undoLabel, /^Set d_model = 1024 \(global, \d+ fields\)$/, 'Undo names the global, not the cell');
+    assert.match(mainTable().querySelector('.df-mt-focus-text').textContent, /^Set d_model = 1024 \(global, \d+ fields\) · /);
     assert.match(cellOf('mlp fc', 3).textContent, /1024\s*→\s*4096/, 'Every layer that uses the global follows');
     await act(() => history().undo());
     assert.equal(globalValue('d_model'), 768);
@@ -316,7 +321,7 @@ test('Escape cancels, invalid input stays open, and $ completion never commits',
     await key(input, 'Enter');
     assert.ok(cellOf('Dropout', 3).querySelector('.df-mt-editor'), 'The editor stays open');
     assert.equal(input.getAttribute('aria-invalid'), 'true');
-    assert.match(mainTable().querySelector('.df-mt-focus-text').textContent, /Unknown name \$nope/);
+    assert.match(mainTable().querySelector('.df-mt-focus-text').textContent, /No parameter named \$nope/);
     assert.equal(rootNode('Dropout').parameters.p, 0.1);
     assert.equal(history().undoCount, 0);
 
@@ -480,7 +485,7 @@ test('an exposed field bound on its instance is edited where the instance binds 
     assert.equal(rootNode('ResNet stages').bindings.stride, 3, 'The binding the instances read changes');
     assert.equal(block.freeParameters.find((parameter) => parameter.name === 'stride').default, 1, 'The unused default stays');
     assert.match(cellOf('Conv2d', 3).textContent, /s=3/);
-    assert.equal(history().undoLabel, 'Set Conv2d stride');
+    assert.equal(history().undoLabel, 'Set ResNet stages stride = 3 (all 3 instances)', 'The undo step names the binding that changed');
     await act(() => history().undo());
     assert.equal(rootNode('ResNet stages').bindings.stride, 2);
 });

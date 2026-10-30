@@ -49,6 +49,9 @@
 .df-mt-col-count { width: 38px; }
 .df-mt-col-output { width: 112px; }
 .df-mt-col-params, .df-mt-col-metric { width: 66px; }
+/* Bytes and their ranges are wider than counts: 0.79–3.15 MB. */
+.df-mt-table.is-activation { min-width: 584px; }
+.df-mt-table.is-activation .df-mt-col-metric { width: 86px; }
 .df-mt-col-share { width: 80px; }
 .df-mt-table thead th { position: sticky; top: 0; z-index: 3; height: 24px; padding: 0 6px; border-bottom: 1px solid #111; background: #fff; color: #555; font: 600 9px/1.2 ui-sans-serif, system-ui, sans-serif; letter-spacing: .05em; text-align: left; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .df-mt-table thead th.df-mt-layer { z-index: 4; left: 0; }
@@ -149,6 +152,9 @@ select.df-mt-input { width: auto; padding-right: 2px; }
 /* The reason an edit was refused, next to the field. */
 .df-mt-input-error { position: absolute; top: calc(100% + 3px); left: 0; z-index: 8; width: max-content; max-width: 240px; padding: 2px 6px; border: 1px solid #dc2626; border-radius: 2px; background: #fff; color: #b91c1c; font: 500 10px/14px ui-sans-serif, system-ui, sans-serif; white-space: normal; box-shadow: 0 2px 6px rgb(0 0 0 / 12%); }
 .df-mt-field.is-readonly { cursor: not-allowed; }
+/* Where a Values edit lands, beside the focused field. */
+.df-mt-editor-target { margin-left: 5px; color: #6d28d9; font: 500 10px/18px ui-sans-serif, system-ui, sans-serif; white-space: nowrap; }
+.df-mt-editor-target.is-idle { display: none; }
 
 .df-mt-more td { padding: 6px; border-bottom: 1px solid #efefea; text-align: center; }
 .df-mt-more button { padding: 3px 8px; border: 1px solid #111; border-radius: 2px; background: #fff; font-size: 10px; font-weight: 600; }

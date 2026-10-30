@@ -185,6 +185,7 @@ export default function ModelTablePanel({ paneId = 'main' }) {
     const configHeaderRef = useRef(null);
     const dragRef = useRef(null);
     const rowsRef = useRef(new Map());
+    const contextRef = useRef({ templateUses: {} });
 
     const ready = !!metrics?.root;
     const rows = useMemo(() => ready ? buildModelTableRows({ metrics, rootGraph: graph, templates, depth, overrides }) : [], [ready, metrics, graph, templates, depth, overrides]);
@@ -205,7 +206,8 @@ export default function ModelTablePanel({ paneId = 'main' }) {
 
     useLayoutEffect(() => {
         rowsRef.current = byKey;
-    }, [byKey]);
+        contextRef.current = context;
+    }, [byKey, context]);
 
     const rowElement = useCallback((key) => [...(bodyRef.current?.children ?? [])].find((element) => element.dataset.rowKey === key), []);
     const focusCell = useCallback((key, column) => rowElement(key)?.querySelector(`[data-col="${column}"]`)?.focus({ preventScroll: false }), [rowElement]);
@@ -290,9 +292,10 @@ export default function ModelTablePanel({ paneId = 'main' }) {
             setEditing({ key: row.key, fieldName, seed });
         },
         editDone: (row, edits, { refocus = true } = {}) => {
-            const written = edits?.length ? applyModelTableEdit(store, row, edits) : 0;
+            const result = edits?.length ? applyModelTableEdit(store, row, edits, { templateUses: contextRef.current.templateUses }) : { written: 0 };
             setEditing(null);
-            setMessage(written ? `Set ${row.label} ${edits.map((edit) => edit.field.name).join(', ')} · ⌘Z / Ctrl+Z to undo` : edits ? 'No change' : 'Edit cancelled');
+            // The confirmation names the value that changed, as the undo step does.
+            setMessage(result.written ? `${result.label} · ⌘Z / Ctrl+Z to undo` : edits ? 'No change' : 'Edit cancelled');
             if (refocus) focusCell(row.key, CONFIG_COLUMN);
         },
         message: setMessage,
@@ -507,7 +510,7 @@ export default function ModelTablePanel({ paneId = 'main' }) {
                     }
                     setCovered((current) => current === under ? current : under);
                 }}>
-                <table className="df-mt-table" role="treegrid" aria-label="Model layers" aria-rowcount={rows.length + 1} aria-describedby={assumptionsId}>
+                <table className={`df-mt-table is-${metricColumn}`} role="treegrid" aria-label="Model layers" aria-rowcount={rows.length + 1} aria-describedby={assumptionsId}>
                     <colgroup>
                         <col className="df-mt-col-layer" /><col className="df-mt-col-count" /><col className="df-mt-col-output" />
                         <col className="df-mt-col-config" /><col className="df-mt-col-params" /><col className="df-mt-col-metric" /><col className="df-mt-col-share" />

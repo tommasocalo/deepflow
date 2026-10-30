@@ -123,9 +123,11 @@ function occurrenceLabel(trail) {
 }
 
 /**
- * A metric over every merged occurrence. `each` and the per-instance list
- * leave out occurrences whose value is unknown, so a half-analysed instance
- * never reads as a small one.
+ * A metric over every merged occurrence. Each occurrence is exact (a number),
+ * a lower bound (`{ atLeast }`: part of it is unknown) or unknown (`null`).
+ * `each` is the range of the exact occurrences only and `knownCount` says how
+ * many there are, so a half-analysed instance never reads as a small one and
+ * "× N = total" is claimed only when every occurrence is known.
  */
 function metricSummary(list, occurrences, metric, labels) {
     let total = 0;
@@ -135,8 +137,9 @@ function metricSummary(list, occurrences, metric, labels) {
         total += totals[metric];
         for (const [key, value] of totals.unresolved[metric]) unresolved.set(key, value);
     }
-    const values = occurrences.map((occurrence) => occurrence.unresolved[metric].size ? null : occurrence[metric]);
-    const known = values.filter((value) => value !== null);
+    const values = occurrences.map((occurrence) => !occurrence.unresolved[metric].size ? occurrence[metric]
+        : occurrence[metric] > 0 ? { atLeast: occurrence[metric] } : null);
+    const known = values.filter((value) => typeof value === 'number');
     const each = occurrences.length > 1 && known.length ? { min: Math.min(...known), max: Math.max(...known) } : null;
     const items = [];
     const seen = new Set();
@@ -151,8 +154,10 @@ function metricSummary(list, occurrences, metric, labels) {
         unresolved: unresolved.size,
         unresolvedItems: items,
         each,
-        // Which instances differ: one hover lists them.
-        perInstance: each && each.min !== each.max ? valueRuns(values, labels) : null,
+        knownCount: known.length,
+        count: occurrences.length,
+        // Which instances differ, or are not known exactly: one hover lists them.
+        perInstance: occurrences.length > 1 && (known.length < values.length || each.min !== each.max) ? valueRuns(values, labels) : null,
         trainable: metric === 'params' ? list.reduce((sum, merged) => sum + subtreeMetrics(merged.metrics).trainable, 0) : undefined,
     };
 }
@@ -352,6 +357,11 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
                 ? unique([...errors.filter((message) => !SUMMARY_ERROR.test(message)),
                     ...list.flatMap((merged) => merged.metrics.instances.flatMap((instance) => instance.instanceIssues ?? []))])
                 : errors;
+            // A shared definition can fail in some of its instances only: name them.
+            const failing = list.map((merged) => [...merged.metrics.errors, ...(row.expanded ? merged.metrics.instances.flatMap((instance) => instance.instanceIssues ?? []) : [])]
+                .some((message) => row.errors.includes(message)));
+            row.failing = row.errors.length && list.length > 1
+                ? { count: failing.filter(Boolean).length, of: list.length, runs: valueRuns(failing, occurrenceLabels).filter((run) => run.value) } : null;
             row.warnings = unique([...(stopped ? [STOPPED_WARNING] : []), ...list.flatMap((merged) => merged.metrics.warnings)]);
             row.parameterIssues = {};
             for (const merged of list) {

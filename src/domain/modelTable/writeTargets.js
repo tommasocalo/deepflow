@@ -175,6 +175,45 @@ export function describeTarget(target, { row, rootGraph, templates, templateUses
     return `Edits ${node?.label ?? row.label}`;
 }
 
+const valueText = (value) => value === null || value === undefined || value === '' ? 'default'
+    : Array.isArray(value) ? `(${value.join(', ')})` : String(value);
+const usesText = (count) => `${count} use${count === 1 ? '' : 's'}`;
+
+/**
+ * Where a value goes when it is not the cell's own field: `global d_model`,
+ * `default of stride in ResNet block`, `stride on ResNet stages`. Null when
+ * the edit writes the field itself.
+ */
+export function targetTag(target, { row, rootGraph, templates }) {
+    if (target.kind === 'global') return `global ${target.name}`;
+    if (target.kind === 'templateDefault') return `default of ${target.name} in ${templates[target.templateId]?.name ?? 'its definition'}`;
+    if (target.kind === 'readonly' || target.nodeId === row.nodeId) return null;
+    const graph = target.kind === 'rootNode' ? rootGraph : templates[target.templateId]?.graph;
+    return `${target.field} on ${graph?.nodes?.[target.nodeId]?.label ?? 'its container'}`;
+}
+
+/**
+ * One edit in words, naming the value that really changes and how far it
+ * reaches: `d_model = 1024 (global, 6 fields)`, `ResNet stages stride = 2
+ * (all 3 instances)`, `mlp proj out_features = 1024 (shared Transformer
+ * block, 12 uses)`. Undo labels and confirmations use it.
+ */
+export function targetSummary(target, value, { row, rootGraph, templates, templateUses = {} }) {
+    const text = valueText(value);
+    const uses = (templateId) => templateUses[templateId] ?? 0;
+    const shared = (templateId) => `${templates[templateId]?.name ?? 'component'}, ${usesText(uses(templateId))}`;
+    if (target.kind === 'global') {
+        const count = globalUseCount(rootGraph, templates, target.name);
+        return `${target.name} = ${text} (global, ${count} field${count === 1 ? '' : 's'})`;
+    }
+    if (target.kind === 'templateDefault') return `${target.name} = ${text} (default in ${shared(target.templateId)})`;
+    const own = target.nodeId === row.nodeId;
+    const graph = target.kind === 'rootNode' ? rootGraph : templates[target.templateId]?.graph;
+    const where = own ? row.label : graph?.nodes?.[target.nodeId]?.label ?? 'its container';
+    if (target.kind === 'rootNode') return `${where} ${target.field} = ${text}${!own && row.multiplicity > 1 ? ` (all ${row.multiplicity} instances)` : ''}`;
+    return `${where} ${target.field} = ${text}${uses(target.templateId) > 1 ? ` (shared ${shared(target.templateId)})` : ''}`;
+}
+
 /**
  * Resolve the owner of one config field, from live store state. Symbols mode
  * edits the expression where it is written. Values mode follows a direct
@@ -283,6 +322,12 @@ function unknownNames(value, scope) {
     return parameterReferences(value).filter((name) => !Object.hasOwn(scope, name) || scope[name] === null || scope[name] === undefined);
 }
 
+/** A name nothing defines, spelled as it was typed: `abc` stays `abc`, `$abc` stays `$abc`. */
+function unknownName(value, name) {
+    const text = Array.isArray(value) ? value.join(', ') : String(value);
+    return `No parameter named ${text.includes(`$${name}`) ? `$${name}` : name}`;
+}
+
 const BATCH_MARK = /^(none|null|b|n|\?)$/i;
 const POSITIVE_INTEGER = /^\+?[1-9]\d*$/;
 
@@ -316,7 +361,7 @@ export function precheckCellValue(value, { spec, scope = {}, literalOnly = false
     if (literalOnly && !isLiteralValue(value, spec)) return 'Values mode sets a value here; switch to Symbols to write an expression.';
     if (source === 'count') {
         const missing = unknownNames(value, scope);
-        if (missing.length) return `Unknown name $${missing[0]}`;
+        if (missing.length) return unknownName(value, missing[0]);
         return resolveRepeatCount(value, scope).error ?? null;
     }
     const type = spec?.type;
@@ -326,7 +371,7 @@ export function precheckCellValue(value, { spec, scope = {}, literalOnly = false
     if (type === 'tuple' || spec?.name === 'shape') {
         if (typeof value === 'number') return Number.isFinite(value) ? null : 'Not a number';
         const missing = unknownNames(value, scope);
-        if (missing.length) return `Unknown name $${missing[0]}`;
+        if (missing.length) return unknownName(value, missing[0]);
         const dimensions = resolveDimensionTuple(value, scope);
         if (dimensions === null || !dimensions.length) return 'Not a list of sizes';
         if (dimensions.some((dimension) => !Number.isInteger(dimension) || dimension < 0)) return 'Sizes must be whole numbers';
@@ -337,11 +382,11 @@ export function precheckCellValue(value, { spec, scope = {}, literalOnly = false
     if (type === 'bool') {
         if (typeof resolved === 'boolean') return null;
         const missing = unknownNames(value, scope);
-        return missing.length ? `Unknown name $${missing[0]}` : 'Must be true or false';
+        return missing.length ? unknownName(value, missing[0]) : 'Must be true or false';
     }
     if (typeof resolved !== 'number' || !Number.isFinite(resolved)) {
         const missing = unknownNames(value, scope);
-        return missing.length ? `Unknown name $${missing[0]}` : 'Not a number';
+        return missing.length ? unknownName(value, missing[0]) : 'Not a number';
     }
     if (type === 'int' && !Number.isInteger(resolved)) return 'Must be an integer';
     return null;

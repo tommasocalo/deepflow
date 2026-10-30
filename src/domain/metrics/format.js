@@ -59,6 +59,26 @@ export function formatExact(value) {
     return finite(value) ? exact.format(value) : '?';
 }
 
+/** The size of each unit suffix the formatters write. */
+const UNIT_SIZES = Object.fromEntries([...COUNT_UNITS, ...MAC_UNITS, ...BYTE_UNITS, [1, ' B']].map(([size, suffix]) => [suffix, size]));
+const unitOf = (text) => text.match(/ ?[A-Za-z]+$/)?.[0] ?? '';
+
+/**
+ * A per-instance range in one unit, the larger value's: 1.86–295K,
+ * 0.79–3.15 MB. A low end that would round to zero keeps its own unit.
+ */
+export function formatMetricRange(metric, min, max) {
+    const high = formatMetric(metric, max, { compact: true });
+    const low = formatMetric(metric, min, { compact: true });
+    if (high === null || low === null) return null;
+    const unit = unitOf(high);
+    if (!unit || !UNIT_SIZES[unit]) return `${low}–${high}`;
+    if (unitOf(low) === unit) return `${low.slice(0, low.length - unit.length)}–${high}`;
+    const scaledLow = min / UNIT_SIZES[unit];
+    const text = scaledLow.toFixed(scaledLow < 10 ? 2 : scaledLow < 100 ? 1 : 0);
+    return Number(text) === 0 ? `${low}–${high}` : `${text}–${high}`;
+}
+
 /** The formatter for a metric lens. */
 export function formatMetric(metric, value, options) {
     if (metric === 'macs') return formatMacs(value, options);

@@ -3,8 +3,9 @@ import { test } from 'node:test';
 import { computeModelMetrics, formatShare } from '../src/domain/metrics/index.js';
 import { buildModelTableRows, readingOrder, rowKey } from '../src/domain/modelTable/rows.js';
 import { configAccessibleText } from '../src/domain/modelTable/configFields.js';
+import { cellStatus, eachText, failingText, metricLines, SHAPE_GUESS_NOTE, shareInfo } from '../src/domain/modelTable/cellText.js';
 import { cutExpression, fitConfigParts, fitShapeText } from '../src/domain/modelTable/fitText.js';
-import { describeTarget, followReference, parseCellValue, precheckCellValue, resolveWriteTarget } from '../src/domain/modelTable/writeTargets.js';
+import { describeTarget, followReference, parseCellValue, precheckCellValue, resolveWriteTarget, targetSummary, targetTag } from '../src/domain/modelTable/writeTargets.js';
 import { createEdge, createLayerNode, createRepeatNode, createSuperNodeInstance, createTemplate } from '../src/domain/architecture/index.js';
 import { getEntry } from '../src/domain/library/index.js';
 import { gpt2Storyboard } from '../src/storyboards/gpt2.js';
@@ -240,7 +241,9 @@ test('cell values parse like parameter fields and are checked before writing', (
     assert.equal(parseCellValue('tanh', { type: 'enum', options: ['none', 'tanh'] }), 'tanh');
     const scope = { d_model: 768, i: 0 };
     assert.equal(precheckCellValue('2 * d_model', { spec: { type: 'int' }, scope }), null);
-    assert.equal(precheckCellValue('$nope', { spec: { type: 'int' }, scope }), 'Unknown name $nope');
+    assert.equal(precheckCellValue('$nope', { spec: { type: 'int' }, scope }), 'No parameter named $nope');
+    assert.equal(precheckCellValue('abc', { spec: { type: 'int' }, scope }), 'No parameter named abc', 'The name reads as it was typed, without an added $');
+    assert.equal(precheckCellValue('abc', { spec: { type: 'int' }, scope, source: 'count' }), 'No parameter named abc');
     assert.equal(precheckCellValue('d_model / 5', { spec: { type: 'int' }, scope }), 'Must be an integer');
     assert.equal(precheckCellValue('$d_model', { spec: { type: 'int' }, scope, literalOnly: true }), 'Values mode sets a value here; switch to Symbols to write an expression.');
     assert.equal(precheckCellValue(null, { spec: { type: 'int' }, scope, source: 'count' }), 'Required');
@@ -340,6 +343,9 @@ test('an eye alias bound on its instance is edited where the instance binds it',
     const unboundRow = find(rowsAt(unbound, 'blocks'), 'Conv2d');
     const unboundTarget = target(unbound, unboundRow, 'stride', 'values');
     assert.deepEqual([unboundTarget.kind, unboundTarget.templateId, unboundTarget.name], ['templateDefault', block.id, 'stride'], 'Nothing binds it: the default is what every instance reads');
+    assert.equal(targetTag(unboundTarget, { row: unboundRow, rootGraph: unbound.graph, templates: unbound.templates }), 'default of stride in ConvBlock', 'The editor says where the value goes');
+    assert.equal(targetSummary(unboundTarget, 2, { row: unboundRow, rootGraph: unbound.graph, templates: unbound.templates, templateUses: unbound.metrics.templateUses }),
+        'stride = 2 (default in ConvBlock, 3 uses)');
 
     const stages = Object.values(architectureStore.getState().graph.nodes).find((node) => node.label === 'ResNet stages');
     architectureStore.getState().patchRootNode(stages.id, { bindings: { ...stages.bindings, stride: 2 } });
@@ -350,6 +356,8 @@ test('an eye alias bound on its instance is edited where the instance binds it',
     assert.deepEqual([valuesTarget.kind, valuesTarget.nodeId, valuesTarget.source, valuesTarget.field, valuesTarget.literalOnly],
         ['rootNode', stages.id, 'bindings', 'stride', true], 'Values follows $stride to the stages binding');
     assert.equal(describeTarget(valuesTarget, { row, rootGraph: bound.graph, templates: bound.templates }), 'Sets stride on ResNet stages · all 3 instances');
+    assert.equal(targetTag(valuesTarget, { row, rootGraph: bound.graph, templates: bound.templates }), 'stride on ResNet stages');
+    assert.equal(targetSummary(valuesTarget, 3, { row, rootGraph: bound.graph, templates: bound.templates }), 'ResNet stages stride = 3 (all 3 instances)');
     const symbolsTarget = target(bound, row, 'stride', 'symbols');
     assert.deepEqual([symbolsTarget.kind, symbolsTarget.name], ['templateDefault', 'stride'], 'Symbols still edits the definition default');
 });
@@ -459,6 +467,73 @@ test('an Input shape is checked in the grammar validation reads before it is wri
     // Other tuples allow zero (padding) and resolve names.
     assert.equal(precheckCellValue('(0, 0)', { spec: { name: 'padding', type: 'tuple' } }), null);
     assert.equal(precheckCellValue('($k, $k)', { spec: { name: 'kernel_size', type: 'tuple' }, scope: { k: 3 } }), null);
-    assert.equal(precheckCellValue('(3, $nope)', { spec: { name: 'kernel_size', type: 'tuple' }, scope: {} }), 'Unknown name $nope');
+    assert.equal(precheckCellValue('(3, $nope)', { spec: { name: 'kernel_size', type: 'tuple' }, scope: {} }), 'No parameter named $nope');
     assert.equal(precheckCellValue('()', { spec: { name: 'kernel_size', type: 'tuple' } }), 'Not a list of sizes');
+});
+
+test('partial states never claim a per-instance figure or × N for instances that are not known', () => {
+    load(gpt2Storyboard);
+    // d_model = 1024 with 12 heads: the head split fails, so every block after the first is unknown.
+    architectureStore.getState().patchGlobalParameter('d_model', { default: 1024 });
+    const partial = model();
+    const ops = rowsAt(partial, 'ops');
+    const q = find(ops, 'Q projection');
+    assert.deepEqual([q.macs.total, q.macs.knownCount, q.macs.count], [1073741824, 1, 12], 'One of 12 instances is known exactly');
+    assert.equal(eachText('macs', q.macs), null, 'No "1.07G ea" beside a total that covers one instance');
+    const lines = metricLines('macs', q.macs, q);
+    assert.equal(lines[0], 'At least 1,073,741,824 MACs: exact in 1 of 12 instances');
+    assert.equal(lines[1], 'i=0: 1,073,741,824 · i=1–11: ?', 'Each instance says what is known');
+    assert.ok(lines.every((line) => !/× 12 =/.test(line)));
+    assert.equal(eachText('params', q.params), '1.05M ea', 'Parameters do not depend on the shapes: every instance is known');
+    assert.equal(metricLines('params', q.params, q)[0], '1,049,600 parameters per instance × 12 = 12,595,200');
+
+    const blocks = find(rowsAt(partial, 'blocks'), 'Transformer blocks');
+    assert.equal(blocks.params.knownCount, 0);
+    assert.deepEqual(blocks.params.perInstance.map((run) => [run.from, run.to, run.value]), [['i=0', 'i=11', { atLeast: 12596224 }]], 'Lower bounds read ≥ per instance');
+    assert.equal(metricLines('params', blocks.params, blocks)[1], 'i=0–11: ≥ 12,596,224');
+    assert.match(cellStatus(q, 5, { lens: 'macs', modelTotal: partial.metrics.totals.macs, modelPartial: true }), /^At least 1,073,741,824 MACs: exact in 1 of 12 instances · i=0: 1,073,741,824 · i=1–11: \? · Not counted: /,
+        'The status line carries the breakdown');
+});
+
+test('shares of a partial total are upper bounds, or unknown where the row is partial too', () => {
+    load(gpt2Storyboard);
+    const block = templatesStore.getState().templates[Object.values(architectureStore.getState().graph.nodes).find((node) => node.label === 'Transformer blocks').templateId];
+    const proj = Object.values(block.graph.nodes).find((node) => node.label === 'mlp proj');
+    templatesStore.getState().patchTemplateNode(block.id, proj.id, { parameterValues: { ...proj.parameterValues, out_features: 1024 } });
+    const broken = model();
+    const rows = rowsAt(broken, 'blocks');
+    const total = broken.metrics.totals.params;
+    assert.ok(broken.metrics.totals.unresolved.params.size > 0, 'The model total is a lower bound');
+    const share = (label) => shareInfo(find(rows, label), 'params', total, true);
+    assert.equal(share('token embedding').text, '≤20.0%', 'An exact row of a partial total: at most');
+    assert.equal(share('ln_f').text, '<0.1%', '"<0.1%" is already a bound');
+    assert.equal(share('Transformer blocks').text, '?', 'Partial row and partial total: either way');
+    assert.match(share('Transformer blocks').title, /^Unknown share: /);
+    assert.equal(shareInfo(find(rows, 'token embedding'), 'params', total, false).text, '20.0%');
+
+    // Shared definitions name the instances that fail.
+    const ln1 = find(rows, 'ln_1');
+    assert.equal(failingText(ln1), 'Fails in i=1–11 (11 of 12)', 'Block 0 still reads 768 wide');
+    assert.match(cellStatus(ln1, 0, { lens: 'params' }), /internal errors: Element-wise dim 2 mismatch: 1024 vs 768 · Fails in i=1–11 \(11 of 12\)$/);
+    const lnF = find(rows, 'ln_f');
+    assert.equal(lnF.shape.unknown, true);
+    assert.ok(cellStatus(lnF, 2, { lens: 'params' }).endsWith(SHAPE_GUESS_NOTE), 'A ? shape says why the canvas still draws one');
+});
+
+test('edits are summarised by the value that really changes', () => {
+    const ctx = load(gpt2Storyboard);
+    const rows = rowsAt(ctx, 'blocks');
+    const ln1 = find(rows, 'ln_1');
+    const global = target(ctx, ln1, 'normalized_shape', 'values');
+    const uses = ctx.metrics.templateUses;
+    assert.equal(targetTag(global, { row: ln1, rootGraph: ctx.graph, templates: ctx.templates }), 'global d_model');
+    assert.match(targetSummary(global, 1024, { row: ln1, rootGraph: ctx.graph, templates: ctx.templates, templateUses: uses }), /^d_model = 1024 \(global, \d+ fields\)$/);
+    const dropout = find(rows, 'attention projection dropout');
+    const shared = target(ctx, dropout, 'p', 'symbols');
+    assert.equal(targetTag(shared, { row: dropout, rootGraph: ctx.graph, templates: ctx.templates }), null, 'The cell\'s own field needs no tag');
+    assert.equal(targetSummary(shared, 0.2, { row: dropout, rootGraph: ctx.graph, templates: ctx.templates, templateUses: uses }),
+        'attention projection dropout p = 0.2 (shared Transformer block, 12 uses)');
+    const root = find(rows, 'Dropout');
+    assert.equal(targetSummary(target(ctx, root, 'p', 'values'), null, { row: root, rootGraph: ctx.graph, templates: ctx.templates }), 'Dropout p = default');
+
 });

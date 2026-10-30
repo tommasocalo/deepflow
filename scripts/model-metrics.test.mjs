@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { validate } from '../src/validation/validator.js';
 import { countArchitectureParameters, layerSize } from '../src/domain/optimization/parameterCount.js';
-import { cachedModelMetrics, computeModelMetrics, formatBytes, formatCount, formatMacs, formatShare, instanceTotals, layerMacs, subtreeMetrics } from '../src/domain/metrics/index.js';
+import { cachedModelMetrics, computeModelMetrics, formatBytes, formatCount, formatMacs, formatMetricRange, formatShare, instanceTotals, layerMacs, subtreeMetrics } from '../src/domain/metrics/index.js';
 import { createEdge, createLayerNode, createRepeatNode, createTemplate, moveNode, patchLayerParameters } from '../src/domain/architecture/index.js';
 import { getEntry } from '../src/domain/library/index.js';
 import { gpt2Storyboard } from '../src/storyboards/gpt2.js';
@@ -291,4 +291,11 @@ test('metric formatting stays compact and labelled', () => {
     assert.deepEqual([145824153600, 2415919104].map(formatMacs), ['145.8G', '2.42G']);
     assert.deepEqual([205852672, 4034203648, 652].map(formatBytes), ['205.9 MB', '4.03 GB', '652 B']);
     assert.deepEqual([0.5217, 0.0000941, 0, null, 1].map(formatShare), ['52.2%', '<0.1%', '', '', '100%']);
+    // Per-instance ranges share one unit, the larger value's, so they fit a narrow column.
+    assert.equal(formatMetricRange('activation', 786432, 3145728), '0.79–3.15 MB');
+    assert.equal(formatMetricRange('activation', 262144, 1048576), '0.26–1.05 MB');
+    assert.equal(formatMetricRange('params', 1856, 295424), '1.86–295K');
+    assert.equal(formatMetricRange('macs', 1769472, 301989888), '1.77–302M');
+    assert.equal(formatMetricRange('params', 768, 2362368), '768–2.36M', 'A unitless low end stays as it is');
+    assert.equal(formatMetricRange('activation', 652, 1048576), '652 B–1.05 MB', 'A low end that would read 0.00 keeps its own unit');
 });

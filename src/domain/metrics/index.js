@@ -5,4 +5,4 @@ export {
     ANALYSIS_LIMITS, BUDGET_ERROR, cachedModelMetrics, computeModelMetrics, definitionFamily, FUSED_FAMILIES, instanceTotals, levelSubtree, METRICS, modelTotals,
     PATH_SEPARATOR, subtreeMetrics, SUMMARY_ERROR,
 } from './modelMetrics.js';
-export { formatBytes, formatCount, formatExact, formatMacs, formatMetric, formatShare } from './format.js';
+export { formatBytes, formatCount, formatExact, formatMacs, formatMetric, formatMetricRange, formatShare } from './format.js';

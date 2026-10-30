@@ -56,6 +56,8 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
         return [part.name, part.name === firstName && seed !== undefined && seed !== null ? seed : initial];
     })));
     const [errors, setErrors] = useState({});
+    // The focused field says where its value goes when that is not the field itself.
+    const [focused, setFocused] = useState(firstName);
     const [initial] = useState(() => Object.fromEntries(editable.map((part) => [part.name, initialText(targets[part.name], context)])));
     const done = useRef(false);
     const editorRef = useRef(null);
@@ -123,7 +125,10 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
         event.stopPropagation();
     };
     // Say where the value goes before anything is written.
-    const announce = (part) => onMessage(`${part.name}: ${targets[part.name].hint} · Enter apply · Esc cancel`);
+    const announce = (part) => {
+        setFocused(part.name);
+        onMessage(`${part.name}: ${targets[part.name].hint} · Enter apply · Esc cancel`);
+    };
     const update = (name, text) => {
         setDrafts((current) => ({ ...current, [name]: text }));
         if (errors[name]) setErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== name)));
@@ -156,11 +161,12 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
             const text = drafts[part.name] ?? '';
             const placeholder = part.values.text;
             const error = errors[part.name];
+            const tagId = info.tag ? `${errorId}-${part.name}-target` : null;
             const common = {
                 'data-field-input': part.name,
                 'aria-label': `${row.label} ${part.name}`,
                 'aria-invalid': !!error,
-                'aria-describedby': error ? `${errorId}-${part.name}` : undefined,
+                'aria-describedby': [error ? `${errorId}-${part.name}` : null, tagId].filter(Boolean).join(' ') || undefined,
                 title: error ?? info.hint,
                 autoFocus: part.name === firstName,
                 className: `df-mt-input${error ? ' is-invalid' : ''}`,
@@ -168,7 +174,11 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
                 onClick: (event) => event.stopPropagation(),
                 onDoubleClick: (event) => event.stopPropagation(),
             };
-            const bubble = error && <span id={`${errorId}-${part.name}`} className="df-mt-input-error">{error}</span>;
+            const bubble = <>
+                {error && <span id={`${errorId}-${part.name}`} className="df-mt-input-error">{error}</span>}
+                {/* Values mode can write a global, a default or a container binding: say which, beside the field. */}
+                {tagId && <span id={tagId} className={`df-mt-editor-target${focused === part.name ? '' : ' is-idle'}`}>writes {info.tag}</span>}
+            </>;
             if (part.spec?.type === 'enum') {
                 return <span key={part.name} className="df-mt-input-wrap"><Prefix prefix={part.prefix} />
                     <select {...common} value={text} onFocus={() => announce(part)} onChange={(event) => update(part.name, event.target.value)}>
