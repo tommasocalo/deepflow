@@ -32,7 +32,7 @@
 /* Escape in the Model table returns focus to the canvas; mouse focus draws no ring. */
 [data-architecture-canvas]:focus { outline: none; }
 [data-architecture-canvas]:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
-/* The first Tab stop of a canvas with a docked tool: hidden until focused. */
-.df-skip-link { position: absolute; top: 8px; left: 50%; z-index: 30; padding: 4px 10px; border: 1px solid #111; border-radius: 2px; background: #fff6cf; color: #111; font-size: 11px; font-weight: 600; white-space: nowrap; transform: translate(-50%, -200%); }
-.df-skip-link:focus { transform: translate(-50%, 0); }
+/* The first Tab stop of a canvas with a docked tool: drawn only while focused. */
+.df-skip-link { position: absolute; top: 8px; left: 50%; z-index: 30; padding: 4px 10px; border: 1px solid #111; border-radius: 2px; background: #fff6cf; color: #111; font-size: 11px; font-weight: 600; white-space: nowrap; transform: translateX(-50%); }
+.df-skip-link:not(:focus) { width: 1px; height: 1px; padding: 0; overflow: hidden; border: 0; clip-path: inset(50%); }
 .df-skip-link:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
