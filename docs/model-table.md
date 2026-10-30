@@ -7,8 +7,8 @@ defining settings in place, and every number states how complete it is.
 ## What it is and how to use it
 
 **View → Table** docks the table beside the active pane. In narrow panes it
-becomes a sheet below the canvas. Each row is a node of the model at the chosen
-depth:
+becomes a sheet below the canvas, unless the pane is too short for one. Each
+row is a node of the model at the chosen depth:
 
 - **Root** shows the nodes of the main graph.
 - **Blocks** opens repeats and custom components. Standard modules such as
@@ -49,16 +49,16 @@ parameters and 145.8G MACs at T = 1024.
 Several kinds of tools already show or change what a model costs. We describe
 each only at the level we rely on here:
 
-- **torchinfo** prints a static text summary of a model, layer by layer.
-- **Netscope / CNN Analyzer** and **Sony Neural Network Console** report
-  per-layer cost and offer table and graph views of a network.
-- **Netron**, **Google Model Explorer** and **TensorBoard Graph** show a model's
-  hierarchy read-only, with overlays.
-- **Skyline** (UIST 2020) lets users change a performance driver by direct
+- **torchinfo** [1] prints a static text summary of a model, layer by layer.
+- **Netscope / CNN Analyzer** [2] and **Sony Neural Network Console** [3]
+  report per-layer cost and offer table and graph views of a network.
+- **Netron** [4], **Google Model Explorer** [5] and **TensorBoard Graph** [6]
+  show a model's hierarchy read-only, with overlays.
+- **Skyline** [7] lets users change a performance driver by direct
   manipulation.
-- **Spreadsheet-style editors** and **prodirect manipulation** (Chugh et al.)
-  let people edit values in a result and have the change applied to the
-  formulas or program behind them.
+- **Spreadsheet-style editors** and **prodirect manipulation** [8] let people
+  edit values in a result and have the change applied to the formulas or
+  program behind them.
 
 DeepFlow models are built from shared definitions (templates), repeats, local
 versions of single instances, and settings bound to globals or to the
@@ -117,17 +117,36 @@ A session lasts about 60 minutes, with a short tutorial before each condition.
 3. *Diagnose.* In a prepared variant with one local version and one shape
    error, find which instances differ or fail, and the root cause.
 
+**Hypotheses**, each against the inspector condition and named by the change
+it tests:
+
+- *H1* (aggregation). With the table, participants complete Locate tasks
+  faster and more accurately.
+- *H2* (stated write targets). With the table, participants make fewer
+  wrong-target edits.
+- *H3* (per-instance and partial results). With the table, participants more
+  often name the instances that differ or fail, and the root cause, in
+  Diagnose tasks.
+
 **Measures.**
 
 - task time;
 - accuracy, meaning a prediction within 5 % of the true value or the correct
   set of instances;
 - wrong-target edits, meaning an edit that changed a different value than the
-  participant intended, such as one instance instead of the shared definition;
+  participant intended, such as one instance instead of the shared definition
+  (see *Recording intent* below);
 - uses of Undo;
 - SUS after each condition;
 - think-aloud, coded for strategy (for example, how often participants consult
   the torchinfo printout or navigate levels).
+
+**Recording intent.** Before each edit, the participant first names the value
+they intend to change and its scope, for example "the MLP width of every
+block" or "the width of the second stage only". The experimenter logs it
+before the edit is committed. Comparing the model before and after the edit
+gives the value that changed; the edit is wrong-target when that value, or
+its scope, differs from the logged intent.
 
 Times and SUS are compared with paired tests. Accuracy and wrong-target edits
 are compared with mixed-effects models that include participant as a random
@@ -138,3 +157,19 @@ sample limit how far the results generalise, and recall of GPT-2 or ResNet
 could stand in for reading the tool. Novelty, and our role as the tool's
 builders, may favour the table; counterbalancing, a scripted protocol and
 measures fixed in advance reduce these risks but do not remove them.
+
+## References
+
+1. torchinfo. Open-source library, github.com/TylerYep/torchinfo.
+2. Netscope (ethereon, 2015), and CNN Analyzer (dgschwend), a fork of
+   Netscope.
+3. Sony Neural Network Console (2017).
+4. Netron (Lutz Roeder).
+5. Google Model Explorer (2024).
+6. TensorBoard Graph: K. Wongsuphasawat et al. "Visualizing Dataflow Graphs
+   of Deep Learning Models in TensorFlow". IEEE TVCG (VAST 2017).
+7. Skyline: G. X. Yu, T. Grossman, G. Pekhimenko. "Skyline: Interactive
+   In-Editor Computational Performance Profiling for Deep Neural Network
+   Training". UIST 2020.
+8. Prodirect manipulation: R. Chugh, B. Hempel, M. Spradlin, J. Albers.
+   "Programmatic and Direct Manipulation, Together at Last". PLDI 2016.
