@@ -508,7 +508,7 @@ test('the Activations lens shows bytes per row, and partial totals say so', asyn
     const stack = rootNode('Transformer blocks');
     await act(() => useArchitectureStore.getState().patchRootNode(stack.id, { count: '$missing' }));
     assert.equal(cellOf('lm_head', 5).textContent, '?', 'Sizes after an unresolved count are unknown');
-    assert.match(header[6].textContent, /% of ≥/, 'The share denominator is a lower bound');
+    assert.match(header[6].textContent, /^% ≥\d/, 'The share denominator is a lower bound, short enough to stay whole');
     assert.match(footerStat('Largest act.').querySelector('dd').textContent, /^≥ /);
     await click(radio('MACs'));
     assert.equal(cellOf('lm_head', 5).textContent, '?', 'lm_head MACs are unknown, not computed from a placeholder');

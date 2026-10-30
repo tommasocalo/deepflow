@@ -377,7 +377,8 @@ export default function ModelTablePanel({ paneId = 'main' }) {
                             </th>
                             <th role="columnheader" scope="col" className="df-mt-num df-mt-share-head"
                                 title={`Share of the whole model: ${modelPartial ? 'at least ' : ''}${formatExact(modelTotal)} ${LENS_NAMES[lens]}${modelPartial ? '. Rows the table cannot count are left out, so shares of exact rows are upper bounds (≤) and shares of partial rows are unknown.' : ''}`}>
-                                % of {lensTotal}
+                                {/* A lower bound reads "% ≥245.7M", short enough to stay whole beside the bars. */}
+                                {modelPartial && modelTotal ? `% ${lensTotal}` : `% of ${lensTotal}`}
                             </th>
                         </tr>
                     </thead>
