@@ -2,7 +2,7 @@ import { STANDARD_COMPONENTS } from '../components/index.js';
 import { getEntry } from '../library/index.js';
 import { isShapeCollection } from '../shapeCollections.js';
 import { ANALYSIS_LIMITS, BUDGET_ERROR, instanceTotals, METRICS, subtreeMetrics, SUMMARY_ERROR } from '../metrics/modelMetrics.js';
-import { aliasFor, configLayout, fieldRaw, fieldSource, fieldSpec, rawText, resolvedBinding, resolvedLayerField, resolvesFalse, summarizeValues, valueRuns } from './configFields.js';
+import { aliasFor, configLayout, fieldRaw, fieldSource, fieldSpec, rawText, resolvedBinding, resolvedLayerValue, resolvesFalse, summarizeValues, valueRuns } from './configFields.js';
 
 export const DEPTHS = ['root', 'blocks', 'ops'];
 /** Definitions that stay one row at Blocks depth: the library's standard modules. */
@@ -185,11 +185,16 @@ function buildConfig(row, list, templates, occurrenceLabels, instanceLabels) {
         const written = rawText(alias?.exposes?.inherited && alias.default === (spec?.default ?? null) ? undefined : raw, spec);
         let values;
         let labels = occurrenceLabels;
+        // Why a value reads ? where it rests on a width inferred after a shape error.
+        let unknownReason = null;
         if (source === 'count') values = list.map((merged) => merged.metrics.count);
-        else if (source === 'parameters') values = list.map((merged) => resolvedLayerField(merged.metrics.node, merged.metrics.scope, name));
-        else {
+        else if (source === 'parameters') {
+            values = list.map((merged) => resolvedLayerValue(merged.metrics, name));
+            unknownReason = list.find((merged) => merged.metrics.taintedSettings?.includes(name))?.metrics.settingsReason ?? null;
+        } else {
             values = list.flatMap((merged) => resolvedBinding(merged.metrics, name));
             labels = row.kind === 'repeat' ? instanceLabels : occurrenceLabels;
+            unknownReason = list.flatMap((merged) => merged.metrics.instances.map((instance) => instance.scopeTaint?.[name]?.reason)).find(Boolean) ?? null;
         }
         // A default worth no words (exact GELU, groups 1) is not drawn, but the editor still offers it.
         const concealed = !!part.hideDefault && values.every((value) => value === null || value === undefined || value === spec?.default);
@@ -197,7 +202,7 @@ function buildConfig(row, list, templates, occurrenceLabels, instanceLabels) {
         parts.push({
             kind: 'field', name, source, spec, prefix: part.prefix ?? null, readOnly: part.readOnly ?? null, concealed,
             raw, alias: alias ? { name: alias.name } : null,
-            symbols: written, values: resolved,
+            symbols: written, values: resolved, unknownReason,
         });
     }
     // A layer without bias says so in both modes; it is not an editable field here.
@@ -205,12 +210,12 @@ function buildConfig(row, list, templates, occurrenceLabels, instanceLabels) {
         : row.family === 'linear' ? fieldSource(firstNode, 'bias') : null;
     if (biasSource) {
         const values = biasSource === 'parameters'
-            ? list.map((merged) => resolvedLayerField(merged.metrics.node, merged.metrics.scope, 'bias'))
+            ? list.map((merged) => resolvedLayerValue(merged.metrics, 'bias'))
             : list.flatMap((merged) => resolvedBinding(merged.metrics, 'bias'));
         if (resolvesFalse(values)) parts.push({ kind: 'note', text: 'no bias', title: 'bias = False: no additive bias is learned. Change it in Settings.' });
     }
     // A switched-off parameter is not created: it holds no weights.
-    if (row.libraryKey === 'deepflow.op.Parameter' && resolvesFalse(list.map((merged) => resolvedLayerField(merged.metrics.node, merged.metrics.scope, 'enabled')))) {
+    if (row.libraryKey === 'deepflow.op.Parameter' && resolvesFalse(list.map((merged) => resolvedLayerValue(merged.metrics, 'enabled')))) {
         parts.push({ kind: 'note', text: 'off', title: 'enabled = False: this parameter is not created and holds no weights. Change it in Settings.' });
     }
     return parts;

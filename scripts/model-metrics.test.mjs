@@ -189,6 +189,76 @@ test('a shape error makes its own layer unknown while later layers use the decla
     assert.equal(metrics.totals.unresolved.macs.size, 1);
 });
 
+test('after inputs that disagree, nothing is sized from the shape validation keeps, so totals stay lower bounds', () => {
+    const { graph, templates } = load(gpt2Storyboard);
+    const healthy = computeModelMetrics(graph, templates);
+    assert.deepEqual([healthy.totals.params, healthy.totals.macs], [163037184, 145824153600], 'A healthy model is counted as before');
+    const block = Object.values(templates).find((template) => template.name === 'Transformer block');
+    const proj = Object.values(block.graph.nodes).find((node) => node.label === 'mlp proj');
+    // mlp proj writes 1024 features into a 768-wide residual stream; validation keeps 1024 and goes on.
+    const broken = { ...templates, [block.id]: { ...block, graph: { ...block.graph, nodes: { ...block.graph.nodes, [proj.id]: { ...proj, parameterValues: { ...proj.parameterValues, out_features: 1024 } } } } } };
+    const declared = countArchitectureParameters(graph, broken);
+    assert.deepEqual([declared.total, declared.complete], [172477440, true], 'Every layer at its declared settings');
+
+    const metrics = computeModelMetrics(graph, broken);
+    const { totals } = metrics;
+    assert.ok(totals.unresolved.params.size > 0, 'The parameter total is partial');
+    assert.ok(totals.params <= declared.total, `≥ ${totals.params} is a lower bound of the declared ${declared.total}`);
+    assert.equal(totals.params, declared.total - 11 * 2362368, 'Attention after block 0 counts nothing: its width D would be read from the guessed residual');
+
+    const blocks = byLabel(metrics.root, 'Transformer blocks');
+    const residuals = Object.values(blocks.instances[0].level.nodes).filter((entry) => entry.node.label === 'residual');
+    const failing = residuals.find((entry) => entry.errors.length);
+    assert.equal(failing.shapeUnknown, 'Element-wise dim 2 mismatch: 1024 vs 768', 'The mismatched Add leaves its output open');
+    assert.deepEqual(validate(graph, { templates: broken, collect: true }).children[blocks.id][0].report.shapeGuesses, { [failing.id]: 'Element-wise dim 2 mismatch: 1024 vs 768' });
+    blocks.instances.forEach((instance, index) => {
+        const attention = byLabel(instance.level, 'causal self-attention');
+        const counted = subtreeMetrics(attention);
+        if (index === 0) {
+            assert.equal(attention.instances[0].scope.D, 768);
+            assert.deepEqual([counted.params, counted.unresolved.params.size, counted.macs], [2362368, 0, 4026531840], 'Block 0 reads D = 768 from the embeddings');
+            return;
+        }
+        assert.equal(attention.instances[0].scope.D, 1024, 'Validation infers D = 1024 from the shape it kept');
+        assert.match(attention.instances[0].scopeTaint.D.reason, /^D is inferred from an input after Transformer blocks › residual: Element-wise dim 2 mismatch: 1024 vs 768$/);
+        assert.deepEqual([counted.params, counted.macs, counted.activation], [0, 0, 0], `Block ${index}: nothing is counted at D = 1024`);
+        assert.ok(counted.unresolved.params.size > 0 && counted.unresolved.macs.size > 0);
+        assert.equal(subtreeMetrics(byLabel(instance.level, 'mlp fc')).params, 2362368, 'Weights the declared settings size are still counted');
+    });
+    const lmHead = subtreeMetrics(byLabel(metrics.root, 'lm_head'));
+    assert.equal(lmHead.params, 38597376);
+    assert.equal(lmHead.macs, 0);
+    assert.match([...lmHead.unresolved.macs.values()][0].reason, /^after Transformer blocks › residual: Element-wise dim 2 mismatch: 1024 vs 768$/, 'Later rows name the cause');
+    assert.equal(totals.macs, 4026531840 + 2415919104 + 3072 * 1024 * 1024, 'MACs: block 0 up to the mismatch');
+});
+
+test('shape rules say when their output reconciles inputs instead of following the settings', () => {
+    const input = (shape) => layer('deepflow.io.Input', { shape });
+    const guesses = (graph) => validate(graph, { collect: true }).shapeGuesses;
+    const pair = (op, a, b, handles = [undefined, undefined]) => {
+        const left = input(a);
+        const right = input(b);
+        return { nodes: { [left.id]: left, [right.id]: right, [op.id]: op }, edges: [createEdge({ source: left.id, target: op.id, targetHandle: handles[0] }), createEdge({ source: right.id, target: op.id, targetHandle: handles[1] })] };
+    };
+    const add = layer('deepflow.op.Add');
+    assert.deepEqual(guesses(pair(add, '(4, 768)', '(4, 1024)')), { [add.id]: 'Element-wise dim 2 mismatch: 768 vs 1024' }, 'An Add of 768 and 1024 features keeps one of them');
+    assert.deepEqual(guesses(pair(layer('deepflow.op.Add'), '(4, 768)', '(4, 768)')), {});
+    const concat = layer('deepflow.op.Concat', { dim: -1 });
+    assert.deepEqual(Object.keys(guesses(pair(concat, '(4, 8)', '(5, 8)'))), [concat.id], 'Concat keeps the first input where the others disagree');
+    const batched = layer('deepflow.op.MatMul');
+    assert.deepEqual(Object.keys(guesses(pair(batched, '(2, 3, 8)', '(5, 8, 4)', ['a', 'b']))), [batched.id], 'A batch mismatch keeps one batch size');
+    const inner = layer('deepflow.op.MatMul');
+    const innerGraph = pair(inner, '(3, 8)', '(6, 4)', ['a', 'b']);
+    assert.deepEqual(guesses(innerGraph), {}, 'An inner mismatch leaves the rows and columns as declared');
+    assert.match(validate(innerGraph).errors[inner.id][0], /inner dimensions mismatch/);
+    const norm = layer('torch.nn.LayerNorm', { normalized_shape: 768 });
+    assert.deepEqual(guesses(chain(input('(4, 1024)'), norm)), {}, 'A norm keeps its input shape, whatever its settings');
+    for (const storyboard of [gpt2Storyboard, resnetStoryboard]) {
+        const { graph, templates } = load(storyboard);
+        assert.deepEqual(validate(graph, { templates, collect: true }).shapeGuesses, {}, 'Valid models guess nothing');
+    }
+});
+
 test('the node budget stops the analysis with lower bounds, not errors', () => {
     const { graph, templates } = load(gpt2Storyboard);
     const huge = { ...graph, parameters: graph.parameters.map((parameter) => ['n_layers', 'n_heads'].includes(parameter.name) ? { ...parameter, default: 96 } : parameter) };
@@ -266,7 +336,7 @@ test('model metrics are cached across position-only edits and recomputed for par
 
 test('validate collects instance reports only on request', () => {
     const strip = (report) => {
-        const { scope: _scope, children: _children, shapeIssues: _shapeIssues, ...rest } = report;
+        const { scope: _scope, children: _children, shapeIssues: _shapeIssues, shapeGuesses: _shapeGuesses, ...rest } = report;
         return rest;
     };
     for (const storyboard of [gpt2Storyboard, resnetStoryboard]) {

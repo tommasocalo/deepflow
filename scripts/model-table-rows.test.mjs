@@ -484,13 +484,20 @@ test('partial states never claim a per-instance figure or × N for instances tha
     assert.equal(lines[0], 'At least 1,073,741,824 MACs: exact in 1 of 12 instances');
     assert.equal(lines[1], 'i=0: 1,073,741,824 · i=1–11: ?', 'Each instance says what is known');
     assert.ok(lines.every((line) => !/× 12 =/.test(line)));
-    assert.equal(eachText('params', q.params), '1.05M ea', 'Parameters do not depend on the shapes: every instance is known');
-    assert.equal(metricLines('params', q.params, q)[0], '1,049,600 parameters per instance × 12 = 12,595,200');
+    // Block 0 reads its width D from the embeddings; later blocks would read it after the failed split.
+    assert.equal(eachText('params', q.params), null, 'Weights sized by a width inferred after the error are not counted');
+    const paramLines = metricLines('params', q.params, q);
+    assert.deepEqual(paramLines.slice(0, 2), ['At least 1,049,600 parameters: exact in 1 of 12 instances', 'i=0: 1,049,600 · i=1–11: ?']);
+    assert.match(paramLines[2], /^Not counted: weight \(D is inferred from an input after causal self-attention › split Q: Split dimension 1024 must be divisible by 12 chunks\)/);
+    assert.deepEqual(q.config.filter((part) => part.kind === 'field').map((part) => [part.values.text, part.values.title]),
+        [['?', 'i=0: 1024 · i=1–11: ?'], ['?', 'i=0: 1024 · i=1–11: ?']], 'Values mode does not show the inferred width as known either');
+    assert.match(q.config[0].unknownReason, /^D is inferred from an input after causal self-attention › split Q: /, 'and says why');
 
     const blocks = find(rowsAt(partial, 'blocks'), 'Transformer blocks');
     assert.equal(blocks.params.knownCount, 0);
-    assert.deepEqual(blocks.params.perInstance.map((run) => [run.from, run.to, run.value]), [['i=0', 'i=11', { atLeast: 12596224 }]], 'Lower bounds read ≥ per instance');
-    assert.equal(metricLines('params', blocks.params, blocks)[1], 'i=0–11: ≥ 12,596,224');
+    assert.deepEqual(blocks.params.perInstance.map((run) => [run.from, run.to, run.value]),
+        [['i=0', 'i=0', { atLeast: 12596224 }], ['i=1', 'i=11', { atLeast: 8397824 }]], 'Lower bounds read ≥ per instance');
+    assert.equal(metricLines('params', blocks.params, blocks)[1], 'i=0: ≥ 12,596,224 · i=1–11: ≥ 8,397,824');
     assert.match(cellStatus(q, 5, { lens: 'macs', modelTotal: partial.metrics.totals.macs, modelPartial: true }), /^At least 1,073,741,824 MACs: exact in 1 of 12 instances · i=0: 1,073,741,824 · i=1–11: \? · Not counted: /,
         'The status line carries the breakdown');
 });
@@ -505,11 +512,11 @@ test('shares of a partial total are upper bounds, or unknown where the row is pa
     const total = broken.metrics.totals.params;
     assert.ok(broken.metrics.totals.unresolved.params.size > 0, 'The model total is a lower bound');
     const share = (label) => shareInfo(find(rows, label), 'params', total, true);
-    assert.equal(share('token embedding').text, '≤20.0%', 'An exact row of a partial total: at most');
+    assert.equal(share('token embedding').text, '≤26.3%', 'An exact row of a partial total: at most');
     assert.equal(share('ln_f').text, '<0.1%', '"<0.1%" is already a bound');
     assert.equal(share('Transformer blocks').text, '?', 'Partial row and partial total: either way');
     assert.match(share('Transformer blocks').title, /^Unknown share: /);
-    assert.equal(shareInfo(find(rows, 'token embedding'), 'params', total, false).text, '20.0%');
+    assert.equal(shareInfo(find(rows, 'token embedding'), 'params', total, false).text, '26.3%');
 
     // Shared definitions name the instances that fail.
     const ln1 = find(rows, 'ln_1');

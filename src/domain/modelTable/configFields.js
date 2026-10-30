@@ -159,10 +159,17 @@ export function resolvedLayerField(node, scope, name) {
 
 /**
  * Per-occurrence values of a container binding: each instance's resolved
- * scope (a repeat has one per instance, so formulas in `i` vary).
+ * scope (a repeat has one per instance, so formulas in `i` vary). A value
+ * that rests on a guessed shape (a width inferred after a shape error) is
+ * unknown.
  */
 export function resolvedBinding(entry, name) {
-    return entry.instances.map((instance) => instance.scope ? instance.scope[name] ?? null : null);
+    return entry.instances.map((instance) => instance.scope && !instance.scopeTaint?.[name] ? instance.scope[name] ?? null : null);
+}
+
+/** Per-occurrence values of a layer field; unknown where they rest on a guessed shape. */
+export function resolvedLayerValue(entry, name) {
+    return entry.taintedSettings?.includes(name) ? null : resolvedLayerField(entry.node, entry.scope, name);
 }
 
 /**

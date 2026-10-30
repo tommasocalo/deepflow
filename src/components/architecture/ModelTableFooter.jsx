@@ -1,6 +1,6 @@
 import { AlertCircle, AlertTriangle, ChevronDown } from 'lucide-react';
 import { shapeSummary } from '../../domain/modelTable/rows.js';
-import { ACTIVATION_TITLE, MACS_TITLE, SHAPE_GUESS_NOTE } from '../../domain/modelTable/cellText.js';
+import { ACTIVATION_TITLE, MACS_TITLE, SHAPE_ERROR_NOTE } from '../../domain/modelTable/cellText.js';
 import { ANALYSIS_LIMITS, formatBytes, formatCount, formatExact, formatMacs } from '../../domain/metrics/index.js';
 
 /** Where the largest activation sits, in full: `Conv2d in ResNet stages i=2`. */
@@ -70,7 +70,7 @@ export default function ModelTableFooter({ metrics, levelErrorCount, assumptions
     return <footer className="df-mt-footer">
         {errorCount > 0 && <p className="df-mt-alert">
             <AlertCircle size={12} strokeWidth={2.6} aria-hidden="true" />
-            <span className="df-mt-alert-text" title={`${errorList.slice(0, 12).join('\n')}${errorList.length > 12 ? '\n…' : ''}\n\n${counting}\nTotals use the declared settings. A layer with a shape error of its own, and anything whose size depends on an unknown value, is not counted (?). ${SHAPE_GUESS_NOTE}`}>
+            <span className="df-mt-alert-text" title={`${errorList.slice(0, 12).join('\n')}${errorList.length > 12 ? '\n…' : ''}\n\n${counting}\n${SHAPE_ERROR_NOTE}`}>
                 <strong>{errorCount} error{errorCount === 1 ? '' : 's'}</strong>{elsewhere ? ` in the model, ${levelErrorCount || 'none'} on this canvas` : ''}
                 <span className="df-mt-alert-detail">{firstError ? ` · ${firstError.label}: ${firstError.messages[0]}` : ` · ${issues.global[0]}`}</span>
             </span>

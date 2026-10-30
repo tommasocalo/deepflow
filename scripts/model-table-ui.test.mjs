@@ -605,9 +605,10 @@ test('the footer counts errors across the model and says how the canvas counts t
     assert.match(alert.textContent, /^14 errors in the model, 3 on this canvas · /);
     const title = alert.querySelector('.df-mt-alert-text').getAttribute('title');
     assert.match(title, /the canvas badge counts the errors of the level it shows \(3\)/);
-    assert.match(title, /The canvas still draws the shape validation carried past this point/);
+    assert.match(title, /inputs of an Add, Concat or Stack disagree, nothing is sized from that shape/, 'The summary says how shape errors are counted');
+    assert.match(title, /the table counts nothing from them\.$/);
     assert.match(container.querySelector('[data-graph-pane="main"] .df-graph-status-trigger').textContent, /^3 errors/, 'The badge it refers to');
-    assert.equal(cellOf('token embedding', 6).textContent, '≤20.0%', 'Exact rows of a partial total are at most their share');
+    assert.equal(cellOf('token embedding', 6).textContent, '≤26.3%', 'Exact rows of a partial total are at most their share');
     assert.equal(cellOf('Transformer blocks', 6).textContent, '?', 'A partial row of a partial total has no share');
     assert.match(rowOf('ln_1').querySelector('[data-col="0"]').getAttribute('title'), /Fails in i=1–11 \(11 of 12\)/);
 });

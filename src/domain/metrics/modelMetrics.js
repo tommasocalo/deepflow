@@ -1,6 +1,8 @@
 import { validate } from '../../validation/validator.js';
 import { createValidationCache } from '../../validation/cache.js';
-import { resolveRepeatCount } from '../expressions.js';
+import { inferShape } from '../../validation/shapes.js';
+import { repeatBindingValue, resolveLayerParameters, resolveRepeatCount } from '../expressions.js';
+import { parameterReferences } from '../parameterBindings.js';
 import { getEntry } from '../library/index.js';
 import { getTemplateInputIds, mapTemplateInputs, orderOperationEdges } from '../graphInputs.js';
 import {
@@ -44,29 +46,88 @@ const unknownModule = (key) => /^(torch|deepflow)\.nn\./.test(key ?? '') && !get
 /**
  * Why a shape is a guess: it rests on a size the model does not determine (an
  * unresolved count, a missing input, a layer without a shape rule, a shape
- * error that left no output). Validation still fills such shapes in, for
- * example without the batch axis, so nothing downstream is computed from them.
- * `origin` names the node where the problem starts; downstream nodes read
- * "after <origin>: <problem>". A shape error with a declared output (MatMul
- * keeps its declared result) does not spread: later layers use the declared
+ * error that left no output, or one that reconciled inputs which disagree,
+ * such as an Add of 768 and 1024 features). Validation still fills such
+ * shapes in, so the canvas can go on drawing, but nothing downstream is
+ * computed from them: neither sizes nor widths inferred from them (a derived
+ * parameter such as D). `origin` names the node where the problem starts;
+ * downstream nodes read "after <origin>: <problem>". A shape error whose
+ * output the node's own settings fix (a MatMul's rows and columns, a norm
+ * that keeps its input shape) does not spread: later layers use the declared
  * settings, and the error is reported on its own row and in the footer.
  */
 const taintOf = (problem, origin) => ({ problem, origin, reason: problem });
 const worse = (current, next) => current ?? next ?? null;
 /** The same problem as seen from a node downstream of its origin. */
 const downstream = (taint) => taint && { ...taint, reason: `after ${taint.origin}: ${taint.problem}` };
+const sameJson = (a, b) => a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const sameSize = (a, b) => (a?.total ?? null) === (b?.total ?? null) && (a?.trainable ?? null) === (b?.trainable ?? null);
+
+/** A layer's settings that read a scope name resting on a guessed shape: { taint, names } or null. */
+function taintedSettings(node, scopeTaint) {
+    let taint = null;
+    const names = [];
+    for (const [name, raw] of Object.entries(node.parameters ?? {})) {
+        const hit = parameterReferences(raw).find((reference) => scopeTaint[reference]);
+        if (!hit) continue;
+        taint ??= scopeTaint[hit];
+        names.push(name);
+    }
+    return taint ? { taint, names } : null;
+}
+
+const NO_TAINT = Object.freeze({});
+
+/** The scope without the names that rest on a guess, to see what a value depends on. */
+const withoutTainted = (scope, scopeTaint) => Object.fromEntries(Object.entries(scope).filter(([name]) => !scopeTaint[name]));
+
+/**
+ * The names of an instance's scope that rest on a guessed shape: tainted names
+ * it inherits, widths inferred from a tainted input port (derived parameters
+ * such as D), and bindings or defaults that read either, in declaration
+ * order as buildParameterScope resolves them.
+ */
+function instanceScopeTaint(template, node, index, parentTaint, portTaint) {
+    // Nothing upstream rests on a guess: the common case costs nothing.
+    if (!Object.keys(parentTaint).length && !Object.values(portTaint).some(Boolean)) return NO_TAINT;
+    const result = { ...parentTaint };
+    const repeat = node.kind === 'repeat';
+    if (repeat) delete result[node.iterationVariable || 'i'];
+    const bindings = (repeat ? node.bindings : node.parameterValues) ?? {};
+    for (const parameter of template.freeParameters ?? []) {
+        let taint = null;
+        if (parameter.derived) {
+            const upstream = portTaint[parameter.derived.inputId] ?? null;
+            taint = upstream && { ...upstream, reason: `${parameter.name} is inferred from an input ${upstream.reason}` };
+        } else {
+            let raw = repeatBindingValue(bindings[parameter.name], parameter, repeat ? index : undefined);
+            if (raw === undefined || (raw === null && !parameter.nullable) || raw === '') raw = parameter.default;
+            const hit = parameterReferences(raw).find((name) => result[name]);
+            taint = hit ? result[hit] : null;
+        }
+        if (taint) result[parameter.name] = taint;
+        else delete result[parameter.name];
+    }
+    return result;
+}
 
 /**
  * Per-node, per-instance facts for one level, recursing through the instance
  * reports that validate({ collect: true }) keeps. Nothing is re-inferred: a
  * node's MACs and activation size become unknown when its input shapes rest on
  * an unknown size or when the node has a shape error of its own, never
- * computed from a placeholder. `shapeError` is the first shape error in the
- * level or anything inside it, so a fused module can say its output is unsure.
+ * computed from a placeholder. `scopeTaint` maps the scope names that rest on
+ * a guessed shape to that problem: what settings that read them size (an
+ * output, weights, products) is unknown. Shape rules and size formulas run
+ * again without those names only to see whether a value depends on them.
+ * `shapeError` is the first shape error in the level or anything inside it,
+ * so a fused module can say its output is unsure.
  */
 function levelMetrics(graph, report, templates, context) {
-    const { inputWeightOnly = {}, inputTaint = {}, fused = false, templateId = null, path = [], issues } = context;
+    const { inputWeightOnly = {}, inputTaint = {}, scopeTaint = {}, fused = false, templateId = null, path = [], issues } = context;
     const scope = report.scope ?? {};
+    const tainting = Object.keys(scopeTaint).length > 0;
+    const cleanScope = tainting ? withoutTainted(scope, scopeTaint) : scope;
     const nodes = {};
     const weightOnly = {};
     const taint = {};
@@ -106,21 +167,33 @@ function levelMetrics(graph, report, templates, context) {
             const key = node.libraryKey;
             const shapeIssue = report.shapeIssues?.[id]?.[0] ?? null;
             if (shapeIssue) shapeError ??= { message: shapeIssue, origin };
-            // Unknown inputs come first; otherwise the node's own shape error.
-            const problem = inputProblem ?? (shapeIssue ? taintOf(shapeIssue, origin) : null);
+            // Settings that read a width inferred from a guessed shape: whatever they size is unknown too.
+            const settings = tainting && key !== TEMPLATE_INPUT ? taintedSettings(node, scopeTaint) : null;
+            const outputFollowsTaint = !!settings && !SINK_KEYS.has(key)
+                && !sameJson(inferShape(key, inputShapes, resolveLayerParameters(node, cleanScope).parameters).output, output);
+            const macsFollowTaint = !!settings && countsMacs(key) && layerMacs(node, cleanScope, inputShapes, output) !== layerMacs(node, scope, inputShapes, output);
+            // Unknown inputs come first; otherwise the node's own shape error, then its settings.
+            const ownProblem = inputProblem ?? (shapeIssue ? taintOf(shapeIssue, origin) : null);
+            const problem = ownProblem ?? (outputFollowsTaint ? settings.taint : null);
+            const macsProblem = problem ?? (macsFollowTaint ? settings.taint : null);
             weightOnly[id] = CONSTANT_SOURCE_KEYS.has(key) ? true
                 : key === TEMPLATE_INPUT ? inputWeightOnly[id] === true
                     : incoming.length > 0 && incoming.every((edge) => weightOnly[edge.source] === true);
             const placeholder = hasPlaceholderShape(key) || unknownModule(key);
+            // A shape validation only carried on (mismatched inputs reconciled) is a guess as well.
+            const guess = report.shapeGuesses?.[id] ?? null;
             taint[id] = worse(inputProblem, placeholder ? taintOf(placeholderReason(node), origin)
-                : output === null && !SINK_KEYS.has(key) ? taintOf(shapeIssue ?? 'its output shape is unknown', origin) : null);
+                : output === null && !SINK_KEYS.has(key) ? taintOf(shapeIssue ?? 'its output shape is unknown', origin)
+                    : guess ? taintOf(guess, origin) : outputFollowsTaint ? settings.taint : null);
             const reasons = {};
-            const params = unknownModule(key) ? null : layerSize(node, scope);
-            if (!params) reasons.params = unresolvedReason(node, 'params');
+            const size = unknownModule(key) ? null : layerSize(node, scope);
+            const sizeFollowsTaint = !!settings && !unknownModule(key) && !sameSize(size, layerSize(node, cleanScope));
+            const params = sizeFollowsTaint ? null : size;
+            if (!params) reasons.params = sizeFollowsTaint ? settings.taint.reason : unresolvedReason(node, 'params');
             let macs;
-            if (problem && countsMacs(key)) {
+            if (macsProblem && countsMacs(key)) {
                 macs = null;
-                reasons.macs = problem.reason;
+                reasons.macs = macsProblem.reason;
             } else {
                 macs = unknownModule(key) ? null : layerMacs(node, scope, inputShapes, output);
                 if (macs === null) reasons.macs = unknownModule(key) ? `${getEntry(key)?.name ?? key} is not in the library; its compute is unknown` : unresolvedReason(node, 'macs');
@@ -145,6 +218,8 @@ function levelMetrics(graph, report, templates, context) {
                 params, macs, activation, reasons,
                 // The shape shown for this node, or why it is a guess.
                 shapeUnknown: taint[id]?.reason ?? null,
+                // Settings whose resolved value rests on a guessed shape, and why.
+                taintedSettings: settings?.names ?? [], settingsReason: settings?.taint.reason ?? null,
                 errors, warnings,
             };
             continue;
@@ -175,8 +250,9 @@ function levelMetrics(graph, report, templates, context) {
                 : mapTemplateInputs(template.graph, incoming, (edge) => downstream(taint[edge.source] ?? null));
             const portFlags = carried ? Object.fromEntries(ports.map((port) => [port, carryWeightOnly]))
                 : mapTemplateInputs(template.graph, incoming, (edge) => weightOnly[edge.source] === true);
+            const childScopeTaint = instanceScopeTaint(template, node, child.index, scopeTaint, portTaint);
             const level = levelMetrics(template.graph, child.report, templates, {
-                inputWeightOnly: portFlags, inputTaint: portTaint, fused: fused || ownsActivation, templateId: child.templateId,
+                inputWeightOnly: portFlags, inputTaint: portTaint, scopeTaint: childScopeTaint, fused: fused || ownsActivation, templateId: child.templateId,
                 path: [...path, id], issues, where,
             });
             shapeError ??= level.shapeError;
@@ -186,7 +262,7 @@ function levelMetrics(graph, report, templates, context) {
             carryWeightOnly = !!port && level.nodes[port]?.weightOnly === true;
             for (const message of child.instanceIssues ?? []) recordError(issues, path, id, where, [message]);
             instances.push({
-                index: child.index, templateId: child.templateId, scope: child.scope, inputs: child.inputs,
+                index: child.index, templateId: child.templateId, scope: child.scope, scopeTaint: childScopeTaint, inputs: child.inputs,
                 output: port ? child.report.shapes[port] ?? null : null, outputTaint, level,
                 parameterIssues: child.parameterIssues ?? [], instanceIssues: child.instanceIssues ?? [],
             });
@@ -200,9 +276,10 @@ function levelMetrics(graph, report, templates, context) {
                 : errors.some((message) => message.startsWith('Template recursion exceeds depth')) ? `components nest deeper than ${ANALYSIS_LIMITS.depth} levels`
                     : instances.length < (countResult.count ?? 0) ? `the analysis stopped at ${ANALYSIS_LIMITS.nodes.toLocaleString('en-US')} expanded nodes`
                         : 'not every instance could be analysed';
-        taint[id] = !complete ? taintOf(incompleteReason, origin)
+        // Unknown inputs come first: what fails inside follows from them.
+        taint[id] = worse(inputProblem, !complete ? taintOf(incompleteReason, origin)
             : sequential ? instances.at(-1)?.outputTaint ?? null
-                : instances.reduce((current, instance) => worse(current, instance.outputTaint), null);
+                : instances.reduce((current, instance) => worse(current, instance.outputTaint), null));
         const instanceActivations = ownsActivation ? instances.map((instance) => {
             if (weightOnly[id]) return { bytes: 0, reason: null };
             if (instance.outputTaint) return { bytes: null, reason: instance.outputTaint.reason };
@@ -220,7 +297,7 @@ function levelMetrics(graph, report, templates, context) {
             errors, warnings,
         };
     }
-    return { graph, templateId, scope, report, nodes, fused, taint, shapeError };
+    return { graph, templateId, scope, scopeTaint, report, nodes, fused, taint, shapeError };
 }
 
 /**

@@ -24,13 +24,17 @@ const MAX_VALIDATED_NODES = 20000;
  * otherwise appear only in the container's summary. `shapeIssues` repeats
  * the errors that make a node's output shape unreliable (shape rules and
  * missing or ambiguous inputs), apart from setting errors such as a dropout
- * probability above 1. Without the option, reports are unchanged.
+ * probability above 1. `shapeGuesses` names, per node, the error behind an
+ * output that validation only carries on so the canvas can keep drawing:
+ * inputs that disagree were reconciled (see ShapeResult.guess) or the
+ * operation's inputs are ambiguous. Without the option, reports are unchanged.
  */
 export function validate(graph, opts = {}) {
     const { templates = {}, externalInputs = {}, depth = 0 } = opts;
     const collect = opts.collect === true;
     const children = collect ? {} : null;
     const shapeIssues = collect ? {} : null;
+    const shapeGuesses = collect ? {} : null;
     const scope = withGlobalParameters(graph, opts.scope ?? {});
     const budget = opts.budget ?? { remaining: MAX_VALIDATED_NODES };
     const { order: topo, cyclic, adjacency: adj } = topologicalSort(graph);
@@ -88,10 +92,17 @@ export function validate(graph, opts = {}) {
         const inputShapes = orderOperationEdges(node, edges).map((edge) => edge ? shapes[edge.source] ?? null : null);
         if (node.kind === 'layer') {
             const operationPorts = getOperationInputIds(node);
+            // Which edge feeds which port is unclear: the output is a guess too.
+            let portIssue = null;
             if (operationPorts) {
-                for (const issue of validateInputPorts(edges, operationPorts)) pushShape(id, issue);
+                for (const issue of validateInputPorts(edges, operationPorts)) {
+                    pushShape(id, issue);
+                    portIssue ??= issue;
+                }
                 if (edges.length !== operationPorts.length || orderOperationEdges(node, edges).some((edge) => !edge)) {
-                    pushShape(id, `${node.libraryKey.split('.').at(-1)} needs ${operationPorts.length} connected inputs (${operationPorts.join(' and ')})`);
+                    const issue = `${node.libraryKey.split('.').at(-1)} needs ${operationPorts.length} connected inputs (${operationPorts.join(' and ')})`;
+                    pushShape(id, issue);
+                    portIssue ??= issue;
                 }
             }
             if (node.libraryKey === TEMPLATE_INPUT && Object.hasOwn(externalInputs, id)) {
@@ -101,6 +112,7 @@ export function validate(graph, opts = {}) {
             const result = inferShape(node.libraryKey, inputShapes, resolveLayerParameters(node, scope).parameters);
             shapes[id] = result.output;
             for (const error of result.errors) pushShape(id, error);
+            if (collect && result.output && (portIssue || result.guess)) shapeGuesses[id] = portIssue ?? result.errors[0] ?? 'its output shape is a guess';
             continue;
         }
         if (node.kind !== 'supernode' && node.kind !== 'repeat') {
@@ -204,6 +216,6 @@ export function validate(graph, opts = {}) {
     }
     const ok = Object.keys(errors).length === 0 && globalErrors.length === 0;
     return collect
-        ? { topo, cyclic, shapes, errors, warnings, globalErrors, ok, scope, children, shapeIssues }
+        ? { topo, cyclic, shapes, errors, warnings, globalErrors, ok, scope, children, shapeIssues, shapeGuesses }
         : { topo, cyclic, shapes, errors, warnings, globalErrors, ok };
 }

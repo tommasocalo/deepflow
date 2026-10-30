@@ -99,6 +99,12 @@ export const FUSED_NOTE = 'Counted in the module output: standard Linear, Embedd
 /** Why the table leaves a shape unknown while the canvas may still draw one. */
 export const SHAPE_GUESS_NOTE = 'The canvas still draws the shape validation carried past this point; the table counts nothing from it.';
 
+/** How the totals treat shape errors, for the error summary. */
+export const SHAPE_ERROR_NOTE = 'Totals use the declared settings. A layer whose shape check fails counts no MACs or activation (?). '
+    + 'Where the error leaves a shape open, as when the inputs of an Add, Concat or Stack disagree, nothing is sized from that shape: '
+    + 'later MACs, activations and widths inferred from it (such as an attention D) read ? too. '
+    + 'The canvas still draws the shapes validation carries on with; the table counts nothing from them.';
+
 /** The Output cell explained. */
 export function shapeLines(row) {
     if (row.shape.unknown) return [row.shape.title || 'Unknown', SHAPE_GUESS_NOTE];

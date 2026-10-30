@@ -15,6 +15,11 @@ import { resolveRepeatCount, resolveDimensionTuple } from '../domain/expressions
  * @typedef {Object} ShapeResult
  * @property {Shape | null} output   Inferred output shape (null if unknown)
  * @property {string[]} errors       Human-readable shape errors
+ * @property {boolean} [guess]       The output stands in for one the model does
+ *   not determine: inputs that disagree were reconciled (an Add of 768 and 1024
+ *   features keeps the first), or the op cannot apply to its input. Later
+ *   shapes then rest on that choice. Rules whose output their own settings fix
+ *   (a Linear's out_features, a norm that keeps its input shape) never guess.
  */
 
 const numOrNull = (v) => {
@@ -219,7 +224,9 @@ const RULES = {
 
     'deepflow.op.Parameter': parameterRule,
     'deepflow.op.Arange': arangeRule,
-    'deepflow.op.PositionIndices': ([shape]) => ({ output: shape ? shape.slice(0, 2) : null, errors: shape && shape.length !== 2 ? ['Position indices expects tokens with shape (B, T)'] : [] }),
+    'deepflow.op.PositionIndices': ([shape]) => shape && shape.length !== 2
+        ? { output: shape.slice(0, 2), errors: ['Position indices expects tokens with shape (B, T)'], guess: true }
+        : { output: shape ? shape.slice(0, 2) : null, errors: [] },
     'deepflow.op.Gather': gatherRule,
     'deepflow.op.Mean': meanRule,
     'deepflow.op.Subtract': elementwiseRule,
@@ -274,7 +281,7 @@ function computeConvTransposeDim(inDim, k, s, p, op) {
 function poolRule([s], p) {
     if (!s) return { output: null, errors: [] };
     if (s.length !== 4) {
-        return { output: s, errors: [`Pool2d expects 4D; got rank ${s.length}`] };
+        return { output: s, errors: [`Pool2d expects 4D; got rank ${s.length}`], guess: true };
     }
     const k = parseSpatial(p.kernel_size, 2);
     const st = parseSpatial(p.stride ?? p.kernel_size, k[0]);
@@ -287,7 +294,7 @@ function poolRule([s], p) {
 function adaptivePoolRule([s], p) {
     if (!s) return { output: null, errors: [] };
     if (s.length !== 4) {
-        return { output: s, errors: [`AdaptiveAvgPool2d expects 4D; got rank ${s.length}`] };
+        return { output: s, errors: [`AdaptiveAvgPool2d expects 4D; got rank ${s.length}`], guess: true };
     }
     const target = parseSpatial(p.output_size, 1);
     return { output: [s[0], s[1], target[0], target[1]], errors: [] };
@@ -297,7 +304,7 @@ function elementwiseRule(inputs) {
     const hasCollection = inputs.some(isShapeCollection);
     inputs = flattenShapeInputs(inputs);
     if (inputs.length < (hasCollection ? 1 : 2)) {
-        return { output: inputs[0] ?? null, errors: ['Element-wise op needs at least 2 inputs'] };
+        return { output: inputs[0] ?? null, errors: ['Element-wise op needs at least 2 inputs'], guess: true };
     }
     const present = inputs.filter(Boolean);
     // Some inputs have unknown shapes: propagate what we know, no error.
@@ -308,23 +315,24 @@ function elementwiseRule(inputs) {
         const dimensions = present.map((shape) => offset <= shape.length ? shape.at(-offset) : 1);
         const known = [...new Set(dimensions.filter((dim) => dim !== null && dim !== 1))];
         if (known.length > 1) errors.push(`Element-wise dim ${rank - offset} mismatch: ${known.join(' vs ')}`);
+        // Mismatched sizes keep the first one, so the canvas can go on drawing.
         output.unshift(known[0] ?? (dimensions.includes(null) ? null : 1));
     }
-    return { output, errors };
+    return errors.length ? { output, errors, guess: true } : { output, errors };
 }
 
 function concatRule(inputs, p) {
     const hasCollection = inputs.some(isShapeCollection);
     inputs = flattenShapeInputs(inputs);
     if (inputs.length < (hasCollection ? 1 : 2)) {
-        return { output: inputs[0] ?? null, errors: ['Concat needs at least 2 inputs'] };
+        return { output: inputs[0] ?? null, errors: ['Concat needs at least 2 inputs'], guess: true };
     }
     const present = inputs.filter(Boolean);
     if (!present.length) return { output: null, errors: [] };
     const axis = numOrNull(p.dim) ?? 1;
     const ref = present[0];
     if (!present.every((s) => s.length === ref.length)) {
-        return { output: ref, errors: ['Concat inputs must have equal rank'] };
+        return { output: ref, errors: ['Concat inputs must have equal rank'], guess: true };
     }
     const concatDim = normalizeAxis(axis, ref.length);
     if (concatDim === null) return { output: null, errors: [`Concat dim ${axis} is outside rank ${ref.length}`] };
@@ -344,7 +352,7 @@ function concatRule(inputs, p) {
         if (unique.size > 1) errors.push(`Concat dim ${i} mismatch: ${[...unique].join(' vs ')}`);
         return ref[i];
     });
-    return { output: out, errors };
+    return errors.length ? { output: out, errors, guess: true } : { output: out, errors };
 }
 
 /**
@@ -410,7 +418,8 @@ function stackRule(inputs, parameters) {
     const errors = present.every((shape) => shape.length === ref.length && shape.every((dim, index) => dim === null || ref[index] === null || dim === ref[index])) ? [] : ['Stack inputs must have the same shape'];
     const axis = normalizeAxis(parameters.dim === undefined ? 0 : Number(parameters.dim), ref.length, true);
     if (axis === null) return { output: null, errors: ['Stack dim is outside the output rank'] };
-    return { output: [...ref.slice(0, axis), flattened.length, ...ref.slice(axis)], errors };
+    const output = [...ref.slice(0, axis), flattened.length, ...ref.slice(axis)];
+    return errors.length ? { output, errors, guess: true } : { output, errors };
 }
 
 function transposeRule([shape], parameters) {
@@ -431,20 +440,25 @@ function matmulRule(inputs) {
     const left = a.length === 1 ? [1, ...a] : a;
     const right = b.length === 1 ? [...b, 1] : b;
     const errors = [];
+    // An inner mismatch leaves the result's own axes (rows of a, columns of b) as declared.
     const innerA = left.at(-1), innerB = right.at(-2);
     if (innerA !== null && innerB !== null && innerA !== innerB) errors.push(`MatMul inner dimensions mismatch: ${innerA} vs ${innerB}`);
     const batchA = left.slice(0, -2), batchB = right.slice(0, -2);
     const batch = [];
+    let guess = false;
     for (let offset = 1; offset <= Math.max(batchA.length, batchB.length); offset++) {
         const x = offset <= batchA.length ? batchA.at(-offset) : 1;
         const y = offset <= batchB.length ? batchB.at(-offset) : 1;
-        if (x !== null && y !== null && x !== y && x !== 1 && y !== 1) errors.push(`MatMul batch dimensions mismatch: ${x} vs ${y}`);
+        if (x !== null && y !== null && x !== y && x !== 1 && y !== 1) {
+            errors.push(`MatMul batch dimensions mismatch: ${x} vs ${y}`);
+            guess = true;
+        }
         batch.unshift(x === y ? x : x === 1 ? y : y === 1 ? x : x === null || y === null ? null : x);
     }
     const output = [...batch];
     if (a.length > 1) output.push(left.at(-2));
     if (b.length > 1) output.push(right.at(-1));
-    return { output, errors };
+    return guess ? { output, errors, guess } : { output, errors };
 }
 
 function parameterRule(_inputs, parameters) {
