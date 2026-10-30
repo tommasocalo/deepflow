@@ -1,6 +1,6 @@
 import { recordArchitectureEdit } from '../../stores/architectureHistory.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
-import { describeTarget, fieldPatch, resolveWriteTarget, targetSummary, targetTag, targetValue } from '../../domain/modelTable/writeTargets.js';
+import { describeTarget, fieldPatch, resolveWriteTarget, targetReach, targetSummary, targetTag, targetValue } from '../../domain/modelTable/writeTargets.js';
 
 /** Table columns, in order; the config column holds the editable settings. */
 export const COLUMNS = ['layer', 'count', 'output', 'config', 'params', 'macs', 'share'];
@@ -29,22 +29,24 @@ function writeTarget(store, target, value) {
 /**
  * Apply the fields edited in one config cell as a single undo step. Targets
  * are resolved from live store state, so a stale render can never write to
- * the wrong owner, and the label names what really changes: "Set d_model =
- * 1024 (global, 6 fields)". Unchanged values and read-only fields write
- * nothing, and an edit that changes nothing records no history entry.
- * Returns { written, label }.
+ * the wrong owner, and the label names what really changes: "Set global
+ * d_model = 1024". `reach` says what else follows, for the confirmation:
+ * "read by every layer that uses it · 6 fields name it directly". Unchanged
+ * values and read-only fields write nothing, and an edit that changes
+ * nothing records no history entry. Returns { written, label, reach }.
  */
 export function applyModelTableEdit(store, row, edits, { templateUses = {} } = {}) {
     const rootGraph = store.getState().graph;
     const templates = useTemplatesStore.getState().templates;
     const planned = edits.map(({ field, value, cells }) => ({ value, target: resolveWriteTarget({ row, field, cells, rootGraph, templates }) }))
         .filter(({ target, value }) => target.kind !== 'readonly' && !sameValue(targetValue(target, { rootGraph, templates }), value));
-    if (!planned.length) return { written: 0, label: null };
+    if (!planned.length) return { written: 0, label: null, reach: null };
     const label = `Set ${planned.map(({ target, value }) => targetSummary(target, value, { row, rootGraph, templates, templateUses })).join('; ')}`;
+    const reach = [...new Set(planned.map(({ target }) => targetReach(target, { row, rootGraph, templates })).filter(Boolean))].join(' · ') || null;
     recordArchitectureEdit(label, () => {
         for (const { target, value } of planned) writeTarget(store, target, value);
     });
-    return { written: planned.length, label };
+    return { written: planned.length, label, reach };
 }
 
 const fieldCache = new WeakMap();

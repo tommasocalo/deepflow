@@ -5,7 +5,7 @@ import { buildModelTableRows, readingOrder, rowKey } from '../src/domain/modelTa
 import { configAccessibleText } from '../src/domain/modelTable/configFields.js';
 import { cellStatus, eachText, failingText, knownShapeMark, knownShapeWords, layerLines, metricLines, multiplicityInfo, SHAPE_GUESS_NOTE, shareInfo } from '../src/domain/modelTable/cellText.js';
 import { cutExpression, fitConfigParts, fitShapeText } from '../src/domain/modelTable/fitText.js';
-import { describeTarget, followReference, parseCellValue, precheckCellValue, resolveWriteTarget, targetSummary, targetTag } from '../src/domain/modelTable/writeTargets.js';
+import { describeTarget, followReference, parseCellValue, precheckCellValue, resolveWriteTarget, targetReach, targetSummary, targetTag } from '../src/domain/modelTable/writeTargets.js';
 import { createEdge, createLayerNode, createRepeatNode, createSuperNodeInstance, createTemplate } from '../src/domain/architecture/index.js';
 import { getEntry } from '../src/domain/library/index.js';
 import { gpt2Storyboard } from '../src/storyboards/gpt2.js';
@@ -564,12 +564,18 @@ test('edits are summarised by the value that really changes', () => {
     const global = target(ctx, ln1, 'normalized_shape', 'values');
     const uses = ctx.metrics.templateUses;
     assert.equal(targetTag(global, { row: ln1, rootGraph: ctx.graph, templates: ctx.templates }), 'global d_model');
-    assert.match(targetSummary(global, 1024, { row: ln1, rootGraph: ctx.graph, templates: ctx.templates, templateUses: uses }), /^d_model = 1024 \(global, \d+ fields\)$/);
+    assert.equal(targetSummary(global, 1024, { row: ln1, rootGraph: ctx.graph, templates: ctx.templates, templateUses: uses }), 'global d_model = 1024');
+    assert.match(targetReach(global, { row: ln1, rootGraph: ctx.graph, templates: ctx.templates }), /^read by every layer that uses it · \d+ fields name it directly$/,
+        'A global reaches every layer that uses it, not only the fields that name it');
     const dropout = find(rows, 'attention projection dropout');
     const shared = target(ctx, dropout, 'p', 'symbols');
     assert.equal(targetTag(shared, { row: dropout, rootGraph: ctx.graph, templates: ctx.templates }), null, 'The cell\'s own field needs no tag');
     assert.equal(targetSummary(shared, 0.2, { row: dropout, rootGraph: ctx.graph, templates: ctx.templates, templateUses: uses }),
         'attention projection dropout p = 0.2 (shared Transformer block, 12 uses)');
+    assert.equal(targetReach(shared, { row: dropout, rootGraph: ctx.graph, templates: ctx.templates }), null, 'An edit where the value is written reaches no further');
+    const followed = target(ctx, dropout, 'p', 'values');
+    assert.equal(targetReach(followed, { row: dropout, rootGraph: ctx.graph, templates: ctx.templates }), 'also changes dropout',
+        '$resid_dropout feeds the MLP dropout too');
     const root = find(rows, 'Dropout');
     assert.equal(targetSummary(target(ctx, root, 'p', 'values'), null, { row: root, rootGraph: ctx.graph, templates: ctx.templates }), 'Dropout p = default');
     const position = find(rows, 'positional embedding');

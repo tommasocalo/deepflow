@@ -1,6 +1,6 @@
 import { asFreeParamRef, globalParameters, resolveDimensionTuple, resolveRepeatCount } from '../expressions.js';
 import { getEntry } from '../library/index.js';
-import { fieldAlias, globalParameterUses, parameterReferences, resolvedFieldValue } from '../parameterBindings.js';
+import { fieldAlias, globalParameterUses, parameterConsumers, parameterReferences, resolvedFieldValue } from '../parameterBindings.js';
 import { NUMBER_LITERAL } from '../parameterDisplay.js';
 import { COUNT_SPEC, fieldRaw, unset } from './configFields.js';
 
@@ -194,24 +194,51 @@ export function targetTag(target, { row, rootGraph, templates }) {
 
 /**
  * One edit in words, naming the value that really changes and how far it
- * reaches: `d_model = 1024 (global, 6 fields)`, `ResNet stages stride = 2
- * (all 3 instances)`, `mlp proj out_features = 1024 (shared Transformer
- * block, 12 uses)`. Undo labels and confirmations use it.
+ * reaches: `global d_model = 1024`, `ResNet stages stride = 2 (all 3
+ * instances)`, `mlp proj out_features = 1024 (shared Transformer block,
+ * 12 uses)`. Undo labels and confirmations use it.
  */
 export function targetSummary(target, value, { row, rootGraph, templates, templateUses = {} }) {
     const text = valueText(value);
     const uses = (templateId) => templateUses[templateId] ?? 0;
     const shared = (templateId) => `${templates[templateId]?.name ?? 'component'}, ${usesText(uses(templateId))}`;
-    if (target.kind === 'global') {
-        const count = globalUseCount(rootGraph, templates, target.name);
-        return `${target.name} = ${text} (global, ${count} field${count === 1 ? '' : 's'})`;
-    }
+    if (target.kind === 'global') return `global ${target.name} = ${text}`;
     if (target.kind === 'templateDefault') return `${target.name} = ${text} (default in ${shared(target.templateId)})`;
     const own = target.nodeId === row.nodeId;
     const graph = target.kind === 'rootNode' ? rootGraph : templates[target.templateId]?.graph;
     const where = own ? row.label : graph?.nodes?.[target.nodeId]?.label ?? 'its container';
     if (target.kind === 'rootNode') return `${where} ${target.field} = ${text}${!own && row.multiplicity > 1 ? ` (all ${row.multiplicity} instances)` : ''}`;
     return `${where} ${target.field} = ${text}${uses(target.templateId) > 1 ? ` (shared ${shared(target.templateId)})` : ''}`;
+}
+
+/**
+ * What else an edit that follows a reference changes, for its confirmation:
+ * a global is read wherever it is used (`read by every layer that uses it ·
+ * 6 fields name it directly`); a binding or a definition default also feeds
+ * the other fields of that definition that name it (`also changes dropout`,
+ * the other dropout of a block). Null when the edit writes the field itself.
+ */
+export function targetReach(target, { row, rootGraph, templates }) {
+    if (!target.hops?.length) return null;
+    if (target.kind === 'global') {
+        const count = globalUseCount(rootGraph, templates, target.name);
+        return `read by every layer that uses it · ${count} field${count === 1 ? ' names' : 's name'} it directly`;
+    }
+    let definition = null;
+    let name = null;
+    if (target.kind === 'templateDefault') {
+        definition = templates[target.templateId];
+        name = target.name;
+    } else if (target.source === 'bindings' || target.source === 'parameterValues') {
+        const graph = target.kind === 'rootNode' ? rootGraph : templates[target.templateId]?.graph;
+        definition = templates[graph?.nodes?.[target.nodeId]?.templateId];
+        name = target.field;
+    }
+    // The row and the containers it was reached through are the edit itself.
+    const path = new Set([row.nodeId, ...row.levelPath]);
+    const others = [...new Set(parameterConsumers(definition, name).filter((use) => use.nodeId && !use.edgeId && !path.has(use.nodeId)).map((use) => use.label))];
+    if (!others.length) return null;
+    return `also changes ${others.slice(0, 2).join(', ')}${others.length > 2 ? ` and ${others.length - 2} more` : ''}`;
 }
 
 /**

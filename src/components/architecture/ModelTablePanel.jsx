@@ -227,8 +227,8 @@ export default function ModelTablePanel({ paneId = 'main' }) {
         editDone: (row, edits, { refocus = true } = {}) => {
             const result = edits?.length ? applyModelTableEdit(store, row, edits, { templateUses: contextRef.current.templateUses }) : { written: 0 };
             setEditing(null);
-            // The confirmation names the value that changed, as the undo step does.
-            setMessage(result.written ? `${result.label} · ⌘Z / Ctrl+Z to undo` : edits ? 'No change' : 'Edit cancelled');
+            // The confirmation names the value that changed, as the undo step does, and what else follows it.
+            setMessage(result.written ? `${result.label}${result.reach ? ` · ${result.reach}` : ''} · ⌘Z / Ctrl+Z to undo` : edits ? 'No change' : 'Edit cancelled');
             if (refocus) focusCell(row.key, CONFIG_COLUMN);
         },
         message: setMessage,

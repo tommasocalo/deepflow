@@ -293,11 +293,23 @@ test('Values mode follows a reference to its source and keeps formulas read-only
     await key(input, 'Enter');
     assert.equal(globalValue('d_model'), 1024);
     assert.equal(history().undoCount, 1);
-    assert.match(history().undoLabel, /^Set d_model = 1024 \(global, \d+ fields\)$/, 'Undo names the global, not the cell');
-    assert.match(mainTable().querySelector('.df-mt-focus-text').textContent, /^Set d_model = 1024 \(global, \d+ fields\) · /);
+    assert.equal(history().undoLabel, 'Set global d_model = 1024', 'Undo names the global, not the cell');
+    assert.match(mainTable().querySelector('.df-mt-focus-text').textContent, /^Set global d_model = 1024 · read by every layer that uses it · \d+ fields name it directly · ⌘Z/,
+        'The confirmation says how far a global reaches');
     assert.match(cellOf('mlp fc', 3).textContent, /1024\s*→\s*4096/, 'Every layer that uses the global follows');
     await act(() => history().undo());
     assert.equal(globalValue('d_model'), 768);
+
+    // A followed binding that other rows read too: the confirmation names them.
+    const dropoutEditor = await editConfig('attention projection dropout');
+    const p = dropoutEditor.querySelector('input[aria-label="attention projection dropout p"]');
+    await typeText(p, '0.2');
+    await key(p, 'Enter');
+    assert.equal(rootNode('Transformer blocks').bindings.resid_dropout, 0.2);
+    assert.equal(history().undoLabel, 'Set Transformer blocks resid_dropout = 0.2 (all 12 instances)');
+    assert.match(mainTable().querySelector('.df-mt-focus-text').textContent, /^Set Transformer blocks resid_dropout = 0\.2 \(all 12 instances\) · also changes dropout · ⌘Z/);
+    assert.match(cellOf('dropout', 3).textContent, /p=0\.2/, 'The MLP dropout follows');
+    await act(() => history().undo());
 
     const fcEditor = await editConfig('mlp fc');
     const readOnly = fcEditor.querySelector('[aria-label="mlp fc out_features"]');
