@@ -263,7 +263,7 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
             <RibbonGroup label="View">
                 <RibbonButton icon={Columns2} onClick={() => { closePopup(); openToSide?.(selectedComponent ? [...currentPath, selectedComponent.id] : currentPath); }} title="Open selected component or current level to the side" aria-label="Open to the side">To side</RibbonButton>
                 <RibbonButton icon={Maximize} onClick={onFitView} title={`Fit graph in ${targetLabel.toLowerCase()}`} aria-label="Fit active graph">Fit</RibbonButton>
-                <RibbonButton icon={Table2} aria-label="Show model table" aria-pressed={!!showModelTable}
+                <RibbonButton icon={Table2} aria-label="Show model table" aria-pressed={!!showModelTable} data-model-table-toggle
                     aria-controls={showModelTable ? `df-model-table-${paneId}` : undefined}
                     onPointerEnter={preloadModelTable} onFocus={preloadModelTable}
                     onClick={() => {

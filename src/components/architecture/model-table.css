@@ -23,41 +23,45 @@
 }
 
 .df-mt-resizer { position: absolute; top: 0; bottom: 0; left: -5px; z-index: 6; width: 8px; cursor: col-resize; touch-action: none; }
-.df-mt-resizer::after { content: ''; position: absolute; top: calc(50% - 16px); left: 3px; width: 2px; height: 32px; background: transparent; }
-.df-mt-resizer:hover::after, .df-mt-resizer:focus-visible::after { background: #111; }
+/* A visible grip on the edge, so the edge reads as draggable. */
+.df-mt-grip { position: absolute; top: calc(50% - 16px); left: 1px; width: 6px; height: 32px; box-sizing: border-box; border: 1px solid #111; border-radius: 3px; background: #fff; }
+.df-mt-resizer:hover .df-mt-grip, .df-mt-resizer:focus-visible .df-mt-grip { background: #fff6cf; }
 .df-mt-resizer:focus-visible { outline: none; }
+.df-mt-resizer:focus-visible .df-mt-grip { box-shadow: 0 0 0 2px #2563eb; }
 
 /* Toolbar: a title and three segmented controls. */
-.df-mt-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 12px; padding: 6px 6px 6px 12px; border-bottom: 1px solid #111; }
+/* The close button keeps the first line's right end, however the controls wrap. */
+.df-mt-toolbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 12px; padding: 5px 34px 5px 12px; border-bottom: 1px solid #111; }
 .df-mt-title { margin: 0 2px 0 0; font: 700 10px/22px ui-sans-serif, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .df-mt-segmented { display: inline-flex; align-items: center; gap: 5px; }
-.df-mt-segmented-label { color: #6b6b66; font: 700 9px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; }
+.df-mt-segmented-label { color: #6b6b66; font: 700 10px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .05em; text-transform: uppercase; }
 .df-mt-segments { display: inline-flex; }
 .df-mt-segments button { height: 22px; padding: 0 7px; border: 1px solid #111; background: #fff; color: #333; font-size: 10px; font-weight: 600; line-height: 20px; white-space: nowrap; }
 .df-mt-segments button + button { margin-left: -1px; }
 .df-mt-segments button:hover { background: #f4f4ef; color: #111; }
 .df-mt-segments button[aria-checked="true"] { position: relative; background: #fff6cf; color: #111; box-shadow: inset 0 -2px 0 #111; }
 .df-mt-segments button:focus-visible, .df-mt-close:focus-visible, .df-mt-focus button:focus-visible, .df-mt-more button:focus-visible, .df-mt-alert button:focus-visible { position: relative; z-index: 1; outline: 2px solid #2563eb; outline-offset: 1px; }
-.df-mt-close { display: grid; place-items: center; width: 24px; height: 22px; margin-left: auto; border-radius: 2px; color: #555; }
+.df-mt-close { position: absolute; top: 5px; right: 6px; display: grid; place-items: center; width: 24px; height: 22px; border-radius: 2px; color: #555; }
 .df-mt-close:hover { background: #ecece6; color: #111; }
 
 /* The table scrolls inside its own box; the header and Layer column stay. */
 .df-mt-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .df-mt-table { width: 100%; min-width: 560px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 /* Config takes the width that is left, so widening the panel shows longer settings. */
-.df-mt-col-layer { width: clamp(160px, 23cqw, 250px); }
+/* At the default 760px the Layer column fits a 24-character name one level deep. */
+.df-mt-col-layer { width: clamp(160px, 28.5cqw, 260px); }
 .df-mt-col-count { width: 38px; }
-.df-mt-col-output { width: 112px; }
+.df-mt-col-output { width: 108px; }
 .df-mt-col-params, .df-mt-col-metric { width: 66px; }
 /* Bytes and their ranges are wider than counts: 0.79–3.15 MB. */
 .df-mt-table.is-activation { min-width: 584px; }
 .df-mt-table.is-activation .df-mt-col-metric { width: 86px; }
 .df-mt-col-share { width: 80px; }
-.df-mt-table thead th { position: sticky; top: 0; z-index: 3; height: 24px; padding: 0 6px; border-bottom: 1px solid #111; background: #fff; color: #555; font: 600 9px/1.2 ui-sans-serif, system-ui, sans-serif; letter-spacing: .05em; text-align: left; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.df-mt-table thead th { position: sticky; top: 0; z-index: 3; height: 24px; padding: 0 6px; border-bottom: 1px solid #111; background: #fff; color: #555; font: 600 10px/1.2 ui-sans-serif, system-ui, sans-serif; letter-spacing: .03em; text-align: left; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .df-mt-table thead th.df-mt-layer { z-index: 4; left: 0; }
 .df-mt-table thead th.df-mt-num { padding: 0 6px 0 4px; text-align: right; }
 /* The denominator must stay readable: % of 4.03 GB. */
-.df-mt-table thead th.df-mt-share-head { padding-left: 2px; letter-spacing: .02em; }
+.df-mt-table thead th.df-mt-share-head { padding-left: 2px; letter-spacing: 0; }
 
 .df-mt-row { --row-bg: #fff; height: 26px; background: var(--row-bg); cursor: default; scroll-margin-top: 28px; }
 .df-mt-row:hover { --row-bg: #fafaf6; }
@@ -96,7 +100,7 @@
 .df-mt-count { color: #444; }
 .df-mt-metric { display: inline-flex; flex-direction: column; align-items: flex-end; vertical-align: middle; }
 .df-mt-number { line-height: 12px; }
-.df-mt-each { color: #666; font-size: 9px; line-height: 10px; }
+.df-mt-each { color: #666; font-size: 10px; line-height: 11px; }
 .df-mt-unknown { color: #b45309; font-weight: 700; cursor: help; }
 .df-mt-fused { color: #a3a39c; cursor: help; }
 .df-mt-shape { color: #333; font: 10px/1 var(--mt-mono); font-variant-numeric: tabular-nums; }
@@ -109,16 +113,27 @@
 .df-mt-row.is-expanded .df-mt-bar > span { opacity: .4; }
 .df-mt-share-text { min-width: 5ch; font-size: 10px; }
 
-/* Very narrow panels: the four totals take two lines. */
-@container df-model-table (max-width: 519px) {
-    .df-mt-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Narrower panels (split panes, bottom sheets): one toolbar line; the group
+   names stay as the radio groups' accessible names. */
+@container df-model-table (max-width: 699px) {
+    .df-mt-title, .df-mt-segmented-label { display: none; }
+    .df-mt-toolbar { gap: 5px 8px; padding-left: 8px; }
+}
+@container df-model-table (max-width: 459px) {
+    .df-mt-toolbar { gap: 4px 6px; padding-left: 6px; }
+    .df-mt-segments button { padding: 0 5px; }
+}
+/* The narrowest panels: "Activations" reads "Act." (its accessible name stays whole). */
+@container df-model-table (max-width: 419px) {
+    .df-mt-segments button { padding: 0 4px; }
+    .df-mt-segments button[data-short] { font-size: 0; }
+    .df-mt-segments button[data-short]::after { content: attr(data-short); font-size: 10px; }
 }
 
 /* Narrow panels: tighter fixed columns, so all seven fit beside the canvas. */
 @container df-model-table (max-width: 699px) {
     .df-mt-col-count { width: 36px; }
     .df-mt-col-output { width: 88px; }
-    .df-mt-col-params, .df-mt-col-metric { width: 64px; }
     .df-mt-col-share { width: 76px; }
     .df-mt-bar { width: 18px; }
     .df-mt-share { gap: 4px; }
@@ -139,7 +154,7 @@
 .df-mt-field.is-invalid { color: #b91c1c; border-bottom: 1px solid #dc2626 !important; }
 .df-mt-prefix { color: #666; }
 .df-mt-separator { margin: 0 3px; color: #999; }
-.df-mt-note { margin-left: 6px; color: #666; font: 9.5px/1 ui-sans-serif, system-ui, sans-serif; }
+.df-mt-note { margin-left: 6px; color: #666; font: 10px/1 ui-sans-serif, system-ui, sans-serif; }
 .df-mt-more-fields { margin-left: 4px; color: #888; }
 
 .df-mt-config-cell.is-editing { overflow: visible; }
@@ -152,43 +167,66 @@ select.df-mt-input { width: auto; padding-right: 2px; }
 /* The reason an edit was refused, next to the field. */
 .df-mt-input-error { position: absolute; top: calc(100% + 3px); left: 0; z-index: 8; width: max-content; max-width: 240px; padding: 2px 6px; border: 1px solid #dc2626; border-radius: 2px; background: #fff; color: #b91c1c; font: 500 10px/14px ui-sans-serif, system-ui, sans-serif; white-space: normal; box-shadow: 0 2px 6px rgb(0 0 0 / 12%); }
 .df-mt-field.is-readonly { cursor: not-allowed; }
-/* Where a Values edit lands, beside the focused field. */
-.df-mt-editor-target { margin-left: 5px; color: #6d28d9; font: 500 10px/18px ui-sans-serif, system-ui, sans-serif; white-space: nowrap; }
-.df-mt-editor-target.is-idle { display: none; }
 
 .df-mt-more td { padding: 6px; border-bottom: 1px solid #efefea; text-align: center; }
 .df-mt-more button { padding: 3px 8px; border: 1px solid #111; border-radius: 2px; background: #fff; font-size: 10px; font-weight: 600; }
 .df-mt-more button:hover { background: #fff6cf; }
 .df-mt-empty { margin: 0; padding: 16px 12px; color: #555; font-size: 11px; }
 
-/* Focus line: where the active row lives and what an edit will change. */
-.df-mt-focus { display: flex; align-items: center; gap: 5px; min-height: 26px; padding: 2px 6px 2px 12px; border-top: 1px solid #deded8; color: #444; font-size: 10px; }
+/* Status line: where the active row lives, what the active cell means, what an edit changed. */
+.df-mt-focus { display: flex; align-items: center; gap: 5px; min-height: 24px; padding: 1px 6px 1px 12px; border-top: 1px solid #deded8; color: #444; font-size: 10.5px; }
 .df-mt-focus-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.df-mt-focus button { flex: none; height: 20px; padding: 0 6px; border: 1px solid #cfcfc8; border-radius: 2px; background: #fff; color: #222; font-size: 10px; font-weight: 600; }
-.df-mt-focus button:hover:not(:disabled) { border-color: #111; background: #f4f4ef; }
+.df-mt-focus button, .df-mt-details-toggle { flex: none; height: 20px; padding: 0 6px; border: 1px solid #cfcfc8; border-radius: 2px; background: #fff; color: #222; font-size: 10px; font-weight: 600; }
+.df-mt-focus button:hover:not(:disabled), .df-mt-details-toggle:hover { border-color: #111; background: #f4f4ef; }
 .df-mt-focus button:disabled { opacity: .4; }
 
-/* Footer: totals and the assumptions behind them. */
-.df-mt-footer { padding: 6px 12px 7px; border-top: 1px solid #111; }
-.df-mt-alert { display: flex; align-items: center; gap: 5px; min-width: 0; margin: 0 0 5px; color: #991b1b; font-size: 10px; line-height: 14px; }
+/* Footer: the totals on one line; their details and assumptions fold below. */
+.df-mt-footer { padding: 4px 6px 5px 12px; border-top: 1px solid #111; }
+.df-mt-alert { display: flex; align-items: center; gap: 5px; min-width: 0; margin: 0 0 4px; color: #991b1b; font-size: 10.5px; line-height: 16px; }
 .df-mt-alert > svg { flex: none; color: #dc2626; }
 .df-mt-alert.is-limit { color: #92400e; }
 .df-mt-alert.is-limit > svg { color: #d97706; }
 .df-mt-alert-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .df-mt-alert button { flex: none; height: 18px; padding: 0 6px; border: 1px solid #cfcfc8; border-radius: 2px; background: #fff; color: #222; font-size: 10px; font-weight: 600; }
 .df-mt-alert button:hover { border-color: #111; background: #f4f4ef; }
-.df-mt-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 12px; margin: 0; }
-.df-mt-stat { min-width: 0; }
-.df-mt-stat dt { overflow: hidden; color: #666; font: 700 9px/12px ui-sans-serif, system-ui, sans-serif; letter-spacing: .05em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.df-mt-stat dd { margin: 0; overflow: hidden; font: 700 12px/16px var(--mt-mono); font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.df-mt-stat dd.df-mt-stat-detail { color: #666; font: 400 9.5px/12px ui-sans-serif, system-ui, sans-serif; }
-.df-mt-assumptions { display: -webkit-box; margin: 5px 0 0; overflow: hidden; color: #666; font-size: 9.5px; line-height: 12px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.df-mt-totals { display: flex; align-items: center; gap: 4px 12px; min-width: 0; }
+.df-mt-stats { display: flex; flex: 1; flex-wrap: wrap; align-items: baseline; gap: 2px 16px; min-width: 0; margin: 0; }
+.df-mt-stat { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; white-space: nowrap; }
+.df-mt-stat dt { color: #666; font: 700 10px/16px ui-sans-serif, system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; }
+.df-mt-stat dd { margin: 0; font: 700 12px/16px var(--mt-mono); font-variant-numeric: tabular-nums; }
+.df-mt-narrow { display: none; }
+.df-mt-details-toggle { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; color: #555; font-weight: 500; white-space: nowrap; }
+.df-mt-details-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.df-mt-details-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.df-mt-details { margin-top: 3px; color: #555; font-size: 10px; line-height: 14px; }
+.df-mt-details[hidden] { display: none; }
+.df-mt-details p { margin: 0; }
+.df-mt-assumptions { margin-top: 2px !important; color: #666; }
 
-/* Narrow panes (split view, small windows): the table becomes a bottom sheet. */
+/* Probes measure the monospace fonts the cells use. */
+.df-mt-probe { position: absolute; top: 0; left: 0; visibility: hidden; padding: 0 !important; white-space: pre; pointer-events: none; }
+
+/* Where a Values edit lands, beside the focused field. */
+.df-mt-editor-target { margin-left: 5px; color: #6d28d9; font: 500 10px/18px ui-sans-serif, system-ui, sans-serif; white-space: nowrap; }
+.df-mt-editor-target.is-idle { display: none; }
+
+/* Narrow panels: compact totals, so they keep one line; the weights (4 bytes
+   per parameter) move into the details. */
+@container df-model-table (max-width: 639px) {
+    .df-mt-wide { display: none; }
+    .df-mt-narrow { display: inline; }
+    .df-mt-stats { column-gap: 12px; }
+}
+@container df-model-table (max-width: 559px) {
+    .df-mt-stat.is-optional { display: none; }
+}
+
+/* Narrow panes (split view, small windows): the table becomes a bottom sheet,
+   tall enough for eight rows or more, never leaving the canvas less than 200px. */
 @container df-architecture-body (max-width: 919px) {
     .df-architecture-workspace:has(> .df-model-table) { flex-direction: column; }
-    .df-model-table { flex: 0 0 var(--model-table-height, 46%); width: auto; min-width: 0; max-width: none; height: auto; border-top: 2px solid #111; border-left: 0; }
-    .df-mt-resizer { top: -5px; right: 0; bottom: auto; left: 0; width: auto; height: 8px; cursor: row-resize; }
-    .df-mt-resizer::after { top: 3px; left: calc(50% - 16px); width: 32px; height: 2px; }
-    .df-mt-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+    .df-model-table { flex: 0 0 var(--model-table-height, clamp(min(330px, 100% - 200px), 60%, 100% - 200px)); width: auto; min-width: 0; max-width: none; height: auto; border-top: 2px solid #111; border-left: 0; }
+    .df-mt-resizer { top: -6px; right: 0; bottom: auto; left: 0; width: auto; height: 10px; cursor: row-resize; }
+    .df-mt-grip { top: 2px; left: calc(50% - 18px); width: 36px; height: 6px; }
+    .df-mt-focus { min-height: 22px; }
 }

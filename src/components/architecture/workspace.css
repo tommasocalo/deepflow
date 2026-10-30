@@ -24,3 +24,6 @@
 .df-pane-divider::after { content: ''; position: absolute; top: calc(50% - 16px); left: 2px; width: 1px; height: 32px; background: #888; }
 .df-pane-divider:hover, .df-pane-divider:focus-visible { background: #ddd; outline: none; }
 .df-pane-divider:focus-visible::after { background: #111; width: 2px; }
+/* Escape in the Model table returns focus to the canvas; mouse focus draws no ring. */
+[data-architecture-canvas]:focus { outline: none; }
+[data-architecture-canvas]:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }

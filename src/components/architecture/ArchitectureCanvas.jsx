@@ -406,6 +406,8 @@ const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = tru
             <div
                 ref={wrapperRef}
                 data-architecture-canvas
+                // Focusable from code only: Escape in the Model table returns here.
+                tabIndex={-1}
                 className={showPanCursor ? 'deepflow-mode-pan' : 'deepflow-mode-select'}
                 style={{ flex: 1, minWidth: 0, minHeight: 0, height: '100%', backgroundColor: '#fff', position: 'relative' }}
                 onPointerUpCapture={(event) => {

@@ -268,8 +268,10 @@ test('Symbols mode edits a shared definition for every use and reports validatio
     assert.match(projectionMacs.getAttribute('title'), /MatMul inner dimensions mismatch: 1536 vs 3072/);
     assert.match(cellOf('lm_head', 5).textContent, /39\.5G/, 'Later layers keep their declared settings');
     const alert = mainTable().querySelector('.df-mt-alert');
-    assert.match(alert.textContent, /^1 error · totals use declared settings · Transformer blocks › mlp proj › input × weightᵀ: MatMul inner dimensions mismatch/);
-    assert.match(footerStat('MACs / sample').textContent, /≥ 102\.3G.*1 row unresolved/);
+    assert.match(alert.textContent, /^1 error · Transformer blocks › mlp proj › input × weightᵀ: MatMul inner dimensions mismatch/);
+    assert.match(alert.querySelector('.df-mt-alert-text').getAttribute('title'), /Totals use the declared settings/);
+    assert.match(footerStat('MACs').textContent, /^MACs≥ 102\.3G$/);
+    assert.match(mainTable().querySelector('.df-mt-details-text').textContent, /MACs: 1 row unresolved/);
     await act(() => history().undo());
     assert.equal(cellOf('mlp proj', 0).getAttribute('aria-invalid'), null);
     assert.match(cellOf('mlp fc', 5).textContent, /29\.0G/);
@@ -500,16 +502,17 @@ test('the Activations lens shows bytes per row, and partial totals say so', asyn
     assert.match(cellOf('lm_head', 5).textContent, /205\.9 MB/);
     assert.match(cellOf('Transformer blocks', 5).textContent, /3\.81 GB.*318 MB ea/);
     assert.match(mainTable().querySelector('.df-mt-assumptions').textContent, /activations: Σ op outputs, standard modules count one output/);
-    assert.match(footerStat('Largest activation').textContent, /^Largest activation205\.9 MBlm_head · B×1024×50257/);
+    assert.match(footerStat('Largest act.').textContent, /^Largest act\.205\.9 MB$/);
+    assert.match(mainTable().querySelector('.df-mt-details-text').textContent, /Largest act\.: lm_head · B×1024×50257/);
 
     const stack = rootNode('Transformer blocks');
     await act(() => useArchitectureStore.getState().patchRootNode(stack.id, { count: '$missing' }));
     assert.equal(cellOf('lm_head', 5).textContent, '?', 'Sizes after an unresolved count are unknown');
     assert.match(header[6].textContent, /% of ≥/, 'The share denominator is a lower bound');
-    assert.match(footerStat('Largest activation').querySelector('dd').textContent, /^≥ /);
+    assert.match(footerStat('Largest act.').querySelector('dd').textContent, /^≥ /);
     await click(radio('MACs'));
     assert.equal(cellOf('lm_head', 5).textContent, '?', 'lm_head MACs are unknown, not computed from a placeholder');
-    assert.match(mainTable().querySelector('.df-mt-alert').textContent, /^1 error · totals use declared settings · Transformer blocks: /);
+    assert.match(mainTable().querySelector('.df-mt-alert').textContent, /^1 error · Transformer blocks: /);
 });
 
 test('read-only values explain themselves, and an input method keeps Enter', async () => {
@@ -559,4 +562,67 @@ test('a default the cell leaves out can still be edited', async () => {
     assert.equal(select.value, 'none', 'Enter on the empty cell still offers the setting');
     await key(select, 'Escape');
     assert.equal(history().undoCount, 1);
+});
+
+const focusText = () => mainTable().querySelector('.df-mt-focus-text').textContent;
+
+test('Escape in the grid returns to the canvas, and the resize handle is the last stop', async () => {
+    await openTable();
+    await nextFrame();
+    const tabbable = [...mainTable().querySelectorAll('button:not([tabindex="-1"]), [tabindex="0"]')].filter((element) => !element.disabled && !element.closest('[hidden]'));
+    assert.equal(tabbable[0].getAttribute('role'), 'radio', 'The toolbar comes first');
+    assert.equal(tabbable.at(-1).getAttribute('role'), 'separator', 'Resizing is the last Tab stop, after the grid and the footer');
+    const cell = cellOf('Dropout', 2);
+    await click(cell);
+    await act(() => cell.focus());
+    await key(cell, 'Escape');
+    const canvas = container.querySelector('[data-graph-pane="main"] [data-architecture-canvas]');
+    assert.ok(canvas.contains(document.activeElement), 'Focus is back on the canvas');
+    assert.ok(!mainTable().contains(document.activeElement));
+    assert.deepEqual(useArchitectureStore.getState().selectedNodeIds, [rootNode('Dropout').id], 'The selection stays');
+});
+
+test('the status line explains the active cell: per-instance figures and unknown values', async () => {
+    await openTable();
+    await click(cellOf('Transformer blocks', 4));
+    assert.equal(focusText(), 'Transformer blocks · 7,087,872 parameters per instance × 12 = 85,054,464');
+    await click(cellOf('Transformer blocks', 1));
+    assert.equal(focusText(), 'Transformer blocks · ×N: 12 per forward pass');
+    await click(cellOf('Transformer blocks', 0));
+    assert.match(focusText(), /^main › Transformer blocks · Transformer block · ×12/, 'The Layer column keeps the row description');
+    await act(() => useArchitectureStore.getState().patchRootNode(rootNode('Transformer blocks').id, { count: '$missing' }));
+    await click(cellOf('lm_head', 5));
+    assert.equal(focusText(), 'lm_head · Unknown · Not counted: input × weightᵀ (after Transformer blocks: its repeat count is unresolved)');
+    await click(cellOf('ln_f', 2));
+    assert.match(focusText(), /^ln_f · Output unknown: after Transformer blocks: its repeat count is unresolved · The canvas still draws the shape/);
+});
+
+test('the footer counts errors across the model and says how the canvas counts them', async () => {
+    await openTable();
+    const proj = blockNode('mlp proj');
+    await act(() => useTemplatesStore.getState().patchTemplateNode(blockTemplate().id, proj.id, { parameterValues: { ...proj.parameterValues, out_features: 1024 } }));
+    const alert = mainTable().querySelector('.df-mt-alert');
+    assert.match(alert.textContent, /^14 errors in the model, 3 on this canvas · /);
+    const title = alert.querySelector('.df-mt-alert-text').getAttribute('title');
+    assert.match(title, /the canvas badge counts the errors of the level it shows \(3\)/);
+    assert.match(title, /The canvas still draws the shape validation carried past this point/);
+    assert.match(container.querySelector('[data-graph-pane="main"] .df-graph-status-trigger').textContent, /^3 errors/, 'The badge it refers to');
+    assert.equal(cellOf('token embedding', 6).textContent, '≤20.0%', 'Exact rows of a partial total are at most their share');
+    assert.equal(cellOf('Transformer blocks', 6).textContent, '?', 'A partial row of a partial total has no share');
+    assert.match(rowOf('ln_1').querySelector('[data-col="0"]').getAttribute('title'), /Fails in i=1–11 \(11 of 12\)/);
+});
+
+test('the totals keep one line and fold their details and assumptions', async () => {
+    await openTable();
+    const toggle = mainTable().querySelector('.df-mt-details-toggle');
+    const details = mainTable().querySelector('.df-mt-details');
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true', 'Beside the canvas the details are open');
+    assert.equal(details.hidden, false);
+    assert.match(details.textContent, /Params: all trainable · MACs: 145,824,153,600 per sample/);
+    await click(toggle);
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(details.hidden, true);
+    assert.equal(mainTable().querySelector('[role="treegrid"]').getAttribute('aria-describedby'), mainTable().querySelector('.df-mt-assumptions').id, 'Folded assumptions still describe the table');
+    assert.deepEqual([...mainTable().querySelectorAll('.df-mt-stat dt')].map((term) => term.textContent), ['Params', 'MACs', 'Largest act.', 'Weights']);
+    assert.equal(radio('Activations').getAttribute('aria-label'), 'Activations', 'Its short form "Act." keeps the whole name');
 });
