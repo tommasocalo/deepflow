@@ -139,7 +139,7 @@ export default {
             solution: [answer('m3.digitsFlatten', 64), { do: 'setParam', node: { id: 'lin1' }, name: 'in_features', value: 64 }, TRAIN],
         },
         {
-            id: 's7', kind: 'predict', subgoal: 'export', target: ['tab.data', 'toolbar.code', 'code.tab:train'],
+            id: 's7', kind: 'predict', subgoal: 'export', target: ['tab.data', 'data.dataset:mnist', 'data.use', 'toolbar.code', 'code.tab:train'],
             codeQuotes: { tab: 'train', text: ['transforms.Normalize((0.1307,), (0.3081,))', 'datasets.MNIST('] },
             predict: {
                 id: 'm3.normalize', kind: 'choice', options: ['standardize', 'binarize', 'resize'], correct: 'standardize',

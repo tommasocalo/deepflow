@@ -6,7 +6,7 @@ import TrainerCard from '../trainer/components/TrainerCard.jsx';
 import { focusNode, requestFit, requestTrainingFit } from '../lessons/engine/canvasBridge.js';
 import { hasText, t } from '../lessons/engine/i18n.js';
 import { revealValues } from '../lessons/engine/reveal.js';
-import { reachedOpenTarget, resolveNodeTargetId } from '../lessons/engine/targets.js';
+import { isTargetDone, resolveNodeTargetId } from '../lessons/engine/targets.js';
 import { useLessonSession } from '../lessons/engine/session.js';
 import { useEduUiStore } from '../shell/uiStore.js';
 import { useBridgeSource } from '../useBridgeSource.js';
@@ -65,7 +65,7 @@ export default function StepView({ module, step, index, total, record, answers, 
     const [toastAt, setToastAt] = useState(null);
     const trainer = useBridgeSource('trainer');
     const canUndo = useArchitectureHistory((state) => state.canUndo);
-    // Re-render on navigation: inside a block a nodeOpen target names, the ring is gone because it was followed.
+    // Re-render on navigation: inside a block a nodeOpen target names, that target is done (see isTargetDone).
     useArchitectureStore((state) => state.currentPath);
     const prefix = `${module.id}.${step.id}`;
     const status = record?.status;
@@ -153,7 +153,7 @@ export default function StepView({ module, step, index, total, record, answers, 
                 <p className="edu-callout edu-callout-misconception"><strong>{t('panel.misconception')}: </strong><RichText inline text={t(`mis.${misconception}`)} /></p>
             )}
             {runtime?.error && <p className="edu-callout edu-callout-error" role="alert">{t('panel.actionFailed', { error: runtime.error })}</p>}
-            {targetMissing && !passing && !reachedOpenTarget(step.target ?? []) && (
+            {targetMissing && !passing && (step.target ?? []).some((ref) => !isTargetDone(ref)) && (
                 <button type="button" className="edu-link-button" onClick={() => revealTarget(step)}>
                     <MapPin size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.whereIsIt')}
                 </button>

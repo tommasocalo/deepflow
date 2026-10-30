@@ -7,7 +7,8 @@ const storage = { getItem: (key) => memory.get(key) ?? null, setItem: (key, valu
 globalThis.window = { localStorage: storage };
 globalThis.localStorage = storage;
 
-const { TARGET_NAMES, isValidTargetRef, reachedOpenTarget } = await import('../src/edu/lessons/engine/targets.js');
+const { TARGET_NAMES, isTargetDone, isValidTargetRef, reachedOpenTarget } = await import('../src/edu/lessons/engine/targets.js');
+const { useEduUiStore } = await import('../src/edu/shell/uiStore.js');
 const { runActions } = await import('../src/edu/lessons/engine/actions.js');
 const { loadFixtureIntoWorkspace, restoreWorkspace } = await import('../src/edu/lessons/engine/workspace.js');
 const { createFixtureHelpers } = await import('../src/edu/lessons/engine/fixtures.js');
@@ -53,4 +54,25 @@ test('M7 s4: every level of the path to the attention head counts as reached', a
     useArchitectureStore.getState().goToLevel(0);
     await open([{ label: 'token embedding' }]);
     assert.equal(reachedOpenTarget(refs), null, 'the token embedding is not on the way: "Where is it?" stays useful');
+});
+
+test('a used target is done, so the ring moves on: the open tab, the open code panel and its tab, an opened block', async () => {
+    useEduUiStore.setState({ activeTab: 'architecture', codeOpen: false, codeTab: 'model' });
+    assert.equal(isTargetDone('tab.data'), false);
+    useEduUiStore.getState().setTab('data');
+    assert.equal(isTargetDone('tab.data'), true);
+    assert.equal(isTargetDone('toolbar.code'), false);
+    useEduUiStore.getState().openCode('model');
+    assert.equal(isTargetDone('toolbar.code'), true);
+    assert.equal(isTargetDone('code.tab:train'), false, 'the panel is open on model.py');
+    useEduUiStore.getState().setCodeTab('train');
+    assert.equal(isTargetDone('code.tab:train'), true);
+    assert.equal(isTargetDone('ribbon.dimensions'), false, 'controls that stay to be used are never done');
+    const h = createFixtureHelpers();
+    const nodes = [h.input('in', [2]), h.linear('lin1', 2, 1), h.output('out')];
+    restoreWorkspace(h.snapshot({ nodes, edges: h.chain(...nodes) }));
+    assert.equal(isTargetDone({ nodeOpen: { id: 'lin1' } }), false);
+    await open([{ id: 'lin1' }]);
+    assert.equal(isTargetDone({ nodeOpen: { id: 'lin1' } }), true);
+    assert.equal(isTargetDone({ node: { id: 'lin1' } }), false);
 });

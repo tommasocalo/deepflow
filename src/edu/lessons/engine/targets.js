@@ -4,6 +4,7 @@ import { useTrainingStore } from '../../../stores/trainingStore.js';
 import { resolveGraphLevel } from '../../../domain/architecture/operations.js';
 import { withGlobalParameters } from '../../../domain/expressions.js';
 import { effectiveObjective } from '../../objective.js';
+import { useEduUiStore } from '../../shell/uiStore.js';
 import { matchNodes } from './nodes.js';
 
 /**
@@ -153,9 +154,25 @@ export function reachedOpenTarget(refs = []) {
     return null;
 }
 
-/** The first visible target of a step's list, with the index of the ref that matched. */
+/**
+ * A target the learner has already used, so the ring moves on to the next one: its tab is open, the code panel is
+ * open (on that tab), the dataset row is the one shown, or the main pane is inside the block a nodeOpen target names.
+ */
+export function isTargetDone(ref, root = globalThis.document) {
+    if (ref && typeof ref === 'object') return !!ref.nodeOpen && reachedOpenTarget([ref]) !== null;
+    if (typeof ref !== 'string') return false;
+    const ui = useEduUiStore.getState();
+    if (TAB_TARGETS.includes(ref)) return ui.activeTab === ref.slice('tab.'.length);
+    if (ref === 'toolbar.code') return !!ui.codeOpen;
+    if (ref.startsWith('code.tab:')) return !!ui.codeOpen && ui.codeTab === ref.slice('code.tab:'.length);
+    if (ref.startsWith('data.dataset:')) return byEduTarget(root, `dataset-${ref.slice('data.dataset:'.length)}`)?.getAttribute('aria-current') === 'true';
+    return false;
+}
+
+/** The first visible target of a step's list that is not done yet, with the index of the ref that matched. */
 export function resolveFirstTarget(refs = [], root = globalThis.document) {
     for (let index = 0; index < refs.length; index++) {
+        if (isTargetDone(refs[index], root)) continue;
         const element = resolveTarget(refs[index], root);
         if (element) return { element, index, ref: refs[index] };
     }
