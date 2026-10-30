@@ -18,8 +18,8 @@ export default {
     'm1.w2.prompt': 'True or false: training a neural network always needs a huge dataset and an expensive GPU.',
     'm1.w2.opt.true': 'True',
     'm1.w2.opt.false': 'False',
-    'm1.w2.why.false': 'Right. In this module you train on 200 points in under a second, in your browser.',
-    'm1.w2.why.true': 'Big models need big hardware; learning the ideas does not. Your first model trains on 200 points in your browser.',
+    'm1.w2.why.false': 'Right. Your first model learns from {trainPoints} points in under a second, in your browser.',
+    'm1.w2.why.true': 'Big models need big hardware; learning the ideas does not. Your first model learns from {trainPoints} points in your browser.',
 
     'm1.s1.title': 'Meet the data',
     'm1.s1.body': 'Each dot is one **example**. Its two numbers, x₁ and x₂, are its **features**. Its colour and shape show its **label**: blue circle 0, orange triangle 1. We hide 20% of the dots as a **validation set**. The model never trains on them, so they show how it does on new data. Open the **Data** tab.',

@@ -39,9 +39,9 @@ export default {
     'm4.s2.predict.reveal': 'Height = ⌊(n + 2p − k)/s⌋ + 1 = (28 + 2 − 3)/1 + 1 = 28. There is one channel per filter, so the output is (B, 8, 28, 28).',
 
     'm4.s3.title': 'Padding matters',
-    'm4.s3.body': 'Click conv1 and set its **Padding** to 0. Predict first: without the ring of zeros, how tall is each output map?',
+    'm4.s3.body': 'Predict first: without the ring of zeros, how tall is each output map? Then click conv1, set its **Padding** to 0, and turn **Dimensions** back on to check.',
     'm4.s3.hint1': 'Click conv1 on the canvas to open its settings.',
-    'm4.s3.hint2': 'Set **Padding** to 0 and read the shape below conv1.',
+    'm4.s3.hint2': 'Set **Padding** to 0, then press **Dimensions** and read the shape below conv1.',
     'm4.s3.predict.prompt': 'What will the output height be?',
     'm4.s3.predict.reveal': '(28 + 0 − 3)/1 + 1 = 26. Without padding, a 3 × 3 filter cannot be centred on the border pixels.',
 
@@ -52,7 +52,7 @@ export default {
     'm4.s4.done': 'The last pool outputs (B, 16, 7, 7): 16 feature maps of 7 × 7.',
 
     'm4.s5.title': 'From feature maps to classes',
-    'm4.s5.body': 'The last pool outputs 16 maps of 7 × 7. Add **Flatten** and a **Linear** block that outputs the 10 class scores, then connect it to Output.',
+    'm4.s5.body': 'The last pool outputs 16 maps of 7 × 7. Add **Flatten** and a **Linear** block that outputs the 10 class scores, then connect it to Output. Dimensions are off until you have answered; turn them back on to check.',
     'm4.s5.hint1': 'Flatten is in **Operations ▾ → Shape & routing**; the chips below insert both blocks.',
     'm4.s5.hint2': 'Flatten, then Linear with Input 784 and Output 10, then Output.',
     'm4.s5.predict.prompt': 'How many features does Flatten produce?',

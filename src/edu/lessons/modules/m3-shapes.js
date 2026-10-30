@@ -125,7 +125,7 @@ export default {
         },
         {
             id: 's6', kind: 'predict', subgoal: 'train', tab: 'architecture', target: [{ node: { id: 'lin1' } }, 'trainer.run'],
-            setup: [{ do: 'useDataset', id: 'digits', setOutput: false }],
+            setup: [{ do: 'useDataset', id: 'digits', setOutput: false }, { do: 'setUi', showDimensions: false }],
             locks: { gate: 'train' }, embeds: ['trainer'], reveal: { run: 'initLoss' },
             predict: {
                 id: 'm3.digitsFlatten', kind: 'number', expected: 64,

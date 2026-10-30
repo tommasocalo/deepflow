@@ -28,7 +28,8 @@ export default {
                 data: { datasetId: 'tiny-shakespeare', options: { 'tiny-shakespeare': { blockSize: 64 } }, split: { val: 0.2, test: 0 } },
                 trainer: { settings: { epochs: 10, batchSize: 32, seed: 7 } },
             },
-            ui: { showDimensions: true },
+            // Dimensions stay off until s1's shape prediction is answered; s2 turns them on.
+            ui: { showDimensions: false },
         },
     },
     start: 'start',
@@ -72,6 +73,7 @@ export default {
         },
         {
             id: 's2', kind: 'predict', subgoal: 'model', tab: 'architecture', target: [{ nodeOpen: { label: 'token embedding' } }],
+            setup: [{ do: 'setUi', showDimensions: true }],
             predict: {
                 id: 'm7.embParams', kind: 'number', expected: 4160,
                 diagnose: [
@@ -91,7 +93,9 @@ export default {
             solution: [answer('m7.positions', 'no')],
         },
         {
-            id: 's4', kind: 'predict', subgoal: 'model', tab: 'architecture', target: [{ nodeOpen: { label: 'Transformer blocks' } }],
+            id: 's4', kind: 'predict', subgoal: 'model', tab: 'architecture',
+            // One ring per level: the arrow to open next, whichever level is showing.
+            target: [{ nodeOpen: { label: 'Transformer blocks' } }, { nodeOpen: { label: 'causal self-attention' } }, { nodeOpen: { label: 'Attention heads' } }],
             predict: {
                 id: 'm7.causal', kind: 'choice', options: ['upto', 'all', 'only', 'next'], correct: 'upto',
                 diagnose: [
@@ -130,6 +134,8 @@ export default {
         },
         {
             id: 's7', kind: 'predict', subgoal: 'evaluate', tab: 'architecture', target: ['ribbon.parameters'],
+            // The code panel from s6 would cover the canvas the learner explores here.
+            setup: [{ do: 'setUi', codeOpen: false }],
             buttons: [{ id: 'load', actions: [{ do: 'loadStoryboard', id: 'gpt2' }] }],
             predict: {
                 id: 'm7.gpt2Heads', kind: 'number', expected: 12,

@@ -83,12 +83,13 @@ export default {
         },
         {
             id: 's3', kind: 'predict', subgoal: 'shapes', tab: 'architecture', target: [{ node: { id: 'conv1' } }, 'field:padding'],
+            setup: [{ do: 'setUi', showDimensions: false }],
             predict: {
                 id: 'm4.noPad', kind: 'number', expected: 26,
                 diagnose: [{ equals: 28, misconception: 'padding-no-effect' }, { equals: 25, misconception: 'minus-kernel' }],
             },
-            check: { all: [{ answered: 'm4.noPad' }, { shapeAt: { node: { id: 'conv1' }, equals: [null, 8, 26, 26] } }] },
-            solution: [answer('m4.noPad', 26), { do: 'setParam', node: { id: 'conv1' }, name: 'padding', value: 0 }],
+            check: { all: [{ answered: 'm4.noPad' }, { shapeAt: { node: { id: 'conv1' }, equals: [null, 8, 26, 26] } }, { ui: { showDimensions: true } }] },
+            solution: [answer('m4.noPad', 26), { do: 'setParam', node: { id: 'conv1' }, name: 'padding', value: 0 }, { do: 'setUi', showDimensions: true }],
         },
         {
             id: 's4', kind: 'task', subgoal: 'model', tab: 'architecture', target: ['lesson.palette', 'ribbon.components'],
@@ -107,6 +108,7 @@ export default {
         },
         {
             id: 's5', kind: 'predict', subgoal: 'shapes', tab: 'architecture', target: ['lesson.palette', { node: { type: 'MaxPool2d', nth: 1 } }],
+            setup: [{ do: 'setUi', showDimensions: false }],
             palette: [{ block: 'torch.nn.Flatten', count: 1 }, { block: 'component:linear', count: 1 }],
             predict: {
                 id: 'm4.flatten', kind: 'number', expected: 784,
@@ -121,6 +123,7 @@ export default {
                 { chain: [{ type: 'MaxPool2d' }, { type: 'Flatten' }, { type: 'Linear' }, { type: 'Output' }] },
                 { valid: true },
                 { outputShape: [null, 10] },
+                { ui: { showDimensions: true } },
             ] },
             diagnose: [{
                 when: { chain: [{ type: 'MaxPool2d' }, { type: 'Linear' }] }, misconception: 'missing-flatten',
@@ -129,6 +132,7 @@ export default {
             solution: [
                 answer('m4.flatten', 784),
                 { do: 'buildChain', from: { type: 'MaxPool2d', nth: 1 }, to: { type: 'Output' }, blocks: [{ block: 'torch.nn.Flatten' }, { block: 'component:linear', params: { in_features: 784, out_features: 10 } }] },
+                { do: 'setUi', showDimensions: true },
             ],
         },
         {

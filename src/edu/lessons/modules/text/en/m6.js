@@ -50,7 +50,7 @@ export default {
     'm6.s3.title': 'Group the block into a component',
     'm6.s3.body': 'Select the 7 blocks of the residual block, from **conv1** to **relu2**, Add included. Press **Group** in the ribbon and name the component ResBlock.',
     'm6.s3.hint1': 'Shift-click each block, or drag a box around them on empty canvas.',
-    'm6.s3.hint2': 'Select conv1, bn1, relu1, conv2, bn2, Add and relu2, then press **Group** under Structure.',
+    'm6.s3.hint2': 'Select conv1, bn1, relu1, conv2, bn2, Add and relu2. Press **Group**, type ResBlock and press **Create component**.',
     'm6.s3.done': 'ResBlock is a reusable component now. The model still has {oneBlockModel} parameters: grouping changes nothing it computes.',
 
     'm6.s4.title': 'Repeat it three times',
@@ -61,7 +61,7 @@ export default {
     'm6.s4.predict.reveal': '2 × 32 × 32 × 9 = 18,432 conv weights, plus 2 × 64 BatchNorm parameters = {blockParams}. Three blocks bring the model from {oneBlockModel} to {threeBlockModel}. BatchNorm\'s running mean and variance are buffers, not parameters: gradient descent does not train them.',
 
     'm6.s5.title': 'Shared structure, separate weights',
-    'm6.s5.body': 'Open the repeated ResBlock with the › arrow on the block. Its definition is shared: change a block inside, and all 3 copies change. The **Instances** button in the ribbon shows each copy.',
+    'm6.s5.body': 'Open the repeated ResBlock with the › arrow on the block. Its definition is shared: change a block inside, and all 3 copies change. Inside, the **Step 1/3** button in the ribbon\'s Structure group steps through the copies.',
     'm6.s5.hint1': 'The › arrow sits on the right of the ResBlock block; double-clicking also opens it.',
     'm6.s5.hint2': 'One definition, three copies. Think about what training changes in each copy.',
     'm6.s5.predict.prompt': 'Do the three copies share the same weights?',

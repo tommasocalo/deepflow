@@ -119,13 +119,14 @@ export default {
             ],
         },
         {
-            id: 's6', kind: 'predict', subgoal: 'shapes', tab: 'architecture', target: [{ nodeOpen: { id: 'lin1' } }],
+            id: 's6', kind: 'predict', subgoal: 'shapes', tab: 'architecture', target: [{ nodeOpen: { id: 'lin1' } }, 'ribbon.dimensions'],
+            setup: [{ do: 'setUi', showDimensions: false }],
             predict: {
                 id: 'm2.matmul', kind: 'choice', options: ['B3', 'B2', '32'], correct: 'B3',
                 diagnose: [{ equals: 'B2', misconception: 'matmul-keeps-width' }, { equals: '32', misconception: 'missing-batch-axis' }],
             },
-            check: { all: [{ level: { open: { type: 'Linear' } } }, { answered: 'm2.matmul' }] },
-            solution: [{ do: 'openLevel', path: [{ id: 'lin1' }] }, answer('m2.matmul', 'B3')],
+            check: { all: [{ level: { open: { type: 'Linear' } } }, { answered: 'm2.matmul' }, { ui: { showDimensions: true } }] },
+            solution: [{ do: 'openLevel', path: [{ id: 'lin1' }] }, answer('m2.matmul', 'B3'), { do: 'setUi', showDimensions: true }],
         },
         {
             id: 's7', kind: 'task', subgoal: 'model', tab: 'architecture', target: ['lesson.palette'],
