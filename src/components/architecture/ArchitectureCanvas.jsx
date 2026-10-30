@@ -45,6 +45,8 @@ const edgeTypes = {
 const NODE_ORIGIN = [0.5, 0];
 
 const VIEWPORT_KEY_PREFIX = 'deepflow:architecture-viewport';
+/** Below this height the column of zoom controls would reach the status badge. */
+const SHORT_CANVAS = 280;
 
 function isAdditivePaneClick(event) {
     return event.button === 0 && (event.metaKey || event.ctrlKey || event.shiftKey)
@@ -112,6 +114,7 @@ const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = tru
     // Where a connection was clicked, in flow coordinates: its detail opens there.
     const [edgeAnchor, setEdgeAnchor] = useState(null);
     const [spacePressed, setSpacePressed] = useState(false);
+    const [shortCanvas, setShortCanvas] = useState(false);
 
     // Resolve the visible graph from the path. Templates is included in deps
     // so edits inside a drilled-in template re-render the canvas.
@@ -207,6 +210,9 @@ const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = tru
         let previous = canvas.getBoundingClientRect();
         const observer = new ResizeObserver(() => {
             const next = canvas.getBoundingClientRect();
+            // A short canvas (a docked tool below it, a small window) lays the zoom
+            // controls out in a row, clear of the status badge above them.
+            if (next.height > 0) setShortCanvas(next.height < SHORT_CANVAS);
             if (previous.width > 0 && previous.height > 0 && next.width > 0 && next.height > 0
                 && (next.width !== previous.width || next.height !== previous.height)) {
                 const viewport = getViewport();
@@ -483,7 +489,7 @@ const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = tru
                     style={{ width: '100%', height: '100%' }}
                 >
                     <Background color="#cbd5e1" gap={24} size={1} variant="dots" />
-                    <Controls className="df-flow-controls text-black!" fitViewOptions={{ padding: 0.2, minZoom: 0.2, maxZoom: 1 }}>
+                    <Controls className="df-flow-controls text-black!" orientation={shortCanvas ? 'horizontal' : 'vertical'} fitViewOptions={{ padding: 0.2, minZoom: 0.2, maxZoom: 1 }}>
                         <ControlButton
                             onClick={() => setInteractionMode('select')}
                             title="Select nodes"

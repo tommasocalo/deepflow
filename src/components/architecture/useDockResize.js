@@ -36,7 +36,7 @@ function saveWidth(width) {
 export function useDockResize(asideRef) {
     const [width, setWidth] = useState(readWidth);
     const [height, setHeight] = useState(null);
-    const [layout, setLayout] = useState({ sheet: false, width: null, height: null });
+    const [layout, setLayout] = useState({ sheet: false, width: null, height: null, room: null });
     const dragRef = useRef(null);
     const { sheet } = layout;
 
@@ -47,8 +47,12 @@ export function useDockResize(asideRef) {
         if (!workspace || typeof ResizeObserver === 'undefined') return undefined;
         const observer = new ResizeObserver(() => {
             const box = aside.getBoundingClientRect();
-            const next = { sheet: getComputedStyle(workspace).flexDirection === 'column', width: Math.round(box.width), height: Math.round(box.height) };
-            setLayout((current) => current.sheet === next.sheet && current.width === next.width && current.height === next.height ? current : next);
+            const sheet = getComputedStyle(workspace).flexDirection === 'column';
+            const parent = workspace.getBoundingClientRect();
+            // The largest size a drag can reach, for the separator's value range.
+            const room = Math.round(sheet ? parent.height - MIN_CANVAS : parent.width * MAX_WIDTH_SHARE);
+            const next = { sheet, width: Math.round(box.width), height: Math.round(box.height), room };
+            setLayout((current) => current.sheet === next.sheet && current.width === next.width && current.height === next.height && current.room === next.room ? current : next);
         });
         observer.observe(workspace);
         observer.observe(aside);
@@ -69,13 +73,17 @@ export function useDockResize(asideRef) {
         }
     };
 
+    const size = sheet ? layout.height : layout.width;
+    const minimum = sheet ? MIN_HEIGHT : MIN_WIDTH;
     const separator = {
         role: 'separator',
         tabIndex: 0,
         'aria-label': 'Resize model table',
         'aria-orientation': sheet ? 'horizontal' : 'vertical',
-        'aria-valuenow': (sheet ? layout.height : layout.width) ?? undefined,
-        'aria-valuemin': sheet ? MIN_HEIGHT : MIN_WIDTH,
+        'aria-valuenow': size ?? undefined,
+        'aria-valuemin': minimum,
+        'aria-valuemax': layout.room ? Math.max(minimum, layout.room) : undefined,
+        'aria-valuetext': size ? `${size} pixels ${sheet ? 'tall' : 'wide'}` : undefined,
         title: `Drag, or use the arrow keys, to resize the table; double-click to restore its size`,
         onPointerDown: (event) => {
             dragRef.current = { x: event.clientX, y: event.clientY, width: currentWidth(), height: currentHeight() };

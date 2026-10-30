@@ -103,9 +103,10 @@
 .df-mt-number { line-height: 12px; }
 .df-mt-each { color: #666; font-size: 10px; line-height: 11px; }
 .df-mt-unknown { color: #b45309; font-weight: 700; cursor: help; }
-.df-mt-fused { color: #a3a39c; cursor: help; }
+.df-mt-fused { color: #85857f; cursor: help; }
 .df-mt-shape { color: #333; font: 10px/1 var(--mt-mono); font-variant-numeric: tabular-nums; }
-.df-mt-times { margin: 0 1px; color: #9a9a94; }
+/* Separators that carry meaning stay legible on every row background: × at 3:1 or more. */
+.df-mt-times { margin: 0 1px; color: #85857f; }
 /* Known in only some occurrences: the label covers 1/12 of them. */
 .df-mt-known { margin-left: 4px; color: #b45309; font-weight: 600; cursor: help; }
 .df-mt-times.is-collection { margin: 0 3px 0 2px; }
@@ -156,9 +157,10 @@
 .df-mt-row:hover .df-mt-field.is-editable, .df-mt-config-cell:focus-visible .df-mt-field.is-editable { border-bottom: 1px dotted #777; }
 .df-mt-field.is-invalid { color: #b91c1c; border-bottom: 1px solid #dc2626 !important; }
 .df-mt-prefix { color: #666; }
-.df-mt-separator { margin: 0 3px; color: #999; }
+/* → and × in settings read as part of the value: 4.5:1 or more, the selected row's tint included. */
+.df-mt-separator { margin: 0 3px; color: #707070; }
 .df-mt-note { margin-left: 6px; color: #666; font: 10px/1 ui-sans-serif, system-ui, sans-serif; }
-.df-mt-more-fields { margin-left: 4px; color: #888; }
+.df-mt-more-fields { margin-left: 4px; color: #707070; }
 
 .df-mt-config-cell.is-editing { overflow: visible; }
 .df-mt-editor { display: inline-flex; align-items: center; gap: 0; max-width: 100%; }

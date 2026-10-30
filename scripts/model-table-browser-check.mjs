@@ -78,6 +78,13 @@ try {
             assert.ok(measured.toolbar < 40, `${width}×${height} ${pane}: the toolbar is one line`);
             assert.ok(measured.totals < 26, `${width}×${height} ${pane}: the totals are one line`);
             assert.ok(measured.grip, 'The resize grip is drawn');
+            // A short canvas keeps the status badge clear of the zoom controls.
+            const clash = await page.locator(`[data-graph-pane="${pane}"]`).evaluate((element) => {
+                const badge = element.querySelector('.df-graph-status-trigger')?.getBoundingClientRect();
+                const controls = element.querySelector('.react-flow__controls')?.getBoundingClientRect();
+                return !!badge && !!controls && badge.bottom > controls.top && badge.top < controls.bottom && badge.right > controls.left && badge.left < controls.right;
+            });
+            assert.equal(clash, false, `${width}×${height} ${pane}: the status badge covers the zoom controls`);
         }
         await page.screenshot({ path: `${directory}/two-panes-${width}x${height}.png` });
         assert.deepEqual(errors, []);
@@ -139,6 +146,17 @@ try {
         await showTable(page);
         const last = await table(page).evaluate((aside) => [...aside.querySelectorAll('button:not([tabindex="-1"]), [tabindex="0"]')].filter((element) => !element.disabled && !element.closest('[hidden]')).at(-1).getAttribute('role'));
         assert.equal(last, 'separator');
+        const semantics = await table(page).evaluate((aside) => {
+            const separator = aside.querySelector('[role="separator"]');
+            const value = (name) => Number(separator.getAttribute(name));
+            return {
+                range: [value('aria-valuemin'), value('aria-valuenow'), value('aria-valuemax')],
+                multiselectable: aside.querySelector('[role="treegrid"]').getAttribute('aria-multiselectable'),
+            };
+        });
+        const [minimum, now, maximum] = semantics.range;
+        assert.ok(minimum > 0 && minimum <= now && now <= maximum, `The resize separator states its range: ${semantics.range.join(' ≤ ')}`);
+        assert.equal(semantics.multiselectable, 'true', 'Several rows can be selected, as on the canvas');
         await table(page).locator('tbody [data-col="0"]').first().focus();
         await page.keyboard.press('Escape');
         assert.equal(await page.evaluate(() => !!document.activeElement.closest('[data-graph-pane="main"] [data-architecture-canvas]')), true, 'Escape focuses the canvas');

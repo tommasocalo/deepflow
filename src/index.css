@@ -80,6 +80,8 @@
 .react-flow__controls.df-flow-controls { overflow: hidden; border: 1px solid var(--border-subtle) !important; border-radius: 7px !important; background: white !important; box-shadow: var(--shadow-soft) !important; }
 .react-flow__controls.df-flow-controls button { width: 29px; height: 29px; border-bottom: 1px solid #00000015 !important; }
 .react-flow__controls.df-flow-controls button:last-child { border-bottom: 0 !important; }
+.react-flow__controls.df-flow-controls.horizontal button { border-bottom: 0 !important; border-right: 1px solid #00000015 !important; }
+.react-flow__controls.df-flow-controls.horizontal button:last-child { border-right: 0 !important; }
 .react-flow__edge-path { stroke: #000; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3; }
 .react-flow__selection { border: 1px solid #000 !important; background: #00000008 !important; }

@@ -357,7 +357,7 @@ export default function ModelTablePanel({ paneId = 'main' }) {
                     }
                     setCovered((current) => current === under ? current : under);
                 }}>
-                <table className={`df-mt-table is-${metricColumn}`} role="treegrid" aria-label="Model layers" aria-rowcount={rows.length + 1} aria-describedby={assumptionsId}
+                <table className={`df-mt-table is-${metricColumn}`} role="treegrid" aria-label="Model layers" aria-multiselectable="true" aria-rowcount={rows.length + 1} aria-describedby={assumptionsId}
                     // Whole characters, so the budget measured from the column covers the longest label.
                     style={{ '--mt-output-need': `${Math.ceil(Math.ceil(outputNeed) * columnWidths.chars.shape) + CELL_PADDING + 1}px` }}>
                     <colgroup>
