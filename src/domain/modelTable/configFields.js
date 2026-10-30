@@ -26,7 +26,8 @@ const LAYER_LAYOUTS = {
     'torch.nn.BatchNorm2d': [field('num_features')],
     'torch.nn.GroupNorm': [field('num_groups'), text('/'), field('num_channels')],
     'torch.nn.Dropout': [field('p', { prefix: 'p' })],
-    'torch.nn.GELU': [field('approximate')],
+    // Exact GELU says nothing; the tanh approximation is named as PyTorch spells it.
+    'torch.nn.GELU': [field('approximate', { prefix: 'approximate', hideDefault: true })],
     'torch.nn.LeakyReLU': [field('negative_slope', { prefix: 'slope' })],
     'torch.nn.Softmax': [field('dim', { prefix: 'dim' })],
     'torch.nn.Conv1d': CONVOLUTION,
@@ -165,24 +166,47 @@ export function resolvedBinding(entry, name) {
 }
 
 /**
- * One text for the values of every occurrence: a single value, or `3…128`
- * (first…last) when they differ, with a run-length list in the title.
+ * Consecutive occurrences with the same value, labelled by occurrence:
+ * [{ value, from: 'i=0', to: 'i=3' }, { value, from: 'i=4', to: 'i=4' }, …].
+ */
+export function valueRuns(values, labels = []) {
+    const runs = [];
+    values.forEach((value, index) => {
+        const label = labels[index] || `#${index + 1}`;
+        const last = runs.at(-1);
+        if (last && (last.value === value || JSON.stringify(last.value) === JSON.stringify(value))) last.to = label;
+        else runs.push({ value, from: label, to: label });
+    });
+    return runs;
+}
+
+/** `i=0–3: 3072 · i=4: 1536 · i=5–11: 3072`, at most `limit` runs. */
+export function runsText(runs, format = String, limit = 12) {
+    return runs.slice(0, limit).map((run) => `${run.from === run.to ? run.from : `${run.from}–${run.to.replace(/^i=/, '')}`}: ${format(run.value)}`).join(' · ')
+        + (runs.length > limit ? ' · …' : '');
+}
+
+/**
+ * One text for the values of every occurrence: a single value; numbers that
+ * differ as their range `min…max` (as the Output column shows axes), so a
+ * middle instance that differs is never hidden; other values as the distinct
+ * values `none|tanh`. The title lists every instance.
  */
 export function summarizeValues(values, spec, labels = []) {
     const texts = values.map((value) => valueText(value, spec));
     if (!texts.length) return { text: '?', varies: false, title: '' };
     const varies = texts.some((value) => value !== texts[0]);
     if (!varies) return { text: texts[0], varies: false, title: '' };
-    const runs = [];
-    texts.forEach((value, index) => {
-        const label = labels[index] || `#${index + 1}`;
-        const last = runs.at(-1);
-        if (last && last.value === value) last.to = label;
-        else runs.push({ value, from: label, to: label });
-    });
-    const title = runs.slice(0, 12).map((run) => `${run.from === run.to ? run.from : `${run.from}–${run.to.replace(/^i=/, '')}`}: ${run.value}`).join(' · ')
-        + (runs.length > 12 ? ' · …' : '');
-    return { text: `${texts[0]}…${texts.at(-1)}`, varies: true, title };
+    const title = runsText(valueRuns(texts, labels));
+    let text;
+    if (values.every((value) => typeof value === 'number' && Number.isFinite(value))) {
+        text = `${valueText(Math.min(...values), spec)}…${valueText(Math.max(...values), spec)}`;
+    } else if (values.some((value) => value === null || value === undefined)) text = '?';
+    else {
+        const distinct = [...new Set(texts)];
+        text = distinct.length === 2 ? distinct.join('|') : `${distinct[0]}|…`;
+    }
+    return { text, varies: true, title };
 }
 
 /** An eye alias: the field shows the alias default, which is where edits go. */
@@ -193,4 +217,34 @@ export function aliasFor(templates, ownerId, nodeId, name) {
 /** Whether a flag resolves to false for every occurrence (Linear without bias). */
 export function resolvesFalse(values) {
     return values.length > 0 && values.every((value) => value === false);
+}
+
+/** The text a field shows: as written (Symbols) or resolved (Values), with its tone. */
+export function shownFieldText(field, cells) {
+    return cells === 'symbols' ? field.symbols : { text: field.values.text, tone: field.values.varies ? 'varies' : 'value' };
+}
+
+/** Separators as words; the field names already say what each value is. */
+const SEPARATOR_WORDS = { '→': 'to', '×': 'by', '↔': 'and' };
+
+/**
+ * A config cell as a sentence for screen readers, since its separators are
+ * drawn: `in_features 768 to out_features 3072, no bias`,
+ * `count 12, mlp_width 3072`, `in_channels 3 through 128 to …`.
+ */
+export function configAccessibleText(row, cells) {
+    const words = [];
+    let previous = null;
+    for (const part of row.config) {
+        if (part.kind === 'field') {
+            // Fields side by side (k=3 s=1) are a list.
+            if (previous && previous.kind !== 'text') words.push(',');
+            words.push(`${part.name} ${shownFieldText(part, cells).text.replace(/…/g, ' through ')}`);
+        } else if (part.kind === 'note') {
+            const more = part.text.match(/^\+(\d+)$/);
+            words.push(`, ${more ? `${more[1]} more setting${more[1] === '1' ? '' : 's'}` : part.text}`);
+        } else words.push(SEPARATOR_WORDS[part.text] ?? ',');
+        previous = part;
+    }
+    return words.join(' ').replace(/\s+,/g, ',').replace(/,(?:\s*,)+/g, ',').replace(/\s+/g, ' ').trim();
 }

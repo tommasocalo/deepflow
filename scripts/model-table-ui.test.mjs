@@ -135,6 +135,7 @@ async function openTable() {
     await click(byAria('Show model table'));
     assert.ok(mainTable(), 'The table opens in the main pane');
 }
+const nextFrame = () => act(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
 /** Start again from another storyboard, optionally changed before the first render. */
 async function seed(storyboard, prepare) {
     await act(() => root.unmount());
@@ -145,6 +146,7 @@ async function seed(storyboard, prepare) {
     root = createRoot(container);
     await act(() => root.render(h(ArchitectureWorkspace)));
 }
+const footerStat = (label) => [...mainTable().querySelectorAll('.df-mt-stat')].find((stat) => stat.querySelector('dt').textContent === label);
 async function editConfig(label) {
     const cell = cellOf(label, 3);
     await act(() => cell.focus());
@@ -261,9 +263,17 @@ test('Symbols mode edits a shared definition for every use and reports validatio
     const projection = cellOf('mlp proj', 0);
     assert.equal(projection.getAttribute('aria-invalid'), 'true');
     assert.match(projection.getAttribute('title'), /MatMul inner dimensions mismatch: 1536 vs 3072/);
+    const projectionMacs = cellOf('mlp proj', 5).querySelector('.df-mt-unknown');
+    assert.equal(projectionMacs?.textContent, '?', 'MACs of the mismatched layer are unknown');
+    assert.match(projectionMacs.getAttribute('title'), /MatMul inner dimensions mismatch: 1536 vs 3072/);
+    assert.match(cellOf('lm_head', 5).textContent, /39\.5G/, 'Later layers keep their declared settings');
+    const alert = mainTable().querySelector('.df-mt-alert');
+    assert.match(alert.textContent, /^1 error · totals use declared settings · Transformer blocks › mlp proj › input × weightᵀ: MatMul inner dimensions mismatch/);
+    assert.match(footerStat('MACs / sample').textContent, /≥ 102\.3G.*1 row unresolved/);
     await act(() => history().undo());
     assert.equal(cellOf('mlp proj', 0).getAttribute('aria-invalid'), null);
     assert.match(cellOf('mlp fc', 5).textContent, /29\.0G/);
+    assert.equal(mainTable().querySelector('.df-mt-alert'), null, 'A valid model has no error line');
 });
 
 test('Values mode follows a reference to its source and keeps formulas read-only', async () => {
@@ -403,30 +413,20 @@ test('each pane has its own table', async () => {
     assert.equal(mainTable(), null, 'The main pane keeps its own view');
 });
 
-test('an exposed field bound on its instance is edited where the instance binds it', async () => {
-    await seed(resnetStoryboard, () => {
-        const block = Object.values(templates()).find((template) => template.name === 'ConvBlock');
-        const conv = Object.values(block.graph.nodes).find((node) => node.libraryKey === 'torch.nn.Conv2d');
-        useTemplatesStore.getState().toggleFieldExposure(block.id, { nodeId: conv.id, field: 'stride', spec: { name: 'stride', type: 'tuple', default: 1 }, defaultValue: 1, label: 'Stride' });
-        const stages = rootNode('ResNet stages');
-        useArchitectureStore.getState().patchRootNode(stages.id, { bindings: { ...stages.bindings, stride: 2 } });
-    });
+test('disclosure keeps focus on visible controls, and cells read as words', async () => {
     await openTable();
-    const cell = cellOf('Conv2d', 3);
-    assert.match(cell.textContent, /s=2/);
-    assert.match(cell.getAttribute('title'), /stride: Sets stride on ResNet stages · all 3 instances/);
-    const editor = await editConfig('Conv2d');
-    const input = editor.querySelector('input[aria-label="Conv2d stride"]');
-    assert.equal(input.value, '2', 'The editor starts from the value the cell shows');
-    await typeText(input, '3');
-    await key(input, 'Enter');
-    const block = Object.values(templates()).find((template) => template.name === 'ConvBlock');
-    assert.equal(rootNode('ResNet stages').bindings.stride, 3, 'The binding the instances read changes');
-    assert.equal(block.freeParameters.find((parameter) => parameter.name === 'stride').default, 1, 'The unused default stays');
-    assert.match(cellOf('Conv2d', 3).textContent, /s=3/);
-    assert.equal(history().undoLabel, 'Set Conv2d stride');
-    await act(() => history().undo());
-    assert.equal(rootNode('ResNet stages').bindings.stride, 2);
+    const grid = mainTable().querySelector('[role="treegrid"]');
+    assert.equal(grid.hasAttribute('aria-readonly'), false, 'The grid has editable cells');
+    await click(rowOf('Transformer blocks').querySelector('.df-mt-chevron'));
+    assert.equal(rowOf('Transformer blocks').getAttribute('aria-expanded'), 'false');
+    assert.equal(document.activeElement, cellOf('Transformer blocks', 0), 'The chevron leaves focus on the row header, not on its hidden button');
+    await click(rowOf('Transformer blocks').querySelector('.df-mt-chevron'));
+
+    assert.equal(cellOf('mlp fc', 3).getAttribute('aria-label'), 'in_features 768 to out_features 3072');
+    assert.equal(cellOf('mlp fc', 3).querySelector('.df-mt-config').getAttribute('aria-hidden'), 'true', 'The drawn digits are not read as 7683072');
+    assert.equal(cellOf('lm_head', 3).getAttribute('aria-label'), 'in_features 768 to out_features 50257, no bias');
+    assert.equal(cellOf('Transformer blocks', 3).getAttribute('aria-label'), 'count 12, mlp_width 3072');
+    assert.equal(cellOf('mlp fc', 2).getAttribute('aria-label'), 'B × 1024 × 3072');
 });
 
 test('an invalid input shape keeps the editor open with its reason beside the field', async () => {
@@ -457,4 +457,69 @@ test('an invalid input shape keeps the editor open with its reason beside the fi
     assert.equal(rootNode('tokens').parameters.shape, '(512,)');
     assert.equal(history().undoCount, 1);
     assert.match(cellOf('token embedding', 2).textContent, /B×512×768/);
+});
+
+test('an exposed field bound on its instance is edited where the instance binds it', async () => {
+    await seed(resnetStoryboard, () => {
+        const block = Object.values(templates()).find((template) => template.name === 'ConvBlock');
+        const conv = Object.values(block.graph.nodes).find((node) => node.libraryKey === 'torch.nn.Conv2d');
+        useTemplatesStore.getState().toggleFieldExposure(block.id, { nodeId: conv.id, field: 'stride', spec: { name: 'stride', type: 'tuple', default: 1 }, defaultValue: 1, label: 'Stride' });
+        const stages = rootNode('ResNet stages');
+        useArchitectureStore.getState().patchRootNode(stages.id, { bindings: { ...stages.bindings, stride: 2 } });
+    });
+    await openTable();
+    const cell = cellOf('Conv2d', 3);
+    assert.match(cell.textContent, /s=2/);
+    assert.match(cell.getAttribute('title'), /stride: Sets stride on ResNet stages · all 3 instances/);
+    const editor = await editConfig('Conv2d');
+    const input = editor.querySelector('input[aria-label="Conv2d stride"]');
+    assert.equal(input.value, '2', 'The editor starts from the value the cell shows');
+    await typeText(input, '3');
+    await key(input, 'Enter');
+    const block = Object.values(templates()).find((template) => template.name === 'ConvBlock');
+    assert.equal(rootNode('ResNet stages').bindings.stride, 3, 'The binding the instances read changes');
+    assert.equal(block.freeParameters.find((parameter) => parameter.name === 'stride').default, 1, 'The unused default stays');
+    assert.match(cellOf('Conv2d', 3).textContent, /s=3/);
+    assert.equal(history().undoLabel, 'Set Conv2d stride');
+    await act(() => history().undo());
+    assert.equal(rootNode('ResNet stages').bindings.stride, 2);
+});
+
+test('the Activations lens shows bytes per row, and partial totals say so', async () => {
+    await openTable();
+    await click(radio('Activations'));
+    const header = mainTable().querySelectorAll('thead th');
+    assert.equal(header[5].textContent.trim(), 'Act. mem', 'Bytes take the place of MACs');
+    assert.match(header[5].getAttribute('title'), /sum of forward op outputs, eager, nothing freed/);
+    assert.match(header[6].textContent, /% of 4\.03 GB/);
+    assert.match(cellOf('lm_head', 5).textContent, /205\.9 MB/);
+    assert.match(cellOf('Transformer blocks', 5).textContent, /3\.81 GB.*318 MB ea/);
+    assert.match(mainTable().querySelector('.df-mt-assumptions').textContent, /activations: Σ op outputs, standard modules count one output/);
+    assert.match(footerStat('Largest activation').textContent, /^Largest activation205\.9 MBlm_head · B×1024×50257/);
+
+    const stack = rootNode('Transformer blocks');
+    await act(() => useArchitectureStore.getState().patchRootNode(stack.id, { count: '$missing' }));
+    assert.equal(cellOf('lm_head', 5).textContent, '?', 'Sizes after an unresolved count are unknown');
+    assert.match(header[6].textContent, /% of ≥/, 'The share denominator is a lower bound');
+    assert.match(footerStat('Largest activation').querySelector('dd').textContent, /^≥ /);
+    await click(radio('MACs'));
+    assert.equal(cellOf('lm_head', 5).textContent, '?', 'lm_head MACs are unknown, not computed from a placeholder');
+    assert.match(mainTable().querySelector('.df-mt-alert').textContent, /^1 error · totals use declared settings · Transformer blocks: /);
+});
+
+test('read-only values explain themselves, and an input method keeps Enter', async () => {
+    await openTable();
+    const fc = cellOf('mlp fc', 3);
+    await click(fc.querySelector('[data-field="out_features"]'));
+    assert.equal(fc.querySelector('.df-mt-editor'), null, 'A computed value does not open an editor');
+    assert.match(mainTable().querySelector('.df-mt-focus-text').textContent, /^out_features: Computed by 4 \* d_model/);
+
+    const editor = await editConfig('Dropout');
+    const input = editor.querySelector('input[aria-label="Dropout p"]');
+    await typeText(input, '0.3');
+    await key(input, 'Enter', { isComposing: true });
+    assert.ok(cellOf('Dropout', 3).querySelector('.df-mt-editor'), 'Enter while composing picks the candidate');
+    assert.equal(rootNode('Dropout').parameters.p, 0.1);
+    await key(input, 'Enter');
+    assert.equal(rootNode('Dropout').parameters.p, 0.3);
 });

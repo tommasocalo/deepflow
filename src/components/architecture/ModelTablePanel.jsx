@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, X } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
 import { useTemplatesStore } from '../../stores/templatesStore.js';
 import { resolveGraphLevel } from '../../domain/architecture/index.js';
 import { isValidLevelPath, sameLevelPath } from '../../domain/architecture/levelNavigation.js';
 import { ancestorKeys, buildModelTableRows, rowKey, shapeSummary } from '../../domain/modelTable/rows.js';
-import { formatBytes, formatExact, formatMacs, formatMetric } from '../../domain/metrics/index.js';
+import { ANALYSIS_LIMITS, formatBytes, formatExact, formatMacs, formatMetric } from '../../domain/metrics/index.js';
 import { parameterSuggestions } from '../../domain/parameterBindings.js';
 import { useModelMetrics } from '../../hooks/useModelMetrics.js';
 import ModelTableRow from './ModelTableRow.jsx';
@@ -18,6 +18,10 @@ const WIDTH_KEY = 'deepflow:model-table-width';
 const MIN_WIDTH = 380;
 const DEFAULT_WIDTH = 760;
 const MIN_HEIGHT = 160;
+/** Character widths of the table's monospace fonts (10.5px settings, 10px shapes), measured in Chromium. */
+const CONFIG_CHAR = 6.32;
+const SHAPE_CHAR = 6.02;
+const CELL_PADDING = 12;
 
 const DEPTHS = [
     ['root', 'Root', 'Nodes of the main graph'],
@@ -27,15 +31,17 @@ const DEPTHS = [
 const LENSES = [
     ['params', 'Params', 'Share of learned parameters'],
     ['macs', 'MACs', 'Share of multiply-accumulates per sample'],
-    ['activation', 'Activations', 'Share of fp32 activation memory per sample'],
+    ['activation', 'Activations', 'Share of activation memory per sample: the sum of forward op outputs (eager, no freeing), fp32. The MACs column shows bytes instead.'],
 ];
 const CELLS = [
     ['symbols', 'Symbols', 'Settings as written, such as $d_model or 4 * d_model'],
     ['values', 'Values', 'Settings resolved to numbers'],
 ];
 const LENS_NAMES = { params: 'parameters', macs: 'multiply-accumulates', activation: 'activation bytes' };
+const MACS_TITLE = 'Multiply-accumulates per sample (B = 1): MatMul, Linear and Conv, and the products inside attention and recurrent modules. Causal attention counts the full T × T product.';
+const ACTIVATION_TITLE = 'Activation memory per sample (B = 1, fp32): the sum of forward op outputs, eager, nothing freed. Standard Linear, Embedding, LayerNorm and position modules count one output; views and weights count nothing.';
 
-/** A width the user chose earlier, or null for the default (760px or less of a small window). */
+/** A width the user chose earlier, or null for the default. */
 function readWidth() {
     try {
         const saved = Number(localStorage.getItem(WIDTH_KEY));
@@ -81,31 +87,71 @@ function Stat({ label, value, detail, title }) {
     </div>;
 }
 
-function Footer({ metrics, assumptionsId }) {
-    const totals = metrics.totals;
+/** Where the largest activation sits, in full: `Conv2d in ResNet stages i=2`. */
+function largestLocation(largest) {
+    const steps = (largest.where ?? []).filter((step) => step.repeat && step.count > 1);
+    return [largest.label, ...steps.map((step) => `${step.label} i=${step.index}`)].join(' in ');
+}
+
+/** The same, compact for the footer: `Conv2d (i=2) · B×256×32×32`. */
+function largestSummary(largest) {
+    const indices = (largest.where ?? []).filter((step) => step.repeat && step.count > 1).map((step) => step.index);
+    const occurrence = indices.length === 1 ? ` (i=${indices[0]})` : indices.length ? ` (${indices.join('.')})` : '';
+    return `${largest.label}${occurrence} · ${(shapeSummary([largest.shape]).text ?? '?').replace(/ × /g, '×')}`;
+}
+
+function Footer({ metrics, assumptionsId, onShowError }) {
+    const { totals, issues } = metrics;
     const unresolved = (metric) => totals.unresolved[metric];
     const partial = (metric) => unresolved(metric).size > 0;
     const unresolvedText = (metric) => `${unresolved(metric).size} row${unresolved(metric).size === 1 ? '' : 's'} unresolved`;
-    const unresolvedTitle = (metric) => partial(metric) ? `Not counted (unknown size): ${[...new Set([...unresolved(metric).values()].map((item) => item.label))].join(', ')}` : '';
+    const unresolvedTitle = (metric) => {
+        if (!partial(metric)) return '';
+        const items = [...new Map([...unresolved(metric).values()].map((item) => [`${item.label}\u001f${item.reason}`, item])).values()];
+        return `Not counted:\n${items.slice(0, 8).map((item) => `${item.label}${item.reason ? `: ${item.reason}` : ''}`).join('\n')}${items.length > 8 ? '\n…' : ''}`;
+    };
+    // A partial total is a lower bound; with nothing counted it is unknown.
+    const bounded = (metric, text) => partial(metric) ? (totals[metric] > 0 ? `≥ ${text}` : '?') : text;
     const frozen = totals.params - totals.trainable;
     const largest = totals.largest;
     const inputs = metrics.inputs.map((input) => `${input.label} ${shapeSummary([input.shape]).text ?? '?'}`).join(' · ');
+    const errors = issues?.errors ?? [];
+    const errorCount = errors.length + (issues?.global?.length ?? 0);
+    const firstError = errors[0];
+    const errorList = [...(issues?.global ?? []), ...errors.map((error) => `${error.label}: ${error.messages.join('; ')}`)];
+    const limits = issues?.limits ?? {};
+    // Attention and recurrent modules count their products in closed form.
+    const macModules = (metrics.macModules ?? []).map((kind) => kind === 'attention' ? ', attention' : ', RNN').join('');
     return <footer className="df-mt-footer">
+        {errorCount > 0 && <p className="df-mt-alert">
+            <AlertCircle size={12} strokeWidth={2.6} aria-hidden="true" />
+            <span className="df-mt-alert-text" title={`${errorList.slice(0, 12).join('\n')}${errorList.length > 12 ? '\n…' : ''}\n\nTotals use the declared settings. A layer with a shape error of its own, and anything whose size depends on an unknown value, is not counted (?).`}>
+                <strong>{errorCount} error{errorCount === 1 ? '' : 's'}</strong> · totals use declared settings
+                <span className="df-mt-alert-detail">{firstError ? ` · ${firstError.label}: ${firstError.messages[0]}` : ` · ${issues.global[0]}`}</span>
+            </span>
+            {firstError && <button type="button" onClick={() => onShowError(firstError)} title={`Show ${firstError.label} in the table`}>Show</button>}
+        </p>}
+        {(limits.budget || limits.depth) && <p className="df-mt-alert is-limit">
+            <AlertTriangle size={12} strokeWidth={2.6} aria-hidden="true" />
+            <span className="df-mt-alert-text" title="Validation expands every repeat and component; past this limit nothing is analysed, so counts (×N) and totals inside are lower bounds.">
+                <strong>{limits.budget ? `Analysis stopped at ${ANALYSIS_LIMITS.nodes.toLocaleString('en-US')} expanded nodes` : `Components nested deeper than ${ANALYSIS_LIMITS.depth} levels are not analysed`}</strong> · counts and totals are lower bounds (≥)
+            </span>
+        </p>}
         <dl className="df-mt-stats">
-            <Stat label="Params" value={`${partial('params') ? '≥ ' : ''}${formatExact(totals.params)}`}
+            <Stat label="Params" value={bounded('params', formatExact(totals.params))}
                 detail={partial('params') ? unresolvedText('params') : frozen ? `trainable ${formatExact(totals.trainable)} · frozen ${formatExact(frozen)}` : 'all trainable'}
                 title={unresolvedTitle('params') || 'Learned parameters, every layer counted once per occurrence (no weight tying)'} />
-            <Stat label="MACs / sample" value={`${partial('macs') ? '≥ ' : ''}${formatMacs(totals.macs) ?? '0'}`}
+            <Stat label="MACs / sample" value={bounded('macs', formatMacs(totals.macs) ?? '0')}
                 detail={partial('macs') ? unresolvedText('macs') : formatExact(totals.macs)}
-                title={unresolvedTitle('macs') || 'Forward multiply-accumulates at B = 1: MatMul, Linear and Conv. Causal attention counts the full T × T product.'} />
-            <Stat label="Largest activation" value={largest ? formatBytes(largest.bytes) : '—'}
-                detail={largest ? `${largest.label} · ${shapeSummary([largest.shape]).text ?? '?'}` : partial('activation') ? unresolvedText('activation') : null}
-                title={`Largest single output tensor at B = 1, fp32. All activations: ${partial('activation') ? '≥ ' : ''}${formatBytes(totals.activation) ?? '0 B'}. Standard Linear, Embedding, LayerNorm and position modules count one output; attention internals count individually; views and weights count nothing.`} />
-            <Stat label="Weights" value={`${partial('params') ? '≥ ' : ''}${formatBytes(totals.params * 4) ?? '0 B'}`} detail="fp32, 4 bytes each"
+                title={unresolvedTitle('macs') || MACS_TITLE} />
+            <Stat label="Largest activation" value={largest ? bounded('activation', formatBytes(largest.bytes)) : partial('activation') ? '?' : '—'}
+                detail={largest ? largestSummary(largest) : partial('activation') ? unresolvedText('activation') : null}
+                title={`Largest single output tensor at B = 1, fp32${largest ? `: ${largestLocation(largest)}, ${shapeSummary([largest.shape]).text ?? '?'}` : ''}.${partial('activation') ? ` ${unresolvedText('activation')}, so a larger one may exist.` : ''} All activations: ${partial('activation') ? '≥ ' : ''}${formatBytes(totals.activation) ?? '0 B'}, the sum of forward op outputs (eager, no freeing). Standard Linear, Embedding, LayerNorm and position modules count one output; attention internals count individually; views and weights count nothing.`} />
+            <Stat label="Weights" value={bounded('params', formatBytes(totals.params * 4) ?? '0 B')} detail="fp32, 4 bytes each"
                 title={`${formatExact(totals.params * 4)} bytes`} />
         </dl>
         <p id={assumptionsId} className="df-mt-assumptions">
-            B = 1{inputs ? ` · ${inputs}` : ''} · fp32 · forward pass · MACs: MatMul, Linear, Conv · no weight tying
+            B = 1{inputs ? ` · ${inputs}` : ''} · fp32 · forward pass · MACs: MatMul, Linear, Conv{macModules} · activations: Σ op outputs, standard modules count one output · no weight tying
         </p>
     </footer>;
 }
@@ -128,8 +174,14 @@ export default function ModelTablePanel() {
     const [width, setWidth] = useState(readWidth);
     const [height, setHeight] = useState(null);
     const [sheet, setSheet] = useState(false);
+    const [scrolledX, setScrolledX] = useState(false);
+    // The column sliding under the sticky Layer column: its cut text is hidden.
+    const [covered, setCovered] = useState(null);
+    const [columnWidths, setColumnWidths] = useState({ output: null, config: null });
     const asideRef = useRef(null);
     const bodyRef = useRef(null);
+    const outputHeaderRef = useRef(null);
+    const configHeaderRef = useRef(null);
     const dragRef = useRef(null);
     const rowsRef = useRef(new Map());
 
@@ -138,6 +190,11 @@ export default function ModelTablePanel() {
     const byKey = useMemo(() => new Map(rows.map((row, index) => [row.key, { row, index }])), [rows]);
     const context = useMemo(() => ({ graph, templates, templateUses: metrics?.templateUses ?? {} }), [graph, templates, metrics]);
     const selectedKeys = useMemo(() => new Set(selectedNodeIds.map((id) => rowKey([...currentPath, id]))), [selectedNodeIds, currentPath]);
+    // Characters that fit in the Output and Config columns; unknown until laid out.
+    const budgets = useMemo(() => ({
+        output: columnWidths.output ? Math.floor((columnWidths.output - CELL_PADDING) / SHAPE_CHAR) : Infinity,
+        config: columnWidths.config ? Math.floor((columnWidths.config - CELL_PADDING) / CONFIG_CHAR) : Infinity,
+    }), [columnWidths]);
     const activeEntry = byKey.get(active.key) ?? (rows.length ? { row: rows[0], index: 0 } : null);
     const activeRow = activeEntry?.row ?? null;
     const activeColumn = byKey.has(active.key) ? active.column : 0;
@@ -190,6 +247,26 @@ export default function ModelTablePanel() {
         reveal(row.nodeId, sameLevel ? 0 : 450);
     }, [reveal, store]);
 
+    /** Bring a row into view: open its ancestors, extend the rendered rows, scroll to it. */
+    const revealKey = useCallback((key, { focus = false } = {}) => {
+        if (!rowsRef.current.has(key)) {
+            const ancestors = ancestorKeys(JSON.parse(key));
+            setOverrides((current) => ancestors.every((ancestor) => current[ancestor] === true) ? current
+                : { ...current, ...Object.fromEntries(ancestors.map((ancestor) => [ancestor, true])) });
+        }
+        setActive((current) => current.key === key ? current : { key, column: focus ? 0 : current.column });
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            const index = rowsRef.current.get(key)?.index;
+            if (index === undefined) return;
+            setLimit((current) => index < current ? current : Math.ceil((index + 1) / RENDER_STEP) * RENDER_STEP);
+            requestAnimationFrame(() => {
+                const element = rowElement(key);
+                element?.scrollIntoView?.({ block: 'nearest' });
+                if (focus) element?.querySelector('[data-col="0"]')?.focus({ preventScroll: true });
+            });
+        }));
+    }, [rowElement]);
+
     const toggle = useCallback((row) => {
         setOverrides((current) => ({ ...current, [row.key]: !row.expanded }));
     }, []);
@@ -226,20 +303,8 @@ export default function ModelTablePanel() {
         if (state.selectedNodeIds === previous.selectedNodeIds && state.currentPath === previous.currentPath) return;
         const id = state.selectedNodeIds[0];
         if (!id) return;
-        const key = rowKey([...state.currentPath, id]);
-        setActive((current) => current.key === key ? current : { key, column: current.column });
-        if (!rowsRef.current.has(key)) {
-            const ancestors = ancestorKeys([...state.currentPath, id]);
-            setOverrides((current) => ancestors.every((ancestor) => current[ancestor] === true) ? current
-                : { ...current, ...Object.fromEntries(ancestors.map((ancestor) => [ancestor, true])) });
-        }
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-            const index = rowsRef.current.get(key)?.index;
-            if (index === undefined) return;
-            setLimit((current) => index < current ? current : Math.ceil((index + 1) / RENDER_STEP) * RENDER_STEP);
-            requestAnimationFrame(() => rowElement(key)?.scrollIntoView?.({ block: 'nearest' }));
-        }));
-    }), [rowElement, store]);
+        revealKey(rowKey([...state.currentPath, id]));
+    }), [revealKey, store]);
 
     // The panel docks at the right, or becomes a bottom sheet in narrow panes.
     useEffect(() => {
@@ -250,11 +315,26 @@ export default function ModelTablePanel() {
         return () => observer.disconnect();
     }, []);
 
+    // Column widths decide how much of a setting or a shape fits.
+    useEffect(() => {
+        const output = outputHeaderRef.current;
+        const config = configHeaderRef.current;
+        if (!output || !config || typeof ResizeObserver === 'undefined') return undefined;
+        const observer = new ResizeObserver(() => {
+            const next = { output: output.getBoundingClientRect().width || null, config: config.getBoundingClientRect().width || null };
+            setColumnWidths((current) => current.output === next.output && current.config === next.config ? current : next);
+        });
+        observer.observe(output);
+        observer.observe(config);
+        return () => observer.disconnect();
+    }, [ready]);
+
     const setDepth = (next) => {
         store.getState().setModelTable({ depth: next });
         setOverrides({});
         setLimit(RENDER_STEP);
         setEditing(null);
+        setMessage('');
     };
     const close = () => {
         store.getState().setShowModelTable(false);
@@ -274,9 +354,12 @@ export default function ModelTablePanel() {
             const targetColumn = Math.max(0, Math.min(COLUMNS.length - 1, nextColumn));
             const target = rows[targetIndex];
             setActive({ key: target.key, column: targetColumn });
+            // An explanation belongs to the cell it was given for.
+            setMessage('');
             focusCell(target.key, targetColumn);
         };
-        const editable = Object.values(fieldTargets(row, cells, context)).some((target) => target.editable);
+        const targets = Object.values(fieldTargets(row, cells, context));
+        const editable = targets.some((target) => target.editable);
         const modifier = event.ctrlKey || event.metaKey;
         switch (event.key) {
             case 'ArrowDown': go(index + 1); break;
@@ -296,10 +379,13 @@ export default function ModelTablePanel() {
                 break;
             case 'Enter':
                 if (column === CONFIG_COLUMN && editable) actions.startEdit(row);
+                // A setting that cannot be edited here says where to change it.
+                else if (column === CONFIG_COLUMN && targets.length) setMessage(targets.map((target) => `${target.field.name}: ${target.hint}`).join(' · '));
                 else openRow(row);
                 break;
             case 'F2':
                 if (editable) actions.startEdit(row);
+                else if (targets.length) setMessage(targets.map((target) => `${target.field.name}: ${target.hint}`).join(' · '));
                 break;
             case ' ':
                 if (column === 0 && row.expandable) toggle(row);
@@ -327,7 +413,10 @@ export default function ModelTablePanel() {
 
     const totals = metrics?.totals;
     const modelTotal = totals?.[lens] ?? 0;
-    const lensTotal = formatMetric(lens, modelTotal) ?? '0';
+    // Shares of a partial total are upper bounds; the header says the denominator is a lower one.
+    const modelPartial = (totals?.unresolved?.[lens]?.size ?? 0) > 0;
+    // With nothing countable, the denominator is unknown rather than zero.
+    const lensTotal = modelPartial && !modelTotal ? '?' : `${modelPartial ? '≥' : ''}${formatMetric(lens, modelTotal) ?? '0'}`;
     const visibleRows = rows.slice(0, limit);
     const breadcrumb = activeRow ? ['main', ...ancestorKeys(activeRow.path).map((key) => byKey.get(key)?.row.label ?? '…'), activeRow.label].join(' › ') : '';
     const sameLevel = activeRow && sameLevelPath(activeRow.levelPath, currentPath);
@@ -338,6 +427,7 @@ export default function ModelTablePanel() {
             owner ? `in the shared ${owner.name} definition${uses > 1 ? ` (${uses} uses)` : ''}` : null,
             sameLevel ? 'on this canvas' : 'Enter or double-click opens its level'].filter(Boolean).join(' · ')
         : 'Select a row');
+    const metricColumn = lens === 'activation' ? 'activation' : 'macs';
 
     return <aside ref={asideRef} className={`df-model-table nokey${sheet ? ' is-sheet' : ''}`} aria-label="Model table"
         style={{ ...(width ? { '--model-table-width': `${width}px` } : {}), ...(height ? { '--model-table-height': `${height}px` } : {}) }}
@@ -388,31 +478,49 @@ export default function ModelTablePanel() {
         <div className="df-mt-toolbar">
             <h2 className="df-mt-title">Model table</h2>
             <Segmented label="Depth" value={depth} options={DEPTHS} onChange={setDepth} />
-            <Segmented label="Share" value={lens} options={LENSES} onChange={(next) => store.getState().setModelTable({ share: next })} />
-            <Segmented label="Cells" value={cells} options={CELLS} onChange={(next) => { setEditing(null); store.getState().setModelTable({ cells: next }); }} />
+            <Segmented label="Share" value={lens} options={LENSES} onChange={(next) => { setMessage(''); store.getState().setModelTable({ share: next }); }} />
+            <Segmented label="Cells" value={cells} options={CELLS} onChange={(next) => { setEditing(null); setMessage(''); store.getState().setModelTable({ cells: next }); }} />
             <button type="button" className="df-mt-close" aria-label="Close model table" title="Close model table" onClick={close}><X size={13} strokeWidth={3} /></button>
         </div>
         {metrics?.unavailable ? <p className="df-mt-empty" role="status">The table could not be computed: {metrics.error}</p> : <>
-            <div className="df-mt-scroll">
-                <table className="df-mt-table" role="treegrid" aria-label="Model layers" aria-readonly="true" aria-rowcount={rows.length + 1} aria-describedby={assumptionsId}>
+            <div className={`df-mt-scroll${scrolledX ? ' is-scrolled-x' : ''}`} data-covered={covered ?? undefined}
+                onScroll={(event) => {
+                    const element = event.currentTarget;
+                    const next = element.scrollLeft > 0;
+                    setScrolledX((current) => current === next ? current : next);
+                    // A cell half under the Layer column would show digits of another number.
+                    const heads = element.querySelectorAll('thead th');
+                    const edge = element.scrollLeft + (heads[0]?.offsetWidth ?? 0);
+                    let under = null;
+                    for (let index = 1; index < heads.length; index++) {
+                        if (next && heads[index].offsetLeft < edge && heads[index].offsetLeft + heads[index].offsetWidth > edge) under = index;
+                    }
+                    setCovered((current) => current === under ? current : under);
+                }}>
+                <table className="df-mt-table" role="treegrid" aria-label="Model layers" aria-rowcount={rows.length + 1} aria-describedby={assumptionsId}>
                     <colgroup>
                         <col className="df-mt-col-layer" /><col className="df-mt-col-count" /><col className="df-mt-col-output" />
-                        <col className="df-mt-col-config" /><col className="df-mt-col-params" /><col className="df-mt-col-macs" /><col className="df-mt-col-share" />
+                        <col className="df-mt-col-config" /><col className="df-mt-col-params" /><col className="df-mt-col-metric" /><col className="df-mt-col-share" />
                     </colgroup>
                     <thead>
                         <tr role="row" aria-rowindex={1}>
                             <th role="columnheader" scope="col" className="df-mt-layer">Layer</th>
                             <th role="columnheader" scope="col" className="df-mt-num" title="Occurrences per forward pass: repeat and parallel counts multiply">×N</th>
-                            <th role="columnheader" scope="col" title="Output shape of each occurrence; B = batch">Output</th>
-                            <th role="columnheader" scope="col" title="Defining settings. Symbols: as written · Values: resolved. Click a setting to edit it.">Config</th>
+                            <th ref={outputHeaderRef} role="columnheader" scope="col" title="Output shape of each occurrence; B = batch">Output</th>
+                            <th ref={configHeaderRef} role="columnheader" scope="col" title="Defining settings. Symbols: as written · Values: resolved. Click a setting to edit it.">Config</th>
                             <th role="columnheader" scope="col" className="df-mt-num" title="Learned parameters of every occurrence; the small figure is one instance">Params</th>
-                            <th role="columnheader" scope="col" className="df-mt-num" title="Multiply-accumulates per sample (B = 1): MatMul, Linear and Conv. Causal attention counts the full T × T product.">MACs</th>
-                            <th role="columnheader" scope="col" className="df-mt-num" title={`Share of the whole model: ${formatExact(modelTotal)} ${LENS_NAMES[lens]}`}>% of {lensTotal}</th>
+                            <th role="columnheader" scope="col" className="df-mt-num" title={metricColumn === 'activation' ? ACTIVATION_TITLE : MACS_TITLE}>
+                                {metricColumn === 'activation' ? 'Act. mem' : 'MACs'}
+                            </th>
+                            <th role="columnheader" scope="col" className="df-mt-num df-mt-share-head"
+                                title={`Share of the whole model: ${modelPartial ? 'at least ' : ''}${formatExact(modelTotal)} ${LENS_NAMES[lens]}${modelPartial ? '. Rows the table cannot count are left out, so shares are upper bounds.' : ''}`}>
+                                % of {lensTotal}
+                            </th>
                         </tr>
                     </thead>
                     <tbody ref={bodyRef} onKeyDown={onGridKeyDown}>
-                        {visibleRows.map((row, index) => <ModelTableRow key={row.key} row={row} index={index} cells={cells} lens={lens} modelTotal={modelTotal}
-                            context={context} selected={selectedKeys.has(row.key)} focusColumn={row === activeRow ? activeColumn : null}
+                        {visibleRows.map((row, index) => <ModelTableRow key={row.key} row={row} index={index} cells={cells} lens={lens} modelTotal={modelTotal} modelPartial={modelPartial}
+                            context={context} selected={selectedKeys.has(row.key)} focusColumn={row === activeRow ? activeColumn : null} budgets={budgets}
                             editing={editing?.key === row.key ? editing : null} suggestions={editing?.key === row.key ? suggestions : null} actions={actions} />)}
                         {rows.length > limit && <tr className="df-mt-more"><td colSpan={COLUMNS.length}>
                             <button type="button" onClick={() => setLimit((current) => current + RENDER_STEP)}>
@@ -423,11 +531,16 @@ export default function ModelTablePanel() {
                 </table>
             </div>
             <div className="df-mt-focus">
-                <span className="df-mt-focus-text" aria-live="polite" title={focusText}>{focusText}</span>
+                <span className="df-mt-focus-text" title={focusText}>{focusText}</span>
                 <button type="button" disabled={!activeRow} onClick={() => openRow(activeRow)} title="Open this row's level and select its node">Show on canvas</button>
                 <button type="button" disabled={!activeRow} onClick={() => openRow(activeRow, { settings: true })} title="Open the node's settings on the canvas">Settings</button>
             </div>
-            {ready && <Footer metrics={metrics} assumptionsId={assumptionsId} />}
+            {/* Results of edits and explanations are announced; moving between cells is not. */}
+            <span className="sr-only" role="status" aria-live="polite">{message}</span>
+            {ready && <Footer metrics={metrics} assumptionsId={assumptionsId} onShowError={(error) => {
+                revealKey(rowKey(error.path), { focus: true });
+                setMessage(`${error.label}: ${error.messages.join('; ')}`);
+            }} />}
         </>}
     </aside>;
 }

@@ -1,14 +1,12 @@
 import { useId, useRef, useState } from 'react';
 import VariableInput from './VariableInput.jsx';
 import { parseCellValue, precheckCellValue, targetSpec } from '../../domain/modelTable/writeTargets.js';
+import { fitConfigParts } from '../../domain/modelTable/fitText.js';
+import { shownFieldText as shownText } from '../../domain/modelTable/configFields.js';
 import { emptyAllowed, fieldScope, initialText } from './modelTableEdits.js';
 
 const widthOf = (text, placeholder) => `${Math.min(22, Math.max(4, String(text || placeholder || '').length + 1))}ch`;
-const LONG_TEXT = 20;
 
-function shownText(field, cells) {
-    return cells === 'symbols' ? field.symbols : { text: field.values.text, tone: field.values.varies ? 'varies' : 'value' };
-}
 
 /** `p=0.1`, `k=3` like a PyTorch repr; symbols such as × and + attach directly. */
 function Prefix({ prefix }) {
@@ -17,15 +15,13 @@ function Prefix({ prefix }) {
 }
 
 /** A field as text: expressions in the expression colour, inherited defaults muted. */
-function FieldText({ field, cells, info, errors, onClick }) {
+function FieldText({ field, cells, text, info, errors, more, onClick }) {
     const shown = shownText(field, cells);
     const error = errors?.[0];
     const title = [
         `${field.name}${cells === 'symbols' && field.values.text !== shown.text ? ` = ${field.values.text}` : ''}${cells === 'values' && field.symbols.text !== shown.text ? ` · written ${field.symbols.text}` : ''}`,
-        shown.text.length > LONG_TEXT ? shown.text : null, field.values.title, error, info?.hint,
+        text !== shown.text ? shown.text : null, field.values.title, error, info?.hint, more ? `Also: ${more}` : null,
     ].filter(Boolean).join('\n');
-    // Long formulas are cut here; the title keeps them whole.
-    const text = shown.text.length > LONG_TEXT ? `${shown.text.slice(0, LONG_TEXT - 2)}…` : shown.text;
     return <span className={`df-mt-field is-${shown.tone}${info?.editable ? ' is-editable' : ''}${error ? ' is-invalid' : ''}`}
         data-field={field.name} title={title} onClick={onClick}>
         <Prefix prefix={field.prefix} />{text}
@@ -36,6 +32,19 @@ function Separator({ part }) {
     return part.kind === 'note'
         ? <span className="df-mt-note" title={part.title}>{part.text}</span>
         : <span className="df-mt-separator" aria-hidden="true">{part.text}</span>;
+}
+
+/** Names a binding can also use: its repeat's index, then parameters declared before it. */
+function bindingSuggestions(row, part, suggestions, templates) {
+    if (part.source !== 'bindings' && part.source !== 'parameterValues') return suggestions;
+    const extra = [];
+    if (row.kind === 'repeat') extra.push({ name: row.iterationVariable ?? 'i', type: 'int', owner: `${row.label} instance index`, value: 0 });
+    for (const parameter of templates[row.definitionIds[0]]?.freeParameters ?? []) {
+        if (parameter.name === part.name) break;
+        extra.push({ ...parameter, owner: `${row.label}, declared earlier`, value: row.instanceScope?.[parameter.name] ?? null });
+    }
+    const names = new Set(extra.map((item) => item.name));
+    return [...suggestions.filter((item) => !names.has(item.name)), ...extra];
 }
 
 /** Shown while a cell is open: every editable field becomes an input. */
@@ -98,6 +107,11 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
         else commitOrExplain();
     };
     const onKeyDown = (event, index) => {
+        // An input method is still composing: Enter picks its candidate.
+        if (event.nativeEvent?.isComposing || event.keyCode === 229) {
+            event.stopPropagation();
+            return;
+        }
         // While $ completion is open, Enter, Escape and arrows belong to the list.
         if (event.currentTarget.getAttribute('aria-expanded') === 'true' && ['Enter', 'Escape', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
             event.stopPropagation();
@@ -118,6 +132,8 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
     return <span ref={editorRef} className="df-mt-editor nokey" role="group" aria-label={`Edit ${row.label} settings`}
         onBlur={(event) => {
             if (done.current || editorRef.current?.contains(event.relatedTarget)) return;
+            // Switching windows keeps the edit open; focus comes back to it.
+            if (!event.relatedTarget && typeof document.hasFocus === 'function' && !document.hasFocus()) return;
             // Leaving the cell keeps a valid edit and drops an invalid one;
             // focus stays wherever the user moved it.
             const problem = commit({ refocus: false });
@@ -162,7 +178,7 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
             }
             return <span key={part.name} className="df-mt-input-wrap"><Prefix prefix={part.prefix} />
                 <VariableInput {...common} type="text" spellCheck={false} autoComplete="off" floatingSuggestions
-                    suggestions={info.target.literalOnly ? [] : suggestions} value={text} placeholder={placeholder}
+                    suggestions={info.target.literalOnly ? [] : bindingSuggestions(row, part, suggestions ?? [], context.templates)} value={text} placeholder={placeholder}
                     style={{ '--parameter-width': widthOf(text, placeholder) }}
                     onFocus={(event) => {
                         announce(part);
@@ -176,15 +192,37 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
 }
 
 /** The defining settings of a row, as written (Symbols) or resolved (Values). */
-export default function ModelTableConfigCell({ row, cells, targets, context, fieldErrors, editing, suggestions, onStartEdit, onDone, onMessage }) {
+export default function ModelTableConfigCell({ row, cells, targets, context, fieldErrors, editing, suggestions, budget, labelled = false, onStartEdit, onReadOnly, onDone, onMessage }) {
     if (editing) {
         return <ConfigEditor row={row} cells={cells} targets={targets} context={context} suggestions={suggestions}
             focusField={editing.fieldName} seed={editing.seed} onDone={onDone} onMessage={onMessage} />;
     }
-    return <span className="df-mt-config">
-        {row.config.map((part, index) => part.kind === 'field'
-            ? <FieldText key={part.name} field={part} cells={cells} info={targets[part.name]} errors={fieldErrors[part.name]}
-                onClick={() => { if (targets[part.name]?.editable) onStartEdit(part.name); }} />
+    // Fit the cell without changing what it says: expressions are cut where the
+    // ellipsis belongs to them, values stay whole, extra fields give way to "…".
+    const fit = fitConfigParts(row.config, {
+        budget,
+        display: (part) => shownText(part, cells).text,
+        expression: (part) => shownText(part, cells).tone === 'expression',
+    });
+    const visible = fit.hiddenFrom === null ? row.config : row.config.slice(0, fit.hiddenFrom);
+    const hidden = fit.hiddenFrom === null ? [] : row.config.slice(fit.hiddenFrom).filter((part) => part.kind !== 'text');
+    const hiddenText = hidden.map((part) => part.kind === 'field' ? `${part.name} ${shownText(part, cells).text}` : part.text).join(' · ');
+    // A cut last field already ends in "…"; it names the hidden parts in its title instead.
+    const lastCut = hidden.length > 0 && !!fit.texts[visible.length - 1]?.endsWith('…');
+    // The cell's label reads the settings as a sentence; the drawn parts are hidden from screen readers.
+    return <span className="df-mt-config" aria-hidden={labelled || undefined}>
+        {visible.map((part, index) => part.kind === 'field'
+            ? <FieldText key={part.name} field={part} cells={cells} text={fit.texts[index]} info={targets[part.name]} errors={fieldErrors[part.name]}
+                more={lastCut && index === visible.length - 1 ? hiddenText : null}
+                onClick={(event) => {
+                    if (targets[part.name]?.editable) onStartEdit(part.name);
+                    else if (targets[part.name]) {
+                        // The row still becomes active; the reason replaces the usual focus line.
+                        event.stopPropagation();
+                        onReadOnly(`${part.name}: ${targets[part.name].hint}`);
+                    }
+                }} />
             : <Separator key={index} part={part} />)}
+        {hidden.length > 0 && !lastCut && <span className="df-mt-more-fields" title={hiddenText}>…</span>}
     </span>;
 }

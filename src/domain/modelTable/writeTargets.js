@@ -112,7 +112,8 @@ export function followReference(name, frames, rootGraph, { before: startBefore =
                 depth -= 1;
                 continue;
             }
-            if (!isLiteralValue(raw, parameter)) return readonly(`Computed by ${raw} (${container.label}). Switch to Symbols to edit the formula.`, hops);
+            // None (a nullable value set to null) and an empty default are values too.
+            if (!unset(raw) && !isLiteralValue(raw, parameter)) return readonly(`Computed by ${raw} (${container.label}). Switch to Symbols to edit the formula.`, hops);
             return bound
                 ? { kind: owner ? 'templateNode' : 'rootNode', templateId: owner, nodeId: container.id, source, field: name, hops }
                 : { kind: 'templateDefault', templateId, name, hops };
@@ -156,8 +157,10 @@ export function describeTarget(target, { row, rootGraph, templates, templateUses
     const uses = (templateId) => templateUses[templateId] ?? 0;
     const usesText = (templateId) => `${uses(templateId)} use${uses(templateId) === 1 ? '' : 's'}`;
     if (target.kind === 'global') {
+        // Direct uses undercount the reach: bindings such as D: $d_model carry
+        // the global into every layer of a component.
         const count = globalUseCount(rootGraph, templates, target.name);
-        return `Sets global ${target.name} · used by ${count} field${count === 1 ? '' : 's'}`;
+        return `Sets global ${target.name} for the whole model: every value that reads it changes, including through component bindings (${count} field${count === 1 ? '' : 's'} name it directly)`;
     }
     if (target.kind === 'templateDefault') return `Sets the default of ${target.name} in the shared ${templates[target.templateId]?.name ?? 'component'} definition · ${usesText(target.templateId)}`;
     if (target.kind === 'templateLayer' || target.kind === 'templateNode') {

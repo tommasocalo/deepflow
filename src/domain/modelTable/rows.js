@@ -1,15 +1,17 @@
 import { STANDARD_COMPONENTS } from '../components/index.js';
 import { getEntry } from '../library/index.js';
 import { isShapeCollection } from '../shapeCollections.js';
-import { instanceTotals, METRICS, subtreeMetrics } from '../metrics/modelMetrics.js';
-import { unresolvedReason } from '../metrics/layerMetrics.js';
-import { aliasFor, configLayout, fieldRaw, fieldSource, fieldSpec, rawText, resolvedBinding, resolvedLayerField, resolvesFalse, summarizeValues } from './configFields.js';
+import { ANALYSIS_LIMITS, BUDGET_ERROR, instanceTotals, METRICS, subtreeMetrics, SUMMARY_ERROR } from '../metrics/modelMetrics.js';
+import { aliasFor, configLayout, fieldRaw, fieldSource, fieldSpec, rawText, resolvedBinding, resolvedLayerField, resolvesFalse, summarizeValues, valueRuns } from './configFields.js';
 
 export const DEPTHS = ['root', 'blocks', 'ops'];
 /** Definitions that stay one row at Blocks depth: the library's standard modules. */
 export const STANDARD_FAMILIES = new Set(['linear', 'embedding', 'layernorm', 'learned-position', 'sinusoidal-position', 'attention', 'attention-head']);
 const HIDDEN_KEYS = new Set(['deepflow.template.Input', 'deepflow.template.Output']);
-const SUMMARY = /^(?:Repeat|Template ".*") has \d+ internal errors?: /;
+const BUDGET_TEXT = 'Expanded graph exceeds';
+const STOPPED_WARNING = `The analysis stopped at ${ANALYSIS_LIMITS.nodes.toLocaleString('en-US')} expanded nodes here; counts and totals are lower bounds`;
+/** Layers whose bias can be switched off; the cell says so when it is. */
+const BIAS_LAYERS = /^torch\.nn\.(Linear|Conv[123]d|ConvTranspose[123]d)$/;
 
 /** Rows are keyed by their absolute node-id path, like level paths. */
 export const rowKey = (path) => JSON.stringify(path);
@@ -87,23 +89,28 @@ function singleShapeText(shape) {
 /**
  * One label for the output of every merged occurrence, B = batch. Shapes
  * that differ in some axes read as a range there: `B × 64…256 × 32 × 32`.
+ * `null` marks an occurrence whose shape is unknown; `unknownReason` says why.
  */
-export function shapeSummary(shapes) {
+export function shapeSummary(shapes, { unknownReason = null } = {}) {
+    const unknown = shapes.filter((shape) => shape === null || shape === undefined).length;
     const distinct = [];
     const seen = new Set();
     for (const shape of shapes) {
-        const key = JSON.stringify(shape ?? null);
+        if (shape === null || shape === undefined) continue;
+        const key = JSON.stringify(shape);
         if (seen.has(key)) continue;
         seen.add(key);
-        distinct.push(shape ?? null);
+        distinct.push(shape);
     }
+    const unknownNote = unknown && distinct.length ? `\nUnknown in ${unknown} of ${shapes.length} occurrences${unknownReason ? `: ${unknownReason}` : ''}` : '';
+    if (!distinct.length) return { text: null, varies: false, unknown: shapes.length > 0, title: unknownReason ? `Unknown: ${unknownReason}` : '' };
     const labels = distinct.map((shape) => singleShapeText(shape) ?? '?');
-    if (distinct.length <= 1) return { text: distinct.length && singleShapeText(distinct[0]) || null, varies: false, title: labels[0] ?? '' };
+    if (distinct.length === 1) return { text: singleShapeText(distinct[0]), varies: false, unknown: false, title: `${labels[0]}${unknownNote}` };
     const ranks = distinct.map((shape) => Array.isArray(shape) ? shape.length : -1);
     const text = ranks.every((rank) => rank > 0 && rank === ranks[0])
         ? Array.from({ length: ranks[0] }, (_, axis) => axisText(distinct.map((shape) => shape[axis]), axis)).join(' × ')
         : `${labels[0]} …`;
-    return { text, varies: true, title: labels.join(' · ') };
+    return { text, varies: true, unknown: false, title: `${labels.join(' · ')}${unknownNote}` };
 }
 
 const unique = (values) => [...new Set(values)];
@@ -115,20 +122,37 @@ function occurrenceLabel(trail) {
     return indices.length === 1 ? `i=${indices[0]}` : indices.join('.');
 }
 
-function metricSummary(list, occurrences, metric) {
+/**
+ * A metric over every merged occurrence. `each` and the per-instance list
+ * leave out occurrences whose value is unknown, so a half-analysed instance
+ * never reads as a small one.
+ */
+function metricSummary(list, occurrences, metric, labels) {
     let total = 0;
     const unresolved = new Map();
     for (const merged of list) {
         const totals = subtreeMetrics(merged.metrics);
         total += totals[metric];
-        for (const [key, label] of totals.unresolved[metric]) unresolved.set(key, label);
+        for (const [key, value] of totals.unresolved[metric]) unresolved.set(key, value);
     }
-    const values = occurrences.map((occurrence) => occurrence[metric]);
+    const values = occurrences.map((occurrence) => occurrence.unresolved[metric].size ? null : occurrence[metric]);
+    const known = values.filter((value) => value !== null);
+    const each = occurrences.length > 1 && known.length ? { min: Math.min(...known), max: Math.max(...known) } : null;
+    const items = [];
+    const seen = new Set();
+    for (const { label, reason } of unresolved.values()) {
+        const key = `${label}\u001f${reason ?? ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push({ label, reason: reason ?? null });
+    }
     return {
         total,
         unresolved: unresolved.size,
-        unresolvedLabels: unique([...unresolved.values()].map((item) => item.label)),
-        each: occurrences.length > 1 ? { min: Math.min(...values), max: Math.max(...values) } : null,
+        unresolvedItems: items,
+        each,
+        // Which instances differ: one hover lists them.
+        perInstance: each && each.min !== each.max ? valueRuns(values, labels) : null,
         trainable: metric === 'params' ? list.reduce((sum, merged) => sum + subtreeMetrics(merged.metrics).trainable, 0) : undefined,
     };
 }
@@ -138,7 +162,7 @@ function standardFor(family) {
 }
 
 /** Field cells for one row: written values (Symbols) and resolved values (Values). */
-function buildConfig(row, list, templates, occurrenceLabels) {
+function buildConfig(row, list, templates, occurrenceLabels, instanceLabels) {
     const firstNode = list[0].metrics.node;
     const ownerId = row.ownerIds.length === 1 ? row.ownerIds[0] : null;
     const parts = [];
@@ -160,7 +184,7 @@ function buildConfig(row, list, templates, occurrenceLabels) {
         else if (source === 'parameters') values = list.map((merged) => resolvedLayerField(merged.metrics.node, merged.metrics.scope, name));
         else {
             values = list.flatMap((merged) => resolvedBinding(merged.metrics, name));
-            labels = row.kind === 'repeat' ? list.flatMap((merged) => merged.metrics.instances.map((instance) => `i=${instance.index}`)) : occurrenceLabels;
+            labels = row.kind === 'repeat' ? instanceLabels : occurrenceLabels;
         }
         if (part.hideDefault && values.every((value) => value === null || value === undefined || value === spec?.default)) continue;
         const resolved = summarizeValues(values, spec, labels);
@@ -170,14 +194,18 @@ function buildConfig(row, list, templates, occurrenceLabels) {
             symbols: written, values: resolved,
         });
     }
-    // A Linear without bias says so in both modes; it is not an editable field here.
-    const biasSource = row.kind === 'layer' && row.libraryKey === 'torch.nn.Linear' ? 'parameters'
+    // A layer without bias says so in both modes; it is not an editable field here.
+    const biasSource = row.kind === 'layer' && BIAS_LAYERS.test(row.libraryKey ?? '') ? 'parameters'
         : row.family === 'linear' ? fieldSource(firstNode, 'bias') : null;
     if (biasSource) {
         const values = biasSource === 'parameters'
             ? list.map((merged) => resolvedLayerField(merged.metrics.node, merged.metrics.scope, 'bias'))
             : list.flatMap((merged) => resolvedBinding(merged.metrics, 'bias'));
         if (resolvesFalse(values)) parts.push({ kind: 'note', text: 'no bias', title: 'bias = False: no additive bias is learned. Change it in Settings.' });
+    }
+    // A switched-off parameter is not created: it holds no weights.
+    if (row.libraryKey === 'deepflow.op.Parameter' && resolvesFalse(list.map((merged) => resolvedLayerField(merged.metrics.node, merged.metrics.scope, 'enabled')))) {
+        parts.push({ kind: 'note', text: 'off', title: 'enabled = False: this parameter is not created and holds no weights. Change it in Settings.' });
     }
     return parts;
 }
@@ -199,6 +227,26 @@ function groupChildren(list) {
     return groups;
 }
 
+/** Outputs of every occurrence; unknown shapes are null. Repeats show one instance's output. */
+function occurrenceShapes(first, list) {
+    if (first.kind !== 'repeat') return list.map((merged) => merged.metrics.shapeUnknown ? null : merged.metrics.output);
+    return list.flatMap((merged) => merged.metrics.complete
+        ? merged.metrics.instances.map((instance) => instance.outputTaint ? null : instance.output)
+        : [null]);
+}
+
+function shapeReason(first, list) {
+    for (const merged of list) {
+        if (merged.metrics.shapeUnknown) return merged.metrics.shapeUnknown;
+        if (first.kind === 'repeat') {
+            if (!merged.metrics.complete) return merged.metrics.incompleteReason;
+            const tainted = merged.metrics.instances.find((instance) => instance.outputTaint);
+            if (tainted) return tainted.outputTaint.reason;
+        }
+    }
+    return null;
+}
+
 /**
  * Rows of the Model table at a depth.
  * - root: the root graph's nodes (containers collapsed);
@@ -208,14 +256,21 @@ function groupChildren(list) {
  * - ops: expands everything down to primitive layers and operations.
  * `overrides` maps row keys to an explicit expanded state. Rows merge one node
  * across every instance of its ancestors, so ×N multiplies nested counts.
+ * Inside a container that could not be analysed completely (an unresolved
+ * count, the node budget), ×N and totals are lower bounds (`lowerBound`).
  */
 export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth = 'blocks', overrides = {} }) {
     if (!metrics?.root) return [];
     const rows = [];
     const modelTotals = metrics.totals;
+    // Rows with a real error somewhere below them, from the errors the metrics recorded.
+    const errorsInside = new Set();
+    for (const issue of metrics.issues?.errors ?? []) {
+        for (let length = 1; length < issue.path.length; length++) errorsInside.add(rowKey(issue.path.slice(0, length)));
+    }
     const automatic = (row) => depth === 'ops' || (depth === 'blocks' && !STANDARD_FAMILIES.has(row.family));
 
-    const visit = (groups, orderGraphs, levelPath, level, parentKey, ancestorConflict) => {
+    const visit = (groups, orderGraphs, levelPath, level, parentKey, ancestorConflict, ancestorIncomplete, ancestorFactors) => {
         const order = unique([...orderGraphs.flatMap((graph) => readingOrder(graph)), ...groups.keys()]).filter((id) => groups.has(id));
         const visible = order.filter((id) => {
             const first = groups.get(id)[0].metrics;
@@ -230,7 +285,12 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
             const definitionIds = container ? unique(list.flatMap((merged) => merged.metrics.instances.map((instance) => instance.templateId))) : [];
             const family = container ? first.family ?? null : null;
             const occurrences = first.kind === 'repeat' ? list.flatMap((merged) => instanceTotals(merged.metrics)) : list.map((merged) => subtreeMetrics(merged.metrics));
+            const occurrenceLabels = list.map((merged) => occurrenceLabel(merged.trail));
+            const instanceLabels = first.kind === 'repeat'
+                ? list.flatMap((merged) => merged.metrics.instances.map((instance) => occurrenceLabel([...merged.trail, { repeat: true, index: instance.index }])))
+                : occurrenceLabels;
             const complete = list.every((merged) => merged.metrics.kind === 'layer' || merged.metrics.complete);
+            const counts = first.kind === 'repeat' ? list.map((merged) => merged.metrics.count) : null;
             const live = levelPath.length ? null : rootGraph?.nodes?.[id];
             const row = {
                 key, path, levelPath, nodeId: id, parentKey, depth: level, posInSet: position + 1, setSize: visible.length,
@@ -243,15 +303,27 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
                     : first.kind === 'repeat' ? { icon: first.node.mode === 'parallel' ? 'parallel' : 'repeat' }
                         : standardFor(family) ? { libraryKey: standardFor(family).libraryKey, standard: true } : { icon: 'boxes' },
                 expandable: container && list.some((merged) => merged.metrics.instances.some((instance) => instance.level)),
-                multiplicity: first.kind === 'repeat' ? (complete ? occurrences.length : null) : list.length,
+                // Occurrences per forward pass: declared repeat counts, or merged entries.
+                multiplicity: counts ? (counts.every((count) => Number.isInteger(count)) ? counts.reduce((sum, count) => sum + count, 0) : null) : list.length,
+                // Inside an incompletely analysed container, counts and totals are lower bounds:
+                // { label, reason } of that container, or null.
+                lowerBound: ancestorIncomplete,
+                // How ×N multiplies: one { label, count } per repeat on the way down, this row's included.
+                factors: counts && counts.every((count) => Number.isInteger(count) && count === counts[0])
+                    ? [...ancestorFactors, { label: (live ?? first.node).label ?? id, count: counts[0] }] : ancestorFactors,
+                complete,
+                incompleteReason: complete ? null : list.find((merged) => merged.metrics.incompleteReason)?.metrics.incompleteReason ?? null,
                 // Repeat ancestors of the first occurrence, for opening its level.
                 firstInstance: list[0].trail.map((step, index) => ({ path: levelPath.slice(0, index + 1), index: step.index, repeat: step.repeat })).filter((step) => step.repeat),
                 trail: list[0].trail.map((step) => ({ id: step.id, index: step.index, templateId: step.templateId, repeat: step.repeat })),
                 definitionIds,
                 ownerIds: levelPath.length ? unique(list.map((merged) => merged.trail.at(-1)?.templateId)) : [],
                 ancestorConflict,
-                shape: shapeSummary(list.map((merged) => merged.metrics.output)),
-                fused: first.kind === 'layer' && first.fused,
+                shape: shapeSummary(occurrenceShapes(first, list), { unknownReason: shapeReason(first, list) }),
+                // A parallel repeat collects its instances' outputs; the row shows one instance's.
+                collectedShape: first.kind === 'repeat' && first.node.mode === 'parallel' ? shapeSummary(list.map((merged) => merged.metrics.output)).text : null,
+                // Ops inside a standard module: the module's output stands for theirs.
+                fusedActivation: first.kind === 'layer' && list.every((merged) => merged.metrics.fusedActivation),
                 countError: first.kind === 'repeat' ? first.countError : null,
                 // Scopes of the first occurrence, for checking an edit before it is written.
                 scope: first.scope ?? {},
@@ -260,20 +332,26 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
             };
             row.expanded = row.expandable && (overrides[key] ?? automatic(row));
             for (const metric of METRICS) {
-                row[metric] = metricSummary(list, occurrences, metric);
+                row[metric] = metricSummary(list, occurrences, metric, instanceLabels);
                 // A layer says why its own value is unknown; containers list what they could not count.
-                if (row[metric].unresolved && first.kind === 'layer') row[metric].reason = unresolvedReason(first.node, metric);
+                if (row[metric].unresolved && first.kind === 'layer') row[metric].reason = list.map((merged) => merged.metrics.reasons?.[metric]).find(Boolean) ?? null;
             }
             row.share = Object.fromEntries(METRICS.map((metric) => [metric, modelTotals[metric] > 0 ? row[metric].total / modelTotals[metric] : null]));
-            const errors = unique(list.flatMap((merged) => merged.metrics.errors));
+            // The node budget is a limit of the analysis, not a mistake in the
+            // model: where validation stopped, and a collapsed container whose
+            // summary only repeats such stops, get a warning instead of an error.
+            const allErrors = unique(list.flatMap((merged) => merged.metrics.errors));
+            const stopped = allErrors.some((message) => BUDGET_ERROR.test(message))
+                || (container && !row.expanded && !errorsInside.has(key) && allErrors.some((message) => SUMMARY_ERROR.test(message) && message.includes(BUDGET_TEXT)));
+            const errors = allErrors.filter((message) => !BUDGET_ERROR.test(message) && !(stopped && !errorsInside.has(key) && SUMMARY_ERROR.test(message)));
             // An open container's children show their own errors, so its summary
             // gives way to the problems of the container itself (ports, missing
             // definitions, parameters that do not resolve).
             row.errors = row.expanded
-                ? unique([...errors.filter((message) => !SUMMARY.test(message)),
+                ? unique([...errors.filter((message) => !SUMMARY_ERROR.test(message)),
                     ...list.flatMap((merged) => merged.metrics.instances.flatMap((instance) => instance.instanceIssues ?? []))])
                 : errors;
-            row.warnings = unique(list.flatMap((merged) => merged.metrics.warnings));
+            row.warnings = unique([...(stopped ? [STOPPED_WARNING] : []), ...list.flatMap((merged) => merged.metrics.warnings)]);
             row.parameterIssues = {};
             for (const merged of list) {
                 for (const instance of merged.metrics.instances ?? []) {
@@ -282,16 +360,17 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
             }
             row.parameterIssues = Object.fromEntries(Object.entries(row.parameterIssues).map(([name, messages]) => [name, [...messages]]));
             if (row.countError) row.parameterIssues.count = [row.countError];
-            row.config = buildConfig(row, list, templates, list.map((merged) => occurrenceLabel(merged.trail)));
+            row.config = buildConfig(row, list, templates, occurrenceLabels, instanceLabels);
             rows.push(row);
             if (!row.expanded) return;
             const childGraphs = definitionIds.map((templateId) => templates[templateId]?.graph).filter(Boolean);
-            visit(groupChildren(list), childGraphs, path, level + 1, key, ancestorConflict || definitionIds.length > 1);
+            visit(groupChildren(list), childGraphs, path, level + 1, key, ancestorConflict || definitionIds.length > 1,
+                ancestorIncomplete ?? (complete ? null : { label: row.label, reason: row.incompleteReason ?? 'could not be analysed completely' }), row.factors);
         });
     };
 
     const rootGroups = new Map(Object.entries(metrics.root.nodes).map(([id, entry]) => [id, [{ metrics: entry, trail: [] }]]));
-    visit(rootGroups, [rootGraph ?? metrics.root.graph], [], 0, null, false);
+    visit(rootGroups, [rootGraph ?? metrics.root.graph], [], 0, null, false, null, []);
     return rows;
 }
 

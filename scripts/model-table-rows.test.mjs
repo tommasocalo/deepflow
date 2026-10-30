@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { computeModelMetrics, formatShare } from '../src/domain/metrics/index.js';
 import { buildModelTableRows, readingOrder, rowKey } from '../src/domain/modelTable/rows.js';
+import { configAccessibleText } from '../src/domain/modelTable/configFields.js';
+import { cutExpression, fitConfigParts, fitShapeText } from '../src/domain/modelTable/fitText.js';
 import { describeTarget, followReference, parseCellValue, precheckCellValue, resolveWriteTarget } from '../src/domain/modelTable/writeTargets.js';
 import { createEdge, createLayerNode, createRepeatNode, createSuperNodeInstance, createTemplate } from '../src/domain/architecture/index.js';
 import { getEntry } from '../src/domain/library/index.js';
@@ -44,6 +46,16 @@ const fieldOf = (row, name) => {
 };
 const cellText = (row, cells) => row.config.map((part) => part.kind === 'field' ? `${part.prefix && part.prefix !== '×' ? `${part.prefix} ` : part.prefix ?? ''}${part[cells].text}` : part.text).join(' ');
 const target = (ctx, row, name, cells) => resolveWriteTarget({ row, field: fieldOf(row, name), cells, rootGraph: ctx.graph, templates: ctx.templates });
+/** The row of a single layer fed by a model input. */
+const layerRow = (libraryKey, parameters) => {
+    const input = createLayerNode({ libraryKey: 'deepflow.io.Input', entry: getEntry('deepflow.io.Input'), position: { x: 0, y: 0 } });
+    const node = createLayerNode({ libraryKey, entry: getEntry(libraryKey), position: { x: 0, y: 100 } });
+    const graph = {
+        nodes: { [input.id]: { ...input, parameters: { ...input.parameters, shape: '(8, 16)' } }, [node.id]: { ...node, parameters: { ...node.parameters, ...parameters } } },
+        edges: [createEdge({ source: input.id, target: node.id })],
+    };
+    return buildModelTableRows({ metrics: computeModelMetrics(graph, {}), rootGraph: graph, templates: {}, depth: 'ops' }).find((row) => row.nodeId === node.id);
+};
 
 test('depth selects root nodes, expanded blocks, or every operation', () => {
     const gpt2 = load(gpt2Storyboard);
@@ -340,6 +352,96 @@ test('an eye alias bound on its instance is edited where the instance binds it',
     assert.equal(describeTarget(valuesTarget, { row, rootGraph: bound.graph, templates: bound.templates }), 'Sets stride on ResNet stages · all 3 instances');
     const symbolsTarget = target(bound, row, 'stride', 'symbols');
     assert.deepEqual([symbolsTarget.kind, symbolsTarget.name], ['templateDefault', 'stride'], 'Symbols still edits the definition default');
+});
+
+test('values that differ per instance read as their range, whichever instance differs', () => {
+    load(gpt2Storyboard);
+    const stack = Object.values(architectureStore.getState().graph.nodes).find((node) => node.label === 'Transformer blocks');
+    architectureStore.getState().setInspectedIteration([stack.id], 4);
+    assert.equal(architectureStore.getState().setStructureScope('local', [stack.id]), true);
+    const localId = Object.values(architectureStore.getState().graph.nodes[stack.id].structureOverrides)[0].templateId;
+    const fc = Object.values(templatesStore.getState().templates[localId].graph.nodes).find((node) => node.label === 'mlp fc');
+    templatesStore.getState().patchTemplateNode(localId, fc.id, { parameterValues: { ...fc.parameterValues, out_features: 1536 } });
+    const proj = Object.values(templatesStore.getState().templates[localId].graph.nodes).find((node) => node.label === 'mlp proj');
+    templatesStore.getState().patchTemplateNode(localId, proj.id, { parameterValues: { ...proj.parameterValues, in_features: 1536 } });
+    const narrowed = model();
+    assert.deepEqual(narrowed.metrics.issues.errors, [], 'Block 4 is a valid, narrower block');
+    const rows = rowsAt(narrowed, 'blocks');
+    const narrow = find(rows, 'mlp fc');
+    assert.equal(cellText(narrow, 'values'), '768 → 1536…3072', 'A middle instance is never hidden behind first…last');
+    assert.equal(fieldOf(narrow, 'out_features').values.title, 'i=0–3: 3072 · i=4: 1536 · i=5–11: 3072');
+    assert.equal(narrow.shape.text, 'B × 1024 × 1536…3072', 'Consistent with the Output column');
+    assert.equal(cellText(find(rows, 'mlp proj'), 'values'), '1536…3072 → 768');
+    assert.deepEqual(narrow.params.perInstance.map((run) => [run.from, run.to, run.value]),
+        [['i=0', 'i=3', 2362368], ['i=4', 'i=4', 1181184], ['i=5', 'i=11', 2362368]], 'Metric tooltips list which instances differ');
+
+    const resnet = load(resnetStoryboard);
+    const stages = find(rowsAt(resnet, 'blocks'), 'ResNet stages');
+    assert.deepEqual(stages.params.perInstance.map((run) => [run.from, run.value]), [['i=0', 1856], ['i=1', 73984], ['i=2', 295424]]);
+    assert.deepEqual(stages.macs.perInstance.map((run) => run.value), [1769472, 75497472, 301989888]);
+});
+
+test('config cells name tanh GELU, switched-off weights and convolutions without bias, and read as sentences', () => {
+    const gpt2 = load(gpt2Storyboard);
+    const blocks = rowsAt(gpt2, 'blocks');
+    const gelu = fieldOf(find(blocks, 'gelu'), 'approximate');
+    assert.deepEqual([gelu.prefix, gelu.values.text], ['approximate', 'tanh'], 'Shown as approximate=tanh');
+    const exact = layerRow('torch.nn.GELU', { approximate: 'none' });
+    assert.equal(exact.config.length, 0, 'Exact GELU says nothing');
+    assert.equal(configAccessibleText(find(blocks, 'mlp fc'), 'values'), 'in_features 768 to out_features 3072');
+    assert.equal(configAccessibleText(find(blocks, 'lm_head'), 'values'), 'in_features 768 to out_features 50257, no bias');
+    assert.equal(configAccessibleText(find(blocks, 'Transformer blocks'), 'symbols'), 'count $n_layers, mlp_width 4 * d_model');
+    const lmBias = find(rowsAt(gpt2, 'ops'), 'bias', 'lm_head');
+    assert.ok(lmBias.config.some((part) => part.kind === 'note' && part.text === 'off'), 'lm_head bias is disabled: enabled = $bias = False');
+    assert.equal(lmBias.params.total, 0);
+
+    const resnet = load(resnetStoryboard);
+    const conv = find(rowsAt(resnet, 'blocks'), 'Conv2d');
+    assert.equal(cellText(conv, 'values'), '3…128 → 64…256 · k 3 s 1 p 1 no bias');
+    assert.equal(configAccessibleText(conv, 'values'), 'in_channels 3 through 128 to out_channels 64 through 256, kernel_size 3, stride 1, padding 1, no bias');
+});
+
+test('rows after an unknown size or inside a stopped analysis are marked, never exact', () => {
+    load(gpt2Storyboard);
+    const stack = Object.values(architectureStore.getState().graph.nodes).find((node) => node.label === 'Transformer blocks');
+    architectureStore.getState().patchRootNode(stack.id, { count: '$missing' });
+    const missing = rowsAt(model(), 'blocks');
+    const lmHead = find(missing, 'lm_head');
+    assert.deepEqual([lmHead.macs.total, lmHead.macs.unresolved], [0, 1], 'lm_head MACs are unknown (?), not 38.6M from a batch-less placeholder');
+    assert.equal(find(missing, 'ln_f').shape.unknown, true, 'Its output shape is a guess too');
+    assert.equal(find(missing, 'Transformer blocks').multiplicity, null);
+
+    load(gpt2Storyboard);
+    architectureStore.getState().patchGlobalParameter('n_layers', { default: 96 });
+    architectureStore.getState().patchGlobalParameter('n_heads', { default: 96 });
+    const huge = model();
+    const rows = rowsAt(huge, 'blocks');
+    const ln1 = find(rows, 'ln_1');
+    assert.ok(ln1.multiplicity < 96);
+    assert.deepEqual(ln1.lowerBound, { label: 'Transformer blocks', reason: 'the analysis stopped at 20,000 expanded nodes' }, 'Counts inside are lower bounds (≥)');
+    assert.equal(find(rows, 'Transformer blocks').multiplicity, 96, 'The declared count stays');
+    assert.ok(rows.every((row) => row.errors.every((message) => !/Expanded graph exceeds/.test(message))), 'The budget is not a model error');
+    assert.match(find(rows, 'ln_f').warnings[0], /analysis stopped at 20,000 expanded nodes/);
+});
+
+test('text cut to fit never reads as another value', () => {
+    assert.equal(cutExpression('4 * d_model', 9), '4 * d_mo…');
+    assert.equal(cutExpression('4 * d_model', 4), '4 *…', 'Never "4…", which would read as the value 4');
+    assert.equal(cutExpression('64 * 2 ** i', 7), '64 *…');
+    assert.equal(cutExpression('i === 0 ? 3 : 64', 12), 'i === 0 ?…');
+    const field = (name, text, prefix = null) => ({ kind: 'field', name, text, prefix });
+    const fit = (parts, budget) => {
+        const { texts, hiddenFrom } = fitConfigParts(parts, { budget, display: (part) => part.text, expression: (part) => /[$*]/.test(part.text) });
+        return [parts.slice(0, hiddenFrom ?? parts.length).map((part, index) => part.kind === 'field' ? texts[index] : part.text).join(' '), hiddenFrom];
+    };
+    const blocks = [field('count', '$n_layers', '×'), { kind: 'text', text: '·' }, field('mlp_width', '4 * d_model', 'mlp_width')];
+    assert.deepEqual(fit(blocks, 40), ['$n_layers · 4 * d_model', null]);
+    assert.deepEqual(fit(blocks, 28), ['$n_layers · 4 * d…', null], 'The formula is cut inside, where the ellipsis belongs to it');
+    assert.deepEqual(fit(blocks, 23), ['$n_layers', 1], 'A whole group gives way before a $name is cut');
+    const linear = [field('in_features', '$d_model'), { kind: 'text', text: '→' }, field('out_features', '$vocab_size'), { kind: 'note', text: 'no bias' }];
+    assert.deepEqual(fit(linear, 23), ['$d_model → $vocab_size', 3], 'The note gives way first');
+    assert.deepEqual(fit(linear, 20), ['$d_model → $vocab_…', 3], 'An in → out pair stays together');
+    assert.equal(fitShapeText('B × 64…256 × 32 × 32', 12), 'B × 64…256 × …', 'Shapes keep whole axes');
 });
 
 test('an Input shape is checked in the grammar validation reads before it is written', () => {

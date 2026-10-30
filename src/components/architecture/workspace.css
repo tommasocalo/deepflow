@@ -13,7 +13,8 @@
 .df-architecture-split.is-split .df-import-source-full { display: none; }
 .df-architecture-split.is-split .df-import-source-short { display: inline; }
 @media (max-width: 700px) { .df-import-source { right: 8px; bottom: 8px; max-width: calc(100% - 16px); font-size: 9px; } .df-import-source-full { display: none; } .df-import-source-short { display: inline; } }
-.df-architecture-body { container-type: inline-size; }
+/* Named, so tools docked inside (the Model table) can be containers of their own. */
+.df-architecture-body { container: df-architecture-body / inline-size; }
 .df-architecture-split.is-split .df-levels { padding-left: 10px; padding-right: 8px; }
 .df-architecture-split.is-split .df-graph-pane.is-active .df-graph-pane-header { box-shadow: inset 2px 0 #111; }
 .df-side-close { display: grid; place-items: center; flex-shrink: 0; width: 30px; border-bottom: 1px solid #e3e3dc; color: #555; }
