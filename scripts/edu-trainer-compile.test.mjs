@@ -158,6 +158,10 @@ test('conversion errors: invalid graphs, inputs, outputs, disconnected models an
     const invalid = compileModel(mismatch);
     assert.equal(errorsOf(invalid, 'invalid-graph').length, 1);
     assert.match(errorsOf(invalid)[0].validatorMessage, /Linear in_features=3 but input has 2 features/);
+    assert.match(errorsOf(invalid)[0].message, /^\S.* expects 3 input features but receives 2\.$/, 'the lesson panel\'s friendly rewrite, as plain text');
+    assert.doesNotMatch(errorsOf(invalid)[0].message, /\*\*|in_features=/);
+    const inComponent = compileModel(chainModel('(2,)', [['linear', 3, 1]]));
+    assert.match(errorsOf(inComponent, 'invalid-graph')[0].message, /expects 3 input features but receives 2\./, 'not "Template … has 1 internal error"');
 
     const two = chainModel('(2,)', [['linear', 2, 1]]);
     two.graph.nodes.in2 = { ...two.graph.nodes.in, id: 'in2' };

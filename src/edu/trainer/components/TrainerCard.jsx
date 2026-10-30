@@ -37,7 +37,8 @@ export default function TrainerCard({ locked = false, lockedReason = '' }) {
     const announcement = useRunAnnouncement(current);
     const ghosts = record && !record.initOnly ? previousRuns(runs, record, 3) : [];
     const failure = current?.status === 'failed' ? current.error?.message : null;
-    const problem = failure ?? (!running && firstError ? firstError.message : null);
+    // While a prediction gate is open, a problem line could give the answer away (M3 s6: "… receives 64").
+    const problem = locked ? null : failure ?? (!running && firstError ? firstError.message : null);
     return (
         <section className="edu-tr-card" aria-label={tr('card.label')}>
             <RunButtons locked={locked} lockedReason={lockedReason} compact />

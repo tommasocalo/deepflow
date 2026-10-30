@@ -228,7 +228,8 @@ export default function RunSettings({ locked = false, lockedReason = '' }) {
             </div>
             <RunButtons locked={locked} lockedReason={lockedReason} />
             <p className="edu-tr-status">{runStatusText(current, status)}</p>
-            <PreflightList preflight={preflight} />
+            {/* Behind an open prediction gate the issue text could give the answer away; it shows once answered. */}
+            {!locked && <PreflightList preflight={preflight} />}
         </div>
     );
 }

@@ -14,6 +14,8 @@ import { cachedValidate } from '../../domain/architecture/levelContext.js';
 import { effectiveTemplateId } from '../../domain/architecture/instanceStructure.js';
 import { resolveGradientFactor } from '../../domain/gradientFactor.js';
 import { isShapeCollection } from '../../domain/shapeCollections.js';
+import { friendlyIssues } from '../lessons/engine/feedback.js';
+import { t } from '../lessons/engine/i18n.js';
 
 export const MAX_PARAMETERS = 2_000_000;
 export const MAX_ACTIVATIONS_PER_BATCH = 4_000_000;
@@ -57,6 +59,9 @@ const typeName = (node, templates) => node.kind === 'layer'
 const formatShape = (shape) => (Array.isArray(shape) ? `(${shape.map((dim) => (dim === null ? 'B' : dim)).join(', ')})` : '(?)');
 const normalAxis = (axis, rank) => (Number.isInteger(axis) ? (axis < 0 ? rank + axis : axis) : null);
 
+/** Lesson markup (**bold**, `code`) without the marks, for the trainer's plain-text lines. */
+const plainText = (markup) => String(markup).replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1');
+
 export function unsupportedMessage(label) {
     return `${label} is not supported by the browser trainer. Use Code → train.py to train this model in PyTorch.`;
 }
@@ -82,13 +87,11 @@ export function compileModel({ graph, templates = {} } = {}) {
     const result = (program = null) => ({ ok: !issues.some((issue) => issue.severity === 'error'), program, issues, inputShape, outputShape, paramCount: program?.paramCount ?? 0 });
 
     if (!report.ok) {
-        const messages = [...report.globalErrors, ...Object.entries(report.errors).flatMap(([nodeId, list]) => list.map((message) => ({ nodeId, message })))];
-        for (const item of messages.slice(0, 6)) {
-            const nodeId = typeof item === 'string' ? undefined : item.nodeId;
-            const message = typeof item === 'string' ? item : item.message;
-            const label = nodeId ? graph.nodes[nodeId]?.label : null;
-            error('invalid-graph', label ? `${label}: ${message}` : message, { nodeId, validatorMessage: message });
+        // The lesson panel's friendly rewrite (docs/edu/SPEC.md §6.4.4), as plain text; the raw text stays alongside.
+        for (const issue of friendlyIssues(report, graph, templates).slice(0, 6)) {
+            error('invalid-graph', plainText(t(issue.key, issue.params)), { nodeId: issue.nodeId ?? undefined, validatorMessage: issue.message });
         }
+        if (!issues.length) error('invalid-graph', 'The model has errors: open Graph checks on the canvas.');
         return result();
     }
     if (inputs.length !== 1) {

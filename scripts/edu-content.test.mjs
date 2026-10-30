@@ -18,7 +18,7 @@ const { isValidTargetRef } = await import('../src/edu/lessons/engine/targets.js'
 const { gradePrediction } = await import('../src/edu/lessons/engine/predict.js');
 const { evaluateStep } = await import('../src/edu/lessons/engine/checks.js');
 const { buildCheckContext, factValues } = await import('../src/edu/lessons/engine/context.js');
-const { interpolate } = await import('../src/edu/lessons/engine/i18n.js');
+const { interpolate, t } = await import('../src/edu/lessons/engine/i18n.js');
 const { revealValues } = await import('../src/edu/lessons/engine/reveal.js');
 const { runActions } = await import('../src/edu/lessons/engine/actions.js');
 const { captureWorkspace, restoreWorkspace } = await import('../src/edu/lessons/engine/workspace.js');
@@ -282,6 +282,23 @@ test('every prediction diagnosis fires on its own wrong answer and never on the 
 
 // ---- 4. solvability and facts -------------------------------------------------------------------------------------
 
+/**
+ * Before the learner answers, nothing the panel shows may contain the expected number or shape: not the status line
+ * (the first failing check or the friendly validation error), and not the trainer card's problem line, which a train
+ * gate hides (TrainerCard.jsx).
+ */
+function assertNoSpoiler(step, result, where) {
+    const { predict } = step;
+    const values = predict.kind === 'number' ? [predict.expected]
+        : predict.kind === 'shape' ? [predict.expectedShape.filter((axis) => axis !== null).join(', ')] : [];
+    const shown = [result.issue ? t(result.issue.key, result.issue.params) : result.detail ? t(result.detail.key, result.detail.params) : ''];
+    if (step.embeds?.includes('trainer') && step.locks?.gate !== 'train') shown.push(...useTrainerStore.getState().refreshPreflight().errors.map((issue) => issue.message));
+    for (const value of values) {
+        const number = new RegExp(`(^|[^\\d.])${String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\d])`);
+        for (const text of shown) assert.doesNotMatch(plain(text), number, `${where}: "${text}" gives away the answer ${value} before it is given`);
+    }
+}
+
 const computedFacts = {};
 
 async function computeFacts(module, at, record) {
@@ -320,6 +337,7 @@ test('every step fails on entry and passes after its Show me, module after modul
             if (step.tab) assert.equal(useEduUiStore.getState().activeTab, step.tab, `${where}: opens tab ${step.tab}`);
             const atEntry = session().evaluate();
             assert.equal(atEntry.pass, false, `${where}: the check must fail on entry`);
+            if (step.predict) assertNoSpoiler(step, atEntry, where);
             // Each diagnose rule fires on its hand-made wrong state, built from the entry state.
             if (step.diagnose?.length) {
                 const entry = captureWorkspace();
