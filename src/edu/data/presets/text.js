@@ -100,7 +100,7 @@ def build_dataloaders(batch_size, data_seed, train_seed):
         task: 'next-token',
         vocabNote: `${VOCABULARY} characters`,
         comment: `${spec.name}: ${grouped(CHARACTERS)} characters of Shakespeare's plays, ${VOCABULARY} distinct characters. `
-            + `Each example is a window of ${blockSize} character ids; the target is the same window shifted by one. ${spec.attribution}.`,
+            + `Each example is a window of ${blockSize} character ids; its target is the window one character further on. ${spec.attribution}.`,
     };
 }
 
@@ -132,7 +132,7 @@ const tinyShakespeare = {
     options: { blockSize: { default: 64, min: 8, max: 1024, step: 8, label: 'Block size (characters)' } },
     exportDefaults: { epochs: 10, batchSize: 32, stepsPerEpoch: 200 },
     /** One sentence shown in the Data tab instead of a data preview (§3.4). */
-    schematic: `One long text of ${grouped(CHARACTERS)} characters written with ${VOCABULARY} distinct characters. Each example is a window of 64 character ids, and the target is the same window shifted one character to the left.`,
+    schematic: `One long text of ${grouped(CHARACTERS)} characters written with ${VOCABULARY} distinct characters. Each example is a window of 64 character ids; its target is the window one character further on, so every position's target is the character that follows it.`,
     preview: 'none',
     featureNames: null,
     python: (ctx = {}) => textPythonLoader(tinyShakespeare, ctx),

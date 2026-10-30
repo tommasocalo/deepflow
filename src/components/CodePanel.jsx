@@ -158,10 +158,12 @@ const CodePanel = ({ open, onClose, tab, onTabChange }) => {
                 <button
                     type="button"
                     onClick={onClose}
-                    className="df-button absolute top-2 right-2 h-7 w-7 p-0 hover:bg-red-50"
+                    className="df-button absolute top-2 right-2 hover:bg-red-50"
+                    // Inline, because .df-button's padding (unlayered CSS) beats Tailwind's p-0 and squeezed the icon.
+                    style={{ width: 28, height: 28, padding: 0 }}
                     aria-label="Close code panel"
                 >
-                    <X size={12} strokeWidth={3} aria-hidden="true" />
+                    <X size={12} strokeWidth={3} aria-hidden="true" style={{ flexShrink: 0 }} />
                 </button>
             </div>
             {activeTab === 'train' && data && (
