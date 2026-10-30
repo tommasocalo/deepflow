@@ -428,3 +428,33 @@ test('an exposed field bound on its instance is edited where the instance binds 
     await act(() => history().undo());
     assert.equal(rootNode('ResNet stages').bindings.stride, 2);
 });
+
+test('an invalid input shape keeps the editor open with its reason beside the field', async () => {
+    await openTable();
+    const shapeBefore = rootNode('tokens').parameters.shape;
+    for (const [text, reason] of [
+        ['(abc)', /numbers, not names \(abc\)/],
+        ['(1024, $foo)', /numbers, not names \(\$foo\)/],
+        ['()', /sizes such as/],
+        ['(-3)', /positive whole numbers/],
+        ['(1.5,)', /positive whole numbers/],
+    ]) {
+        const editor = cellOf('tokens', 3).querySelector('.df-mt-editor') ?? await editConfig('tokens');
+        const input = editor.querySelector('input[aria-label="tokens shape"]');
+        await typeText(input, text);
+        await key(input, 'Enter');
+        assert.ok(cellOf('tokens', 3).querySelector('.df-mt-editor'), `${text} keeps the editor open`);
+        assert.equal(input.getAttribute('aria-invalid'), 'true', text);
+        const bubble = document.getElementById(input.getAttribute('aria-describedby'));
+        assert.ok(bubble && cellOf('tokens', 3).contains(bubble), 'The reason sits next to the field');
+        assert.match(bubble.textContent, reason, text);
+        assert.equal(rootNode('tokens').parameters.shape, shapeBefore, `${text} writes nothing`);
+        assert.equal(history().undoCount, 0);
+    }
+    const input = cellOf('tokens', 3).querySelector('input[aria-label="tokens shape"]');
+    await typeText(input, '(512,)');
+    await key(input, 'Enter');
+    assert.equal(rootNode('tokens').parameters.shape, '(512,)');
+    assert.equal(history().undoCount, 1);
+    assert.match(cellOf('token embedding', 2).textContent, /B×512×768/);
+});

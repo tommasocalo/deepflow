@@ -1,7 +1,8 @@
 import { asFreeParamRef, globalParameters, resolveDimensionTuple, resolveRepeatCount } from '../expressions.js';
+import { getEntry } from '../library/index.js';
 import { fieldAlias, globalParameterUses, parameterReferences, resolvedFieldValue } from '../parameterBindings.js';
 import { NUMBER_LITERAL } from '../parameterDisplay.js';
-import { fieldRaw, unset } from './configFields.js';
+import { COUNT_SPEC, fieldRaw, unset } from './configFields.js';
 
 /**
  * Where a Model table edit is written. Each kind names the real owner of the value:
@@ -245,6 +246,24 @@ export function targetValue(target, { rootGraph, templates }) {
 }
 
 /**
+ * The spec of the value a target writes, for checks before writing: a global,
+ * a definition parameter, a container binding or count, or the field itself.
+ */
+export function targetSpec(target, { rootGraph, templates }, fieldSpec = null) {
+    if (target.kind === 'global') return globalParameters(rootGraph).find((parameter) => parameter.name === target.name) ?? fieldSpec;
+    if (target.kind === 'templateDefault') return templates[target.templateId]?.freeParameters?.find((parameter) => parameter.name === target.name) ?? fieldSpec;
+    if (target.source === 'count') return COUNT_SPEC;
+    if (target.source === 'bindings' || target.source === 'parameterValues') {
+        const graph = target.kind === 'rootNode' ? rootGraph : templates[target.templateId]?.graph;
+        const container = graph?.nodes?.[target.nodeId];
+        return templates[container?.templateId]?.freeParameters?.find((parameter) => parameter.name === target.field) ?? fieldSpec;
+    }
+    const graph = target.kind === 'rootNode' ? rootGraph : templates[target.templateId]?.graph;
+    const node = graph?.nodes?.[target.nodeId];
+    return getEntry(node?.libraryKey)?.parameters.find((parameter) => parameter.name === target.field) ?? fieldSpec;
+}
+
+/**
  * The grammar of ParameterField: a number literal becomes a number, an empty
  * cell inherits the default, true/false are flags, anything else ($ref,
  * formula, tuple) is kept as text.
@@ -261,11 +280,34 @@ function unknownNames(value, scope) {
     return parameterReferences(value).filter((name) => !Object.hasOwn(scope, name) || scope[name] === null || scope[name] === undefined);
 }
 
+const BATCH_MARK = /^(none|null|b|n|\?)$/i;
+const POSITIVE_INTEGER = /^\+?[1-9]\d*$/;
+
+/**
+ * The model Input's shape, in the grammar validation reads: sizes such as
+ * (1024,) or (B, 3, 32, 32). Names are not resolved there, so they are refused.
+ */
+function inputShapeProblem(value) {
+    if (typeof value === 'number') return POSITIVE_INTEGER.test(String(value)) ? null : 'Sizes must be positive whole numbers';
+    const text = String(value).trim();
+    const inner = /^\(.*\)$|^\[.*\]$/.test(text) ? text.slice(1, -1) : text;
+    const parts = inner.split(',').map((part) => part.trim());
+    if (parts.at(-1) === '' && parts.length > 1) parts.pop();
+    if (!parts.length || parts.some((part) => part === '')) return 'Write sizes such as (1024,) or (3, 32, 32)';
+    const names = parts.filter((part) => /[A-Za-z_$]/.test(part) && !BATCH_MARK.test(part));
+    if (names.length) return `Input sizes take numbers, not names (${names[0]}); write sizes such as (1024,)`;
+    if (parts.slice(1).some((part) => BATCH_MARK.test(part))) return 'Only the first size can be the batch (B)';
+    if (parts.some((part) => !BATCH_MARK.test(part) && !POSITIVE_INTEGER.test(part))) return 'Sizes must be positive whole numbers';
+    if (parts.every((part) => BATCH_MARK.test(part))) return 'Add at least one size, such as (1024,)';
+    return null;
+}
+
 /**
  * Check a parsed value before writing it. Returns an error message, or null.
- * Nothing is written while this fails; the editor stays open.
+ * Nothing is written while this fails; the editor stays open. `libraryKey`
+ * names the layer whose field is written, for fields with their own grammar.
  */
-export function precheckCellValue(value, { spec, scope = {}, literalOnly = false, source, required: requiredOverride }) {
+export function precheckCellValue(value, { spec, scope = {}, literalOnly = false, source, required: requiredOverride, libraryKey = null }) {
     const required = requiredOverride ?? (source === 'count' || (spec?.required && spec?.default === undefined));
     if (value === null) return required ? 'Required' : null;
     if (literalOnly && !isLiteralValue(value, spec)) return 'Values mode sets a value here; switch to Symbols to write an expression.';
@@ -276,13 +318,18 @@ export function precheckCellValue(value, { spec, scope = {}, literalOnly = false
     }
     const type = spec?.type;
     if (type === 'enum') return spec.options?.includes(value) ? null : `Choose one of ${spec.options?.join(', ')}`;
-    if (type === 'string') return null;
+    // Shapes first: the model Input stores its shape as text.
+    if (libraryKey === 'deepflow.io.Input' && spec?.name === 'shape') return inputShapeProblem(value);
     if (type === 'tuple' || spec?.name === 'shape') {
-        if (typeof value === 'number') return null;
-        if (resolveDimensionTuple(value, scope) !== null) return null;
+        if (typeof value === 'number') return Number.isFinite(value) ? null : 'Not a number';
         const missing = unknownNames(value, scope);
-        return missing.length ? `Unknown name $${missing[0]}` : 'Not a list of sizes';
+        if (missing.length) return `Unknown name $${missing[0]}`;
+        const dimensions = resolveDimensionTuple(value, scope);
+        if (dimensions === null || !dimensions.length) return 'Not a list of sizes';
+        if (dimensions.some((dimension) => !Number.isInteger(dimension) || dimension < 0)) return 'Sizes must be whole numbers';
+        return null;
     }
+    if (type === 'string') return null;
     const resolved = resolvedFieldValue(value, scope);
     if (type === 'bool') {
         if (typeof resolved === 'boolean') return null;

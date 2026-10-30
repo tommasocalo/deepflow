@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import VariableInput from './VariableInput.jsx';
-import { parseCellValue, precheckCellValue } from '../../domain/modelTable/writeTargets.js';
+import { parseCellValue, precheckCellValue, targetSpec } from '../../domain/modelTable/writeTargets.js';
 import { emptyAllowed, fieldScope, initialText } from './modelTableEdits.js';
 
 const widthOf = (text, placeholder) => `${Math.min(22, Math.max(4, String(text || placeholder || '').length + 1))}ch`;
@@ -50,6 +50,7 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
     const [initial] = useState(() => Object.fromEntries(editable.map((part) => [part.name, initialText(targets[part.name], context)])));
     const done = useRef(false);
     const editorRef = useRef(null);
+    const errorId = useId();
     // VariableInput keeps its own ref, so inputs are found by their field name.
     const focusInput = (name) => [...(editorRef.current?.querySelectorAll('[data-field-input]') ?? [])]
         .find((element) => element.dataset.fieldInput === name)?.focus();
@@ -67,8 +68,10 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
             const text = drafts[part.name] ?? '';
             if (text === initial[part.name]) continue;
             const info = targets[part.name];
-            const value = parseCellValue(text, part.spec);
-            const error = precheckCellValue(value, { spec: part.spec, scope: fieldScope(row, part, context.templates),
+            // Values mode writes the source it follows: check against that value's own spec.
+            const spec = info.target.literalOnly ? targetSpec(info.target, { rootGraph: context.graph, templates: context.templates }, part.spec) : part.spec;
+            const value = parseCellValue(text, spec);
+            const error = precheckCellValue(value, { spec, scope: fieldScope(row, part, context.templates), libraryKey: row.libraryKey,
                 literalOnly: info.target.literalOnly, source: part.source, required: emptyAllowed(info) ? undefined : true });
             if (error) found[part.name] = error;
             else edits.push({ field: part, value, cells });
@@ -134,23 +137,27 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
             }
             const text = drafts[part.name] ?? '';
             const placeholder = part.values.text;
+            const error = errors[part.name];
             const common = {
                 'data-field-input': part.name,
                 'aria-label': `${row.label} ${part.name}`,
-                'aria-invalid': !!errors[part.name],
-                title: errors[part.name] ?? info.hint,
+                'aria-invalid': !!error,
+                'aria-describedby': error ? `${errorId}-${part.name}` : undefined,
+                title: error ?? info.hint,
                 autoFocus: part.name === firstName,
-                className: `df-mt-input${errors[part.name] ? ' is-invalid' : ''}`,
+                className: `df-mt-input${error ? ' is-invalid' : ''}`,
                 onKeyDown: (event) => onKeyDown(event, index),
                 onClick: (event) => event.stopPropagation(),
                 onDoubleClick: (event) => event.stopPropagation(),
             };
+            const bubble = error && <span id={`${errorId}-${part.name}`} className="df-mt-input-error">{error}</span>;
             if (part.spec?.type === 'enum') {
                 return <span key={part.name} className="df-mt-input-wrap"><Prefix prefix={part.prefix} />
                     <select {...common} value={text} onFocus={() => announce(part)} onChange={(event) => update(part.name, event.target.value)}>
                         {!part.spec.options.includes(text) && <option value={text}>{text || 'Default'}</option>}
                         {part.spec.options.map((option) => <option key={option} value={option}>{option}</option>)}
                     </select>
+                    {bubble}
                 </span>;
             }
             return <span key={part.name} className="df-mt-input-wrap"><Prefix prefix={part.prefix} />
@@ -162,6 +169,7 @@ function ConfigEditor({ row, cells, targets, context, suggestions, focusField, s
                         if (seed === undefined || seed === null || part.name !== firstName) event.currentTarget.select?.();
                     }}
                     onChange={(event) => update(part.name, event.target.value)} />
+                {bubble}
             </span>;
         })}
     </span>;

@@ -341,3 +341,19 @@ test('an eye alias bound on its instance is edited where the instance binds it',
     const symbolsTarget = target(bound, row, 'stride', 'symbols');
     assert.deepEqual([symbolsTarget.kind, symbolsTarget.name], ['templateDefault', 'stride'], 'Symbols still edits the definition default');
 });
+
+test('an Input shape is checked in the grammar validation reads before it is written', () => {
+    const spec = { name: 'shape', type: 'string' };
+    const check = (text) => precheckCellValue(parseCellValue(text, spec), { spec, libraryKey: 'deepflow.io.Input' });
+    for (const valid of ['(1024,)', '(B, 3, 32, 32)', '(3, 32, 32)', '1024']) assert.equal(check(valid), null, valid);
+    assert.match(check('(abc)'), /numbers, not names \(abc\)/);
+    assert.match(check('(1024, $foo)'), /numbers, not names \(\$foo\)/);
+    assert.match(check('()'), /sizes such as/);
+    for (const size of ['(-3)', '(1.5,)', '(0,)']) assert.match(check(size), /positive whole numbers/, size);
+    assert.match(check('(3, B)'), /Only the first size/);
+    // Other tuples allow zero (padding) and resolve names.
+    assert.equal(precheckCellValue('(0, 0)', { spec: { name: 'padding', type: 'tuple' } }), null);
+    assert.equal(precheckCellValue('($k, $k)', { spec: { name: 'kernel_size', type: 'tuple' }, scope: { k: 3 } }), null);
+    assert.equal(precheckCellValue('(3, $nope)', { spec: { name: 'kernel_size', type: 'tuple' }, scope: {} }), 'Unknown name $nope');
+    assert.equal(precheckCellValue('()', { spec: { name: 'kernel_size', type: 'tuple' } }), 'Not a list of sizes');
+});
