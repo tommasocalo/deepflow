@@ -8,7 +8,8 @@ import { tr } from '../text.js';
 import AccuracyChart from './AccuracyChart.jsx';
 import BoundaryView from './BoundaryView.jsx';
 import ConfusionMatrix from './ConfusionMatrix.jsx';
-import { useMeasuredWidth, useSourceValue } from './hooks.js';
+import { useBridgeSource } from '../../useBridgeSource.js';
+import { useMeasuredWidth } from './hooks.js';
 import LossChart from './LossChart.jsx';
 import RunSettings from './RunSettings.jsx';
 import { useRunAnnouncement } from './useAnnouncement.js';
@@ -51,7 +52,7 @@ function ResultColumn({ record }) {
 export default function TrainerPanel() {
     const current = useTrainerStore((state) => state.current);
     const runs = useTrainerStore((state) => state.runs);
-    const lesson = useSourceValue('lesson');
+    const lesson = useBridgeSource('lesson');
     const locked = lesson?.mode === 'lesson' && !!lesson?.trainLocked;
     const record = shownRecord(current, runs);
     const last = record?.history?.at(-1);

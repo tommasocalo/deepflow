@@ -173,6 +173,22 @@ test('Use this dataset binds Iris and fits the Input and the last Linear in one 
     assert.equal($$('.edu-data-table:not(.edu-data-table-compact) tbody tr').length, 8);
 });
 
+test('in a lesson step that leaves the output size to the learner, Use this dataset sets only the Input', async () => {
+    load();
+    const unregister = registerSource('lesson', { read: () => ({ mode: 'lesson', phase: 'steps', stepId: 's4', datasetUse: { setOutput: false } }) });
+    try {
+        await render(h(DataWorkspace));
+        await click(target('dataset-iris'));
+        assert.equal($('.edu-data-use-hint').textContent, 'Sets your model\'s Input to (4,). In this lesson you set the output size yourself.');
+        await click(target('use-dataset'));
+        assert.equal(graph().nodes.in.parameters.shape, '(4,)');
+        assert.equal(graph().nodes.neuron.parameterValues.out_features, 1, 'the output size is the next exercise (M1 s5)');
+        assert.equal($('.edu-data-use-status').textContent, 'Done: Input → (4,).');
+    } finally {
+        unregister();
+    }
+});
+
 test('toy options and the split update the preview and the sizes', async () => {
     load();
     await render(h(DataWorkspace));

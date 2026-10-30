@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { onSourceRegistered, readSource, subscribeSource } from '../bridge.js';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { getModules, subscribeModuleRegistry } from '../lessons/engine/registry.js';
 import { subscribeLessonContext, useLessonSession } from '../lessons/engine/session.js';
 import { isStorageDegraded, subscribeStorageDegraded } from '../lessons/engine/storage.js';
@@ -52,27 +51,4 @@ export function useMediaQuery(query) {
     };
     const read = () => !!globalThis.matchMedia?.(query)?.matches;
     return useSyncExternalStore(subscribe, read, () => false);
-}
-
-/** A bridge source's latest read(), re-read on its notifications and when it is registered later. */
-export function useBridgeSource(name) {
-    const [value, setValue] = useState(() => readSource(name));
-    const nameRef = useRef(name);
-    useEffect(() => {
-        nameRef.current = name;
-        let unsubscribe = subscribeSource(name, () => setValue(readSource(name)));
-        const stop = onSourceRegistered((registered) => {
-            if (registered !== nameRef.current) return;
-            unsubscribe();
-            unsubscribe = subscribeSource(name, () => setValue(readSource(name)));
-            setValue(readSource(name));
-        });
-        const initial = setTimeout(() => setValue(readSource(name)), 0);
-        return () => {
-            clearTimeout(initial);
-            unsubscribe();
-            stop();
-        };
-    }, [name]);
-    return value;
 }

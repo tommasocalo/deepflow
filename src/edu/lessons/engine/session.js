@@ -449,8 +449,18 @@ watchTrainer();
 onSourceRegistered((name) => { if (name === 'trainer') watchTrainer(); });
 
 /**
+ * The Data tab's Use this dataset in the current step: a step whose own Show me or setup leaves the output size to
+ * the learner (`useDataset` with `setOutput: false`, docs/edu/SPEC.md §3.4) makes the button do the same.
+ */
+function datasetUseOf(state, step) {
+    if (state.mode !== 'lesson' || state.phase !== 'steps' || !step) return null;
+    const action = [...(step.solution ?? []), ...(step.setup ?? [])].find((item) => item?.do === 'useDataset');
+    return action?.setOutput === false ? { setOutput: false } : null;
+}
+
+/**
  * Read-only lesson state for other stages: the trainer UI can disable Train while a prediction gate is open,
- * wherever the Train button lives.
+ * wherever the Train button lives, and the Data tab follows the step's dataset options.
  */
 const lessonListeners = new Set();
 useLessonSession.subscribe(() => { for (const listener of lessonListeners) listener(); });
@@ -461,6 +471,7 @@ registerSource('lesson', {
         return {
             mode: state.mode, moduleId: state.moduleId, phase: state.phase, stepId: target?.id ?? null,
             trainLocked: state.trainLocked(), lockedReason: state.trainLocked() ? 'panel.trainLocked' : '',
+            datasetUse: datasetUseOf(state, target),
         };
     },
     subscribe: (listener) => { lessonListeners.add(listener); return () => lessonListeners.delete(listener); },

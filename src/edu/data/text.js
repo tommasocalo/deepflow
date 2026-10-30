@@ -32,6 +32,7 @@ export const DATA_TEXT = {
         'badge.export': 'Export to train',
         'use.button': 'Use this dataset',
         'use.hint': 'Sets your model\'s Input to {shape} and its last Linear to {output}.',
+        'use.hintInputOnly': 'Sets your model\'s Input to {shape}. In this lesson you set the output size yourself.',
         'use.outputClasses': '{count} outputs',
         'use.outputBinary': '1 output (BCE) or 2 (cross-entropy)',
         'use.outputRegression': '1 output',

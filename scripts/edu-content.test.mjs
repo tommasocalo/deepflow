@@ -338,6 +338,8 @@ test('every step fails on entry and passes after its Show me, module after modul
             const atEntry = session().evaluate();
             assert.equal(atEntry.pass, false, `${where}: the check must fail on entry`);
             if (step.predict) assertNoSpoiler(step, atEntry, where);
+            if (where === 'm1.s4') assert.deepEqual(readSource('lesson').datasetUse, { setOutput: false }, 'the Data tab leaves the output size to s5');
+            if (where === 'm1.s5') assert.equal(readSource('lesson').datasetUse, null);
             // Each diagnose rule fires on its hand-made wrong state, built from the entry state.
             if (step.diagnose?.length) {
                 const entry = captureWorkspace();

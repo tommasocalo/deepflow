@@ -9,6 +9,7 @@ import { revealValues } from '../lessons/engine/reveal.js';
 import { resolveNodeTargetId } from '../lessons/engine/targets.js';
 import { useLessonSession } from '../lessons/engine/session.js';
 import { useEduUiStore } from '../shell/uiStore.js';
+import { useBridgeSource } from '../useBridgeSource.js';
 import HintLadder from './HintLadder.jsx';
 import PaletteChips from './PaletteChips.jsx';
 import ParamCountReadout from './ParamCountReadout.jsx';
@@ -16,7 +17,6 @@ import PredictGate from './PredictGate.jsx';
 import RichText from './RichText.jsx';
 import SoftmaxTemperature from './SoftmaxTemperature.jsx';
 import Spotlight from './Spotlight.jsx';
-import { useBridgeSource } from './hooks.js';
 
 const TAB_OF_TARGET = [
     [/^(ribbon\.|graph\.checks|field:)/, 'architecture'],

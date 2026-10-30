@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { useBridgeSource } from '../useBridgeSource.js';
 import { ClassSwatch } from './ClassMarker.jsx';
 import ScatterPreview from './ScatterPreview.jsx';
 import { dataSeedOf, datasetSize, parseInputShape, resolveOptions, SPLIT_LIMITS } from './registry.js';
@@ -377,6 +378,9 @@ export default function DatasetDetail({ spec }) {
     const { prepared, loading, error } = usePrepared(spec, options, split, dataSeedOf(options));
     const n = datasetSize(spec, options);
     const headingId = useId();
+    // In a lesson step where choosing the output size is the exercise, the button sets only the Input (§3.4).
+    const lessonUse = useBridgeSource('lesson')?.datasetUse ?? null;
+    const inputOnly = lessonUse?.setOutput === false;
     return (
         <section className="edu-data-detail" aria-labelledby={headingId}>
             <header className="edu-data-header">
@@ -388,12 +392,14 @@ export default function DatasetDetail({ spec }) {
                 </div>
                 <p className="edu-data-desc">{spec.description}</p>
                 <div className="edu-data-use">
-                    <button type="button" className="df-button df-button-primary edu-data-use-button" data-edu-target="use-dataset" onClick={() => applyDataset(spec.id)}>
+                    <button type="button" className="df-button df-button-primary edu-data-use-button" data-edu-target="use-dataset" onClick={() => applyDataset(spec.id, lessonUse ?? {})}>
                         {dtx('use.button')}
                     </button>
                     <span className="edu-data-io">{ioLine(spec)}</span>
                 </div>
-                <p className="edu-data-note edu-data-use-hint">{dtx('use.hint', { shape: spec.input.shape, output: outputText(spec) })}</p>
+                <p className="edu-data-note edu-data-use-hint">
+                    {inputOnly ? dtx('use.hintInputOnly', { shape: spec.input.shape }) : dtx('use.hint', { shape: spec.input.shape, output: outputText(spec) })}
+                </p>
                 <p className="edu-data-use-status" role="status"><UseStatus spec={spec} boundId={boundId} lastUse={lastUse} /></p>
             </header>
             <div className="edu-data-grid">

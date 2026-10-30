@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { onSourceRegistered, readSource, subscribeSource } from '../../bridge.js';
 import { effectiveObjective } from '../../objective.js';
 import { OPTIMIZER_DEFAULTS } from '../../../domain/training/index.js';
 import { useArchitectureStore } from '../../../stores/architectureStore.js';
@@ -23,22 +22,6 @@ export function useMeasuredWidth(fallback = 280) {
         return () => observer.disconnect();
     }, []);
     return [ref, width];
-}
-
-/** A bridge source's read(), refreshed on its notifications (and once it is registered, if that happens later). */
-export function useSourceValue(name) {
-    const [value, setValue] = useState(() => readSource(name));
-    useEffect(() => {
-        let unsubscribe = subscribeSource(name, () => setValue(readSource(name)));
-        const stop = onSourceRegistered((registered) => {
-            if (registered !== name) return;
-            unsubscribe();
-            unsubscribe = subscribeSource(name, () => setValue(readSource(name)));
-            setValue(readSource(name));
-        });
-        return () => { unsubscribe(); stop(); };
-    }, [name]);
-    return value;
 }
 
 /** The training graph's effective optimizer and loss (docs/edu/SPEC.md §6.10.5), live. */

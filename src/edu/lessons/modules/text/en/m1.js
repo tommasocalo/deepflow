@@ -55,7 +55,7 @@ export default {
     'm1.s4.done': 'The Input is now (4,). Iris is split like the dots: {irisTrain} flowers train the model and {irisVal} validate it.',
 
     'm1.s5.title': 'One output per species',
-    'm1.s5.body': 'A classifier gives one **score** per class, and the highest score wins. Click the Linear block. Set **Input** to 4, one per feature, and make sure **Output** is 3, one per species.',
+    'm1.s5.body': 'A classifier gives one **score** per class, and the highest score wins. Click the Linear block. Set **Input** to 4, one per feature, and **Output** to 3, one per species.',
     'm1.s5.hint1': 'Click the Linear block on the canvas to open its settings.',
     'm1.s5.hint2': 'Set **Input** = 4 and **Output** = 3.',
     'm1.s5.done': 'The model now has {irisParams} parameters: 4 × 3 weights and 3 biases.',
