@@ -284,7 +284,8 @@ Behaviour:
   Output is a Linear (layer or component), reached only through shape-preserving blocks (activation, dropout), it
   sets that Linear's `out_features` to the target size. An inline result line lists what changed ("Input → (4,);
   last Linear Output → 3") or why the output was not changed. In lessons, steps pass `setOutput: false` when choosing
-  the output size is part of the exercise.
+  the output size is part of the exercise, and the button follows the current step: when the step's own Show me or
+  setup calls `useDataset` with `setOutput: false`, the button sets only the Input and its hint says so (M1 s4).
 - The Data tab binds the dataset to the workspace (`useEduDataStore`, persisted per workspace slot). The trainer and
   `train.py` read it from there.
 
@@ -907,8 +908,8 @@ Learning objectives:
   cross-entropy. Data `spiral3` {perClass: 50, noise: 0.3, seed: 5}, split {val: 0.5}, so 75 training points.
   Trainer epochs 300, batch 16.
 
-**Facts:** `initLoss3 = 1.10`, `trainPoints = 75`, `dropoutSeeds = "7 of 8"` (source: §11 simulation; not
-recomputed by tests, marked `source: 'simulation'`).
+**Facts:** `initLoss3 = 1.10`, `trainPoints = 75`, `dropoutSeeds = "8 of 8"` (measured with the in-browser trainer,
+§11.2; not recomputed by tests, marked `source: 'simulation'`).
 
 **Warm-up.** `m5.w1` (m4.lo1) "Conv2d(1 → 4, kernel 5, padding 0) on a 28 × 28 image gives height…" **24 ✓** · 28 ·
 23. `m5.w2` (m3.lo4) "What is the initial loss for 10 equally likely classes?" **≈ 2.30 ✓** · 10 · 0.1.
@@ -1888,12 +1889,23 @@ through the canvas bridge (`deepflow-edu:canvas` → `insert`), which uses DeepF
 the visible canvas, then selects the new node. `headless: true` is set by tests (§8.4) and makes training run
 synchronously.
 
+Show me completes what the learner started. It passes `ctx.entryNodeIds`, the root node ids of the step-entry
+snapshot. `insertBetween`, `insertAfter` and `buildChain` then first adopt blocks of the same BlockRef that were added
+since the step began and are unwired, or wired only to the action's own blocks (`from`, `to`, `after` and its next
+blocks, or other adopted blocks). An adopted block is unwired, moved into the column slot, given the action's
+`params` and `label`, and wired like a new one. Blocks of the entry state and blocks wired elsewhere are never
+adopted, and setup and fixture actions pass no entry ids. So a palette chip followed by Show me leaves one block,
+not a stranded chip block beside a second one.
+
 ### 6.6 Spotlight targets (`engine/targets.js`, Stage A)
 
 A `TargetRef` is a string. The registry resolves it to an element at render time. Node targets filter
 `.react-flow__node` elements in JavaScript by `dataset.id`, as GraphStatusPanel does, and never interpolate ids into
-selectors. A target that is not found shows no ring; the panel then offers "Where is it?", which switches to the
-step's tab.
+selectors. A target that is not found shows no ring; after a second the panel offers "Where is it?", which switches
+to the step's tab, goes to the root level and centres a node target, opens the code panel for `code.*` targets and
+fits the Training canvas beside its palette for `training.*` targets. It is not offered while the main pane shows the
+inside of a block that a `nodeOpen` target names, at any depth (`reachedOpenTarget`): that target has been followed
+(M7 s4 at the attention-head level).
 
 | TargetRef | Element |
 |---|---|
@@ -1908,6 +1920,7 @@ step's tab.
 | `trainer.run` · `trainer.lr` · `trainer.curves` · `trainer.boundary` · `trainer.confusion` · `trainer.initLoss` | `[data-edu-target="trainer-run"]`, `"trainer-lr"`, `"trainer-curves"`, `"trainer-boundary"`, `"trainer-confusion"`, `"trainer-init-loss"` (B; present in both TrainerPanel and TrainerCard, the visible one wins) |
 | `training.loss` · `training.optimizer` | the training canvas node of the effective loss or optimizer |
 | `code.tab:model` · `code.tab:train` | `[data-edu-target="code-tab-model"]`, `"code-tab-train"` (C) |
+| `code.notebook` · `code.colabNote` | `[data-edu-target="code-notebook"]` (Download .ipynb), `"code-colab-note"` (the Run in Colab note); both on train.py with a bound dataset (C) |
 | `lesson.palette` | the palette box in the lesson panel |
 
 In module files, a node target is written as `{ node: NodeMatch }` or `{ nodeOpen: NodeMatch }`, and the others as
@@ -2735,6 +2748,21 @@ seeds 1–10 (digits 1–5). Validation fraction 0.2 unless stated. Scripts:
 | M5 spiral3 2-64-3, Adam 0.01, 200 epochs | 0.977 [0.950, 1.000] (CS231n reports 98 % train) | 1.102 [1.077, 1.151] ≈ ln 3 | init within 0.15 of 1.10 |
 | M5 spiral3 2-64-3, 60 epochs, lr 0.0001 / 0.01 / 1.0 | 0.545 / 0.967 / 0.745 [0.317, 0.917] (final val loss 0.978 / 0.137 / 0.678) | — | 0.01 best |
 
+**The in-browser trainer on the M2 fixtures** (Stage E, `stageE/m2-one-neuron.mjs` and `m2-widths.mjs`, training
+seeds 1–10, data as in the fixtures, 50 epochs). The lesson copy reports the learner's own `{measured}` value; these
+are the values learners see:
+
+| Lesson configuration | Final val accuracy, mean [min, max] | Copy |
+|---|---|---|
+| M2 s1 circle, Linear 2→1 | 0.595 [0.55, 0.65] (fixture seed 2: 0.583) | "not much better than the 50% you get by guessing" |
+| M2 s2 circle, Linear 2→8 → Linear 8→1, no activation | 0.587 [0.53, 0.65] | "about the same as the single neuron" |
+| M2 s5 circle 2-2-1 ReLU | 0.742 [0.63, 0.82] | "about 75%" |
+| M2 s5 circle 2-3-1 ReLU | 0.883 [0.52, 1.00] (seed 5 gets stuck at 0.52) | "training sometimes gets stuck" |
+| M2 s4 circle 2-8-1 ReLU | 1.000 [1.00, 1.00] | check ≥ 0.9 |
+
+The NumPy rows above for one neuron and for two stacked Linears are lower (0.477 and 0.447): both sit near chance,
+the browser runs a little above it.
+
 Overfitting (M5 s3; spiral3 50/class, noise 0.3, val 0.5 → 75 train points; 2-128-128-3, Adam 0.01, batch 16, 300
 epochs; 8 seeds): train accuracy 0.990 [0.987, 1.000]. Final/min validation-loss ratio
 [2.51, 3.09, 6.56, 2.00, 1.39, 4.01, 2.29, 2.68] (threshold 1.25). Best epochs 11–106. Validation accuracy stays
@@ -2758,8 +2786,20 @@ experiment used NumPy's RNG; only the statistics matter here.
 | AdamW weight decay 0.1 | 0.003 | 0.519 | 7 / 8 | 8 / 8 |
 
 Validation accuracy changed little in every variant (0.93–0.94). Conclusion for content: regularisation helps on
-average but not on every seed. M5 s5 therefore reports the learner's own comparison, and quotes "7 of 8" (Dropout
-0.5, lr 0.01, the gap metric) as the reference.
+average but not on every seed. M5 s5 therefore reports the learner's own comparison.
+
+**The in-browser trainer** (Stage D probe, re-measured in Stage E with `stageE/dropout-seeds.mjs`): the `m5.big`
+fixture itself (spiral3 50/class, noise 0.3, data seed 5, val 0.5, 2-128-128-3, Adam lr 0.01, batch 16, 300 epochs),
+with and without Dropout p = 0.5 after each ReLU, training seeds 1–8, all metrics in evaluation mode:
+
+| | Mean final gap (val − train loss) | Mean final val loss | Mean final val accuracy |
+|---|---|---|---|
+| baseline | 0.359 | 0.378 | 0.913 |
+| Dropout p = 0.5 | 0.160 | 0.214 | 0.910 |
+
+The gap shrank on **8 of 8** seeds and the final validation loss fell on 8 of 8; validation accuracy barely moved.
+M5 s5 quotes "8 of 8" (`dropoutSeeds`), the number of the trainer the learner uses. The NumPy simulation above, with
+its own dropout masks and batch order, gave 7 of 8.
 
 ### 11.3 Parameter counts (DeepFlow's own `countArchitectureParameters` on `15c7c25`, with the Conv fix applied by hand where noted)
 
@@ -2828,3 +2868,16 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | Date | Author | Change |
 |---|---|---|
 | 2026-10-29 | Stage 0 (product/tech lead) | v1 of the specification |
+| 2026-10-30 | Stage C (recorded by Stage E) | **Export.** Without a bound dataset `train.py` stays DeepFlow's stub, byte-identical for ResNet, DANN and GAN, but with two fixes that change the GPT-2 output in one line (§3.6 said byte-identical for all): cross-entropy flattens `(B, T, V)` scores and `(B, T)` targets when the scores sit on the last axis (a Linear or MatMul output; the GPT-2 export crashed on its first step), and each loss reads its own `labelKey` from the batch. Channels-first scores such as ResNet's `(B, C, H, W)` keep PyTorch's per-pixel cross-entropy. |
+| 2026-10-30 | Stage C (recorded by Stage E) | **Export.** With a bound dataset, `train.py` also keeps the best-validation weights and restores them before the test evaluation (§6.11.2 only reported the best epoch), prints the first loss next to `ln C`, and opens with a "Check before running" list when the model does not fit the data (input shape, output size, several Inputs). Tiny Shakespeare takes its window length from the model's Input. The loaders of the export-only presets live in `data/presets/images.js` and `text.js`, next to their specs, not in `data/python/`. The code panel generates code only while it is open. |
+| 2026-10-30 | Stage D (recorded by Stage E) | **Quizzes.** `m1.q4` and `m4.q4` were replaced so that every learning objective has a quiz item: `m1.q4` (lo4) "A confusion matrix has true classes in its rows and predicted classes in its columns. Where are the correct predictions?" **On the diagonal** · In the first row · In the last column (it was a second lo2 item on the neuron's boundary); `m4.q4` (lo4) "The last pooling block outputs (B, 32, 4, 4). What must the Input of the Linear block after Flatten be?" **512** · 16 · 40 (it was a second lo3 parameter count). `m3.q2`'s distractors are (B, 67) (added, not multiplied), (B, 1024) (one channel map only) and (3072,) (no batch axis), instead of (B, 96) and (3072,). |
+| 2026-10-30 | Stage D (recorded by Stage E) | **Module 7 copy.** s3 asks about attention "without positions and without a causal mask", because a causal mask alone leaks some order; the reveal says so and that GPT models still add positions. s4 asks "The output at position 6 predicts character 7. Which characters can a head at position 6 look at?" (**Characters 1 to 6** · All 64 · Only character 6 · Characters 1 to 7), which removes the ambiguity of "when predicting the 6th character". |
+| 2026-10-30 | Stage D (recorded by Stage E) | **Gates and tabs.** Beyond §4: M5 s2 locks Train until its learning-rate prediction is answered (`locks.gate: 'train'`). M2 s6, M3 s6, M4 s3 and s5, and M7 s1 (through its fixture's `ui`) turn Dimensions off until the shape prediction is answered; M2 s6, M4 s3 and s5 then ask to turn them back on, and M7 s2 turns them on. M5 s4 opens the Training tab, where the curves are. |
+| 2026-10-30 | Stage D (recorded by Stage E) | **Wording and numbers.** M6 uses the app's own labels: "set **Steps** to 3" for the repeat count and the "**Step 1/3**" button for stepping through copies (§4.6 said "count" and "Instances"). M2 s1's reveal no longer says "Accuracy stays near 50%"; its done line shows the learner's measured accuracy, about 60% in the browser (§11.1), as "not much better than the 50% you get by guessing". `dropoutSeeds` is "8 of 8", measured with the in-browser trainer and marked `source: 'simulation'` (§11.2). |
+| 2026-10-30 | Stage D (recorded by Stage E) | **Metadata the engine ignores**, read only by the content tests (§8.4): facts carry `at` (the step whose state the fact is computed on) and `note` (how a `simulation` or `literature` fact was obtained); export steps carry `codeQuotes` (lines of model.py or train.py the copy points at, checked against the generated code); `diagnose` rules carry an `example` action list that builds the wrong state; M6's custom check reports its sub-steps with the text keys `m6.check.*`. |
+| 2026-10-30 | Stage E | **Show me adopts the learner's blocks** (§6.5): insert actions reuse same-kind blocks added since the step began that are unwired or wired only to the action's blocks, so a palette chip followed by Show me no longer leaves a stray block (M3 s2). |
+| 2026-10-30 | Stage E | **Trainer text** (§3.5): invalid-graph preflight issues carry the friendly rewrite of §6.4.4 as plain text (the raw validator text stays in `validatorMessage`), so the TrainerCard and the Training tab no longer show "Template "Linear" has 1 internal error". While a prediction gate is open, the card's problem line and the Training tab's preflight list are hidden: in M3 s6 they named the answer. The content test asserts that no status line or ungated card shows an expected answer before it is given. |
+| 2026-10-30 | Stage E | **One accuracy format**: one decimal at most, no trailing .0, never rounded up to 100% ("97.5%", "93.3%", "100%"), used by the trainer, the reveals and the check messages (the card said 98% where the reveal said 97.5%). |
+| 2026-10-30 | Stage E | **Use this dataset** follows the step's `setOutput: false` (§3.4); M1 s5 now asks for Input 4 and Output 3 (it said "make sure Output is 3" because the button had set it). The lesson bridge source gains `datasetUse`. |
+| 2026-10-30 | Stage E | **Training canvas**: it fits beside the TrainingPalette (right 40%, at most 100% zoom; the Controls' fit button too), and in a lesson it fits when it opens instead of restoring a viewport saved in another workspace, so the loss block of M1 s6 is clickable at 1440×900 and 1024×768. Event `deepflow-edu:training-canvas` (`fit`) for "Where is it?". |
+| 2026-10-30 | Stage E | **Targets** (§6.6): `code.notebook` and `code.colabNote` added; "Where is it?" is not offered inside a level a `nodeOpen` target opened, opens the code panel for code targets and fits the Training canvas for training targets. §11.1 and §11.2 gained the in-browser trainer's measurements. |
