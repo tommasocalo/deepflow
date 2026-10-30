@@ -55,8 +55,26 @@ function revealTarget(step, options) {
     setTimeout(() => {
         const element = refs.filter((ref) => !isTargetDone(ref, globalThis.document, options))
             .map((ref) => resolveTarget(ref, globalThis.document, { rendered: true })).find(Boolean);
-        if (element && !isVisible(element) && !element.closest('.react-flow')) element.scrollIntoView({ block: 'center', inline: 'nearest' });
+        if (element && !isVisible(element) && !element.closest('.react-flow')) scrollToElement(element);
     }, 160);
+}
+
+/**
+ * Centre `element` in each scrolling box around it, innermost first. Unlike scrollIntoView this leaves
+ * overflow:hidden boxes alone: they hold the page layout (the stage and the drawer), and scrolling them shifts it.
+ */
+function scrollToElement(element) {
+    const view = element.ownerDocument.defaultView;
+    for (let node = element.parentElement; node && node !== element.ownerDocument.body; node = node.parentElement) {
+        const style = view.getComputedStyle(node);
+        const vertical = /auto|scroll/.test(style.overflowY) && node.scrollHeight > node.clientHeight;
+        const horizontal = /auto|scroll/.test(style.overflowX) && node.scrollWidth > node.clientWidth;
+        if (!vertical && !horizontal) continue;
+        const box = node.getBoundingClientRect();
+        const rect = element.getBoundingClientRect();
+        if (vertical) node.scrollTop += rect.top + rect.height / 2 - (box.top + box.height / 2);
+        if (horizontal) node.scrollLeft += rect.left + rect.width / 2 - (box.left + box.width / 2);
+    }
 }
 
 function statusText(result, busy) {
