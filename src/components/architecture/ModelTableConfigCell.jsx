@@ -20,7 +20,8 @@ function FieldText({ field, cells, text, info, errors, more, onClick }) {
     const error = errors?.[0];
     const title = [
         `${field.name}${cells === 'symbols' && field.values.text !== shown.text ? ` = ${field.values.text}` : ''}${cells === 'values' && field.symbols.text !== shown.text ? ` · written ${field.symbols.text}` : ''}`,
-        text !== shown.text ? shown.text : null, field.values.title, field.unknownReason ? `?: ${field.unknownReason}` : null, error, info?.hint, more ? `Also: ${more}` : null,
+        text !== shown.text ? shown.text : null, cells === 'symbols' ? field.symbols.title : null, field.values.title,
+        field.unknownReason ? `?: ${field.unknownReason}` : null, error, info?.hint, more ? `Also: ${more}` : null,
     ].filter(Boolean).join('\n');
     return <span className={`df-mt-field is-${shown.tone}${info?.editable ? ' is-editable' : ''}${error ? ' is-invalid' : ''}`}
         data-field={field.name} title={title} onClick={onClick}>

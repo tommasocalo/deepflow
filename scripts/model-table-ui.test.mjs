@@ -496,7 +496,7 @@ test('the Activations lens shows bytes per row, and partial totals say so', asyn
     await openTable();
     await click(radio('Activations'));
     const header = mainTable().querySelectorAll('thead th');
-    assert.equal(header[5].textContent.trim(), 'Act. mem', 'Bytes take the place of MACs');
+    assert.equal(header[5].textContent.trim(), 'Σ outputs', 'Bytes of op outputs take the place of MACs');
     assert.match(header[5].getAttribute('title'), /sum of forward op outputs, eager, nothing freed/);
     assert.match(header[6].textContent, /% of 4\.03 GB/);
     assert.match(cellOf('lm_head', 5).textContent, /205\.9 MB/);

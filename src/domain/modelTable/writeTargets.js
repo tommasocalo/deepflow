@@ -160,7 +160,7 @@ export function describeTarget(target, { row, rootGraph, templates, templateUses
         // Direct uses undercount the reach: bindings such as D: $d_model carry
         // the global into every layer of a component.
         const count = globalUseCount(rootGraph, templates, target.name);
-        return `Sets global ${target.name} for the whole model: every value that reads it changes, including through component bindings (${count} field${count === 1 ? '' : 's'} name it directly)`;
+        return `Sets global ${target.name} for the whole model: every value that reads it changes, including through component bindings (${count} field${count === 1 ? ' names' : 's name'} it directly)`;
     }
     if (target.kind === 'templateDefault') return `Sets the default of ${target.name} in the shared ${templates[target.templateId]?.name ?? 'component'} definition · ${usesText(target.templateId)}`;
     if (target.kind === 'templateLayer' || target.kind === 'templateNode') {

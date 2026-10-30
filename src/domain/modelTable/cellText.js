@@ -8,7 +8,7 @@ import { runsText } from './configFields.js';
 
 export const METRIC_UNITS = { params: 'parameters', macs: 'MACs', activation: 'bytes' };
 export const MACS_TITLE = 'Multiply-accumulates per sample (B = 1): MatMul, Linear and Conv, and the products inside attention and recurrent modules. Causal attention counts the full T × T product.';
-export const ACTIVATION_TITLE = 'Activation memory per sample (B = 1, fp32): the sum of forward op outputs, eager, nothing freed. Standard Linear, Embedding, LayerNorm and position modules count one output; attention internals count individually; views and weights count nothing.';
+export const ACTIVATION_TITLE = 'Activation bytes per sample (B = 1, fp32): the sum of forward op outputs, eager, nothing freed. This is not the memory training keeps for backward, which saves fewer tensors. Standard Linear, Embedding, LayerNorm and position modules count one output; attention internals count individually; views and weights count nothing.';
 
 /** One instance's value: exact, a lower bound, or unknown. */
 export const instanceValueText = (value, format = formatExact) => value === null || value === undefined ? '?'
@@ -81,16 +81,27 @@ export function shareInfo(row, lens, modelTotal, modelPartial) {
     return { fraction, text, unknown: false, title: `${of} (${text})` };
 }
 
+/** Which instances lack the node, and which use a local version of its definition. */
+function instanceNotes(row) {
+    const notes = [];
+    if (row.absent?.count) {
+        notes.push(`Not in ${runLabels(row.absent.runs)} (${row.absent.count} of ${row.absent.of})${row.absent.local ? ': a local version without it' : ''}`);
+    }
+    if (row.variants?.count) notes.push(`${runLabels(row.variants.runs)} ${row.variants.count === 1 ? 'uses a local version' : 'use local versions'} of ${row.variants.name}`);
+    return notes;
+}
+
 /** The ×N cell: occurrences per forward pass, and how nested repeats multiply. */
 export function multiplicityInfo(row) {
     if (row.multiplicity === null) return { text: '?', title: row.incompleteReason ? `Unknown: ${row.incompleteReason}` : 'The count is unresolved', unknown: true };
+    const notes = instanceNotes(row);
     if (row.lowerBound) {
-        return { text: `≥${row.multiplicity}`, title: `At least ${row.multiplicity} per forward pass: ${row.lowerBound.label} ${row.lowerBound.reason}`, unknown: false };
+        return { text: `≥${row.multiplicity}`, title: [`At least ${row.multiplicity} per forward pass: ${row.lowerBound.label} ${row.lowerBound.reason}`, ...notes].join('\n'), unknown: false };
     }
     // Nested repeats multiply: 144 per forward pass = 12 Transformer blocks × 12 Attention heads.
     const product = row.factors?.reduce((total, factor) => total * factor.count, 1);
     const breakdown = row.factors?.length > 1 && product === row.multiplicity ? `: ${row.factors.map((factor) => `${factor.count} ${factor.label}`).join(' × ')}` : '';
-    return { text: row.multiplicity > 1 ? `×${row.multiplicity}` : '', title: `${row.multiplicity} per forward pass${breakdown}`, unknown: false };
+    return { text: row.multiplicity > 1 ? `×${row.multiplicity}` : '', title: [`${row.multiplicity} per forward pass${breakdown}`, ...notes].join('\n'), unknown: false };
 }
 
 /** Ops inside a standard module: its one output tensor stands for theirs. */
@@ -125,9 +136,15 @@ export function failingText(row) {
     return count === of ? `Fails in all ${of} instances` : `Fails in ${runLabels(runs)} (${count} of ${of})`;
 }
 
-/** The Layer cell explained: name, type, errors and where they occur. */
+/** A merge row's inputs, in port order: `block input B × 1024 × 768 + attention projection dropout B × 1024 × 768`. */
+export function inputsText(row) {
+    if (!row.inputs?.length) return null;
+    return `Inputs: ${row.inputs.map((input) => `${input.label} ${input.shape ?? '?'}`).join(' + ')}`;
+}
+
+/** The Layer cell explained: name, type, inputs, errors and where they occur. */
 export function layerLines(row) {
-    return [`${row.label} · ${row.typeName}`, ...row.errors, failingText(row)].filter(Boolean);
+    return [`${row.label} · ${row.typeName}`, inputsText(row), ...row.errors, failingText(row)].filter(Boolean);
 }
 
 /**
@@ -138,10 +155,10 @@ export function cellStatus(row, column, { lens, modelTotal, modelPartial }) {
     if (!row) return null;
     const metric = lens === 'activation' ? 'activation' : 'macs';
     const join = (lines) => lines.filter(Boolean).join(' · ');
-    if (column === 0) return row.errors.length ? join([row.errors[0], failingText(row)]) : null;
+    if (column === 0) return row.errors.length ? join([row.errors[0], failingText(row)]) : inputsText(row);
     if (column === 1) {
         const count = multiplicityInfo(row);
-        return count.text || count.unknown ? `×N: ${count.title}` : null;
+        return count.text || count.unknown ? `×N: ${count.title.replace(/\n/g, ' · ')}` : null;
     }
     if (column === 2) {
         if (row.shape.unknown) return `Output unknown: ${join([row.shape.title.replace(/^Unknown: /, ''), SHAPE_GUESS_NOTE])}`;

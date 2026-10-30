@@ -368,7 +368,8 @@ export default function ModelTablePanel({ paneId = 'main' }) {
                             <th ref={configHeaderRef} role="columnheader" scope="col" title="Defining settings. Symbols: as written · Values: resolved. Click a setting to edit it.">Config</th>
                             <th role="columnheader" scope="col" className="df-mt-num" title="Learned parameters of every occurrence; the small figure is one instance">Params</th>
                             <th role="columnheader" scope="col" className="df-mt-num" title={metricColumn === 'activation' ? ACTIVATION_TITLE : MACS_TITLE}>
-                                {metricColumn === 'activation' ? 'Act. mem' : 'MACs'}
+                                {/* The sum of op outputs, not what training keeps for backward. */}
+                                {metricColumn === 'activation' ? 'Σ outputs' : 'MACs'}
                             </th>
                             <th role="columnheader" scope="col" className="df-mt-num df-mt-share-head"
                                 title={`Share of the whole model: ${modelPartial ? 'at least ' : ''}${formatExact(modelTotal)} ${LENS_NAMES[lens]}${modelPartial ? '. Rows the table cannot count are left out, so shares of exact rows are upper bounds (≤) and shares of partial rows are unknown.' : ''}`}>

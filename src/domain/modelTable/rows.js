@@ -2,7 +2,7 @@ import { STANDARD_COMPONENTS } from '../components/index.js';
 import { getEntry } from '../library/index.js';
 import { isShapeCollection } from '../shapeCollections.js';
 import { ANALYSIS_LIMITS, BUDGET_ERROR, instanceTotals, METRICS, subtreeMetrics, SUMMARY_ERROR } from '../metrics/modelMetrics.js';
-import { aliasFor, configLayout, fieldRaw, fieldSource, fieldSpec, rawText, resolvedBinding, resolvedLayerValue, resolvesFalse, summarizeValues, valueRuns } from './configFields.js';
+import { aliasFor, configLayout, fieldRaw, fieldSource, fieldSpec, rawText, resolvedBinding, resolvedLayerValue, resolvesFalse, runsText, summarizeValues, valueRuns } from './configFields.js';
 
 export const DEPTHS = ['root', 'blocks', 'ops'];
 /** Definitions that stay one row at Blocks depth: the library's standard modules. */
@@ -185,7 +185,12 @@ function buildConfig(row, list, templates, occurrenceLabels, instanceLabels) {
         const alias = source === 'count' ? null : aliasFor(templates, ownerId, row.nodeId, name);
         // One owner definition (or one root node) means one written value for every occurrence.
         const raw = alias ? alias.default : fieldRaw(firstNode, source, name);
-        const written = rawText(alias?.exposes?.inherited && alias.default === (spec?.default ?? null) ? undefined : raw, spec);
+        let written = rawText(alias?.exposes?.inherited && alias.default === (spec?.default ?? null) ? undefined : raw, spec);
+        // Local versions can write the field differently: Symbols says so instead of showing the first.
+        if (row.ownerIds.length > 1 && !alias) {
+            const texts = list.map((merged) => rawText(fieldRaw(merged.metrics.node, source, name), spec).text);
+            if (texts.some((value) => value !== texts[0])) written = { text: 'varies', tone: 'varies', title: `As written: ${runsText(valueRuns(texts, occurrenceLabels))}` };
+        }
         let values;
         let labels = occurrenceLabels;
         // Why a value reads ? where it rests on a width inferred after a shape error.
@@ -224,21 +229,31 @@ function buildConfig(row, list, templates, occurrenceLabels, instanceLabels) {
     return parts;
 }
 
+/**
+ * Children of a container's rows, merged by node id across every analysed
+ * instance; `instances` lists those instances' trails, so a child can say
+ * which instances lack it (a local version without that node).
+ */
 function groupChildren(list) {
     const groups = new Map();
+    const instances = [];
     for (const merged of list) {
         merged.metrics.instances.forEach((instance) => {
             if (!instance.level) return;
+            const trail = [...merged.trail, { id: merged.metrics.id, index: instance.index, templateId: instance.templateId, repeat: merged.metrics.kind === 'repeat' }];
+            instances.push(trail);
             for (const [childId, child] of Object.entries(instance.level.nodes)) {
                 if (!groups.has(childId)) groups.set(childId, []);
-                groups.get(childId).push({
-                    metrics: child,
-                    trail: [...merged.trail, { id: merged.metrics.id, index: instance.index, templateId: instance.templateId, repeat: merged.metrics.kind === 'repeat' }],
-                });
+                groups.get(childId).push({ metrics: child, trail });
             }
         });
     }
-    return groups;
+    return { groups, instances };
+}
+
+/** Runs of occurrences, by label, where `test(trail)` holds: `i=5`, `i=0–4, i=6–11`. */
+function occurrenceRuns(trails, test) {
+    return valueRuns(trails.map(test), trails.map(occurrenceLabel)).filter((run) => run.value);
 }
 
 /** Outputs of every occurrence; unknown shapes are null. Repeats show one instance's output. */
@@ -284,7 +299,7 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
     }
     const automatic = (row) => depth === 'ops' || (depth === 'blocks' && !STANDARD_FAMILIES.has(row.family));
 
-    const visit = (groups, orderGraphs, levelPath, level, parentKey, ancestorConflict, ancestorIncomplete, ancestorFactors) => {
+    const visit = (groups, orderGraphs, levelPath, level, parentKey, ancestorConflict, ancestorIncomplete, ancestorFactors, parentInstances = []) => {
         const order = unique([...orderGraphs.flatMap((graph) => readingOrder(graph)), ...groups.keys()]).filter((id) => groups.has(id));
         const visible = order.filter((id) => {
             const first = groups.get(id)[0].metrics;
@@ -344,6 +359,20 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
                 instanceScope: container ? first.instances[0]?.scope ?? null : null,
                 iterationVariable: first.kind === 'repeat' ? first.node.iterationVariable || 'i' : null,
             };
+            // Instances of the container above that have no such node (a local version without it).
+            const present = new Set(list.map((merged) => merged.trail));
+            const absent = parentInstances.filter((trail) => !present.has(trail));
+            row.absent = absent.length ? { count: absent.length, of: parentInstances.length, runs: occurrenceRuns(parentInstances, (trail) => !present.has(trail)),
+                local: absent.every((trail) => templates[trail.at(-1)?.templateId]?.structureVariant === true) } : null;
+            // Occurrences whose definition is a local version, when the others share the original.
+            const localTrails = list.map((merged) => merged.trail).filter((trail) => templates[trail.at(-1)?.templateId]?.structureVariant === true);
+            row.variants = levelPath.length && localTrails.length && localTrails.length < list.length
+                ? { count: localTrails.length, runs: occurrenceRuns(list.map((merged) => merged.trail), (trail) => templates[trail.at(-1)?.templateId]?.structureVariant === true),
+                    name: templates[localTrails[0].at(-1).templateId]?.name ?? 'its definition' } : null;
+            // Where a merge (an Add, a Concat, a MatMul) takes its inputs from, in port order.
+            row.inputs = first.kind === 'layer' && first.inputs?.length > 1
+                ? first.inputs.map((input, port) => input && { label: input.label, shape: shapeSummary(list.map((merged) => merged.metrics.inputs?.[port]?.unknown ? null : merged.metrics.inputShapes[port])).text }).filter(Boolean)
+                : null;
             row.expanded = row.expandable && (overrides[key] ?? automatic(row));
             for (const metric of METRICS) {
                 row[metric] = metricSummary(list, occurrences, metric, instanceLabels);
@@ -383,8 +412,9 @@ export function buildModelTableRows({ metrics, rootGraph, templates = {}, depth 
             rows.push(row);
             if (!row.expanded) return;
             const childGraphs = definitionIds.map((templateId) => templates[templateId]?.graph).filter(Boolean);
-            visit(groupChildren(list), childGraphs, path, level + 1, key, ancestorConflict || definitionIds.length > 1,
-                ancestorIncomplete ?? (complete ? null : { label: row.label, reason: row.incompleteReason ?? 'could not be analysed completely' }), row.factors);
+            const children = groupChildren(list);
+            visit(children.groups, childGraphs, path, level + 1, key, ancestorConflict || definitionIds.length > 1,
+                ancestorIncomplete ?? (complete ? null : { label: row.label, reason: row.incompleteReason ?? 'could not be analysed completely' }), row.factors, children.instances);
         });
     };
 

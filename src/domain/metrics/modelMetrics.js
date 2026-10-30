@@ -213,6 +213,8 @@ function levelMetrics(graph, report, templates, context) {
             }
             nodes[id] = {
                 id, node, kind: 'layer', output, inputShapes, scope, fused, weightOnly: weightOnly[id],
+                // Where each input comes from, in port order; `unknown` when its shape is a guess.
+                inputs: ordered.map((edge) => edge && { id: edge.source, label: graph.nodes[edge.source]?.label ?? edge.source, unknown: !!taint[edge.source] }),
                 // Inside a fused standard module, an op whose output the module's own output stands for.
                 fusedActivation: fused && producesActivation(key) && !weightOnly[id],
                 params, macs, activation, reasons,

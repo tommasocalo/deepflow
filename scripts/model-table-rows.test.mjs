@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { computeModelMetrics, formatShare } from '../src/domain/metrics/index.js';
 import { buildModelTableRows, readingOrder, rowKey } from '../src/domain/modelTable/rows.js';
 import { configAccessibleText } from '../src/domain/modelTable/configFields.js';
-import { cellStatus, eachText, failingText, knownShapeMark, metricLines, SHAPE_GUESS_NOTE, shareInfo } from '../src/domain/modelTable/cellText.js';
+import { cellStatus, eachText, failingText, knownShapeMark, layerLines, metricLines, multiplicityInfo, SHAPE_GUESS_NOTE, shareInfo } from '../src/domain/modelTable/cellText.js';
 import { cutExpression, fitConfigParts, fitShapeText } from '../src/domain/modelTable/fitText.js';
 import { describeTarget, followReference, parseCellValue, precheckCellValue, resolveWriteTarget, targetSummary, targetTag } from '../src/domain/modelTable/writeTargets.js';
 import { createEdge, createLayerNode, createRepeatNode, createSuperNodeInstance, createTemplate } from '../src/domain/architecture/index.js';
@@ -383,6 +383,20 @@ test('values that differ per instance read as their range, whichever instance di
     assert.deepEqual(narrow.params.perInstance.map((run) => [run.from, run.to, run.value]),
         [['i=0', 'i=3', 2362368], ['i=4', 'i=4', 1181184], ['i=5', 'i=11', 2362368]], 'Metric tooltips list which instances differ');
     assert.equal(fitShapeText(narrow.shape.text, 15), 'B × … × 1536…3072', 'A cut keeps the axis that varies');
+    // The local version writes its own width: Symbols says the definitions differ.
+    const written = fieldOf(narrow, 'out_features').symbols;
+    assert.deepEqual([written.text, written.tone], ['varies', 'varies']);
+    assert.equal(written.title, 'As written: i=0–3: $mlp_width · i=4: 1536 · i=5–11: $mlp_width');
+    assert.equal(fieldOf(narrow, 'in_features').symbols.text, '$d_model', 'A field every version writes alike stays as written');
+    assert.equal(multiplicityInfo(narrow).title, '12 per forward pass\ni=4 uses a local version of Transformer block');
+
+    // A node the local version drops: ×11, and the hover names the instance without it.
+    const gelu = Object.values(templatesStore.getState().templates[localId].graph.nodes).find((node) => node.label === 'gelu');
+    templatesStore.getState().removeNodeFromTemplate(localId, gelu.id);
+    const dropped = find(rowsAt(model(), 'blocks'), 'gelu');
+    assert.equal(dropped.multiplicity, 11);
+    assert.equal(multiplicityInfo(dropped).title, '11 per forward pass\nNot in i=4 (1 of 12): a local version without it');
+    assert.match(cellStatus(dropped, 1, {}), /^×N: 11 per forward pass · Not in i=4 /, 'The status line reads it on one line');
 
     const resnet = load(resnetStoryboard);
     const stages = find(rowsAt(resnet, 'blocks'), 'ResNet stages');
@@ -524,6 +538,10 @@ test('shares of a partial total are upper bounds, or unknown where the row is pa
     assert.deepEqual([ln1.shape.text, ln1.shape.known, ln1.shape.count, knownShapeMark(ln1)], ['B × 1024 × 768', 1, 12, '1/12'],
         'A shape known in block 0 only says so in the cell');
     assert.equal(knownShapeMark(find(rows, 'token embedding')), null);
+    const residual = rows.filter((row) => row.label === 'residual');
+    assert.equal(layerLines(residual[0])[1], 'Inputs: attention projection dropout B × 1024 × 768 + block input B × 1024 × 768', 'A merge row names its inputs');
+    assert.equal(layerLines(residual[1])[1], 'Inputs: dropout B × 1024 × 1024 + residual B × 1024 × 768', 'which shows where shapes disagree');
+    assert.equal(cellStatus(residual[0], 0, { lens: 'params' }), layerLines(residual[0])[1]);
     assert.equal(failingText(ln1), 'Fails in i=1–11 (11 of 12)', 'Block 0 still reads 768 wide');
     assert.match(cellStatus(ln1, 0, { lens: 'params' }), /internal errors: Element-wise dim 2 mismatch: 1024 vs 768 · Fails in i=1–11 \(11 of 12\)$/);
     const lnF = find(rows, 'ln_f');
@@ -546,5 +564,7 @@ test('edits are summarised by the value that really changes', () => {
         'attention projection dropout p = 0.2 (shared Transformer block, 12 uses)');
     const root = find(rows, 'Dropout');
     assert.equal(targetSummary(target(ctx, root, 'p', 'values'), null, { row: root, rootGraph: ctx.graph, templates: ctx.templates }), 'Dropout p = default');
+    const position = find(rows, 'positional embedding');
+    assert.match(describeTarget(target(ctx, position, 'max_len', 'values'), { row: position, rootGraph: ctx.graph, templates: ctx.templates }), /\(1 field names it directly\)$/);
 
 });
