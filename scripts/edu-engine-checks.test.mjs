@@ -351,3 +351,18 @@ test('derived parts of a context are computed lazily and only once', () => {
     assert.ok(ctx.report.ok);
     assert.equal(createEdge({ source: 'a', target: 'b' }).gradientOp, 'none');
 });
+
+test('component: a Linear is no grouping attempt; a partial group says what it misses', async () => {
+    const { MODULES } = await import('../src/edu/lessons/modules/index.js');
+    const { runActions } = await import('../src/edu/lessons/engine/actions.js');
+    const { restoreWorkspace, buildFixtureSnapshot } = await import('../src/edu/lessons/engine/workspace.js');
+    const { buildCheckContext } = await import('../src/edu/lessons/engine/context.js');
+    const m6 = MODULES.find((module) => module.id === 'm6');
+    const spec = m6.steps.find((step) => step.id === 's3').check;
+    restoreWorkspace(buildFixtureSnapshot(m6, m6.start));
+    const context = () => buildCheckContext({ module: m6 });
+    assert.equal(detail(evaluateCheck(spec, context())), 'Group the blocks into a component with **Group** in the ribbon.');
+    const grouped = await runActions([{ do: 'group', nodes: [{ id: 'c1' }, { id: 'b1' }, { id: 'r1' }, { id: 'c2' }, { id: 'b2' }], name: 'Part' }]);
+    assert.equal(grouped.ok, true, grouped.error);
+    assert.equal(detail(evaluateCheck(spec, context())), '**Add** blocks in your component: 1 needed, 0 now. Select all of them before **Group**.');
+});

@@ -411,19 +411,24 @@ const handlers = {
     },
     component(spec, ctx) {
         const containers = Object.values(ctx.graph.nodes ?? {}).filter((node) => (spec.kind ? node.kind === spec.kind : ['supernode', 'repeat'].includes(node.kind)));
+        const wanted = spec.contains ?? [];
+        // The closest attempt: the learner's own component holding the most of the wanted blocks. A standard
+        // component (Linear holds an Add) or one with none of them is no attempt: then the learner groups first.
         let best = null;
         for (const node of containers) {
-            const graph = ctx.templates[node.templateId]?.graph;
+            const template = ctx.templates[node.templateId];
+            const graph = template?.graph;
             if (!graph) continue;
-            const missing = (spec.contains ?? []).find((wanted) => {
-                const count = Object.values(graph.nodes ?? {}).filter((child) => nodeMatches(child, { ...wanted, count: undefined }, { templates: ctx.templates, scope: {} })).length;
-                return count < (wanted.count ?? 1);
-            });
-            if (!missing) return pass('component');
-            best ??= missing;
+            const standard = !!(template.standardKey ?? template.componentStyleKey);
+            const counts = wanted.map((item) => Object.values(graph.nodes ?? {})
+                .filter((child) => nodeMatches(child, { ...item, count: undefined }, { templates: ctx.templates, scope: {} })).length);
+            const missing = wanted.findIndex((item, index) => counts[index] < (item.count ?? 1));
+            if (missing < 0) return pass('component');
+            const held = counts.filter((count) => count > 0).length;
+            if (!standard && held && (!best || held > best.held)) best = { held, item: wanted[missing], actual: counts[missing] };
         }
         if (!best) return fail('component', 'check.component');
-        return fail('component', 'check.component.contains', { type: matchName(best), count: best.count ?? 1 });
+        return fail('component', 'check.component.contains', { type: matchName(best.item), count: best.item.count ?? 1, actual: best.actual });
     },
     custom(name, ctx) {
         const check = ctx.module?.checks?.[name];
