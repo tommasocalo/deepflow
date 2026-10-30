@@ -201,13 +201,19 @@ export function resolveWriteTarget({ row, field, cells = 'values', rootGraph, te
     }
     if (field.spec?.derived) return readonly('Inferred from the input; it cannot be set.');
     const direct = alias ? { kind: 'templateDefault', templateId: ownerId, name: alias.name } : directTarget(row, field, ownerId);
+    // Symbols edits the cell as written; an eye alias is written as its default.
     if (cells === 'symbols') return { ...direct, hops: [], literalOnly: false };
-    const shown = alias ? alias.default : raw;
-    if (unset(shown) || isLiteralValue(shown, field.spec)) return { ...direct, hops: [], literalOnly: false };
-    const reference = asFreeParamRef(typeof raw === 'string' ? raw.trim() : raw);
-    if (!reference) return readonly(`Computed by ${typeof raw === 'string' ? raw.trim() : JSON.stringify(raw)}. Switch to Symbols to edit the formula.`);
+    if (!alias && (unset(raw) || isLiteralValue(raw, field.spec))) return { ...direct, hops: [], literalOnly: false };
     const frames = rowFrames(row, rootGraph, templates);
     if (!frames) return readonly('The level of this row changed; try again.');
+    if (alias) {
+        // The field reads $alias, and an instance may bind it: Values follows
+        // the binding, and edits the alias default only when nothing binds it.
+        const followed = followReference(alias.name, frames, rootGraph);
+        return followed.kind === 'readonly' ? followed : { ...followed, literalOnly: true };
+    }
+    const reference = asFreeParamRef(typeof raw === 'string' ? raw.trim() : raw);
+    if (!reference) return readonly(`Computed by ${typeof raw === 'string' ? raw.trim() : JSON.stringify(raw)}. Switch to Symbols to edit the formula.`);
     let followed;
     if (field.source === 'bindings' || field.source === 'parameterValues') {
         // A container's binding is resolved inside its own definition first:

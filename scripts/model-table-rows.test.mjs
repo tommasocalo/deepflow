@@ -318,3 +318,26 @@ test('an open container keeps its own problems; auto counts name their source', 
     assert.equal(auto.kind, 'readonly');
     assert.match(auto.reason, /Broadcast copies \(count 4\)/);
 });
+
+test('an eye alias bound on its instance is edited where the instance binds it', () => {
+    load(resnetStoryboard);
+    const block = Object.values(templatesStore.getState().templates).find((template) => template.name === 'ConvBlock');
+    const conv = Object.values(block.graph.nodes).find((node) => node.libraryKey === 'torch.nn.Conv2d');
+    templatesStore.getState().toggleFieldExposure(block.id, { nodeId: conv.id, field: 'stride', spec: { name: 'stride', type: 'tuple', default: 1 }, defaultValue: 1, label: 'Stride' });
+    const unbound = model();
+    const unboundRow = find(rowsAt(unbound, 'blocks'), 'Conv2d');
+    const unboundTarget = target(unbound, unboundRow, 'stride', 'values');
+    assert.deepEqual([unboundTarget.kind, unboundTarget.templateId, unboundTarget.name], ['templateDefault', block.id, 'stride'], 'Nothing binds it: the default is what every instance reads');
+
+    const stages = Object.values(architectureStore.getState().graph.nodes).find((node) => node.label === 'ResNet stages');
+    architectureStore.getState().patchRootNode(stages.id, { bindings: { ...stages.bindings, stride: 2 } });
+    const bound = model();
+    const row = find(rowsAt(bound, 'blocks'), 'Conv2d');
+    assert.equal(fieldOf(row, 'stride').values.text, '2', 'The cell shows the value the instances read');
+    const valuesTarget = target(bound, row, 'stride', 'values');
+    assert.deepEqual([valuesTarget.kind, valuesTarget.nodeId, valuesTarget.source, valuesTarget.field, valuesTarget.literalOnly],
+        ['rootNode', stages.id, 'bindings', 'stride', true], 'Values follows $stride to the stages binding');
+    assert.equal(describeTarget(valuesTarget, { row, rootGraph: bound.graph, templates: bound.templates }), 'Sets stride on ResNet stages · all 3 instances');
+    const symbolsTarget = target(bound, row, 'stride', 'symbols');
+    assert.deepEqual([symbolsTarget.kind, symbolsTarget.name], ['templateDefault', 'stride'], 'Symbols still edits the definition default');
+});

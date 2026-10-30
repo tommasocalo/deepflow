@@ -49,6 +49,7 @@ try {
                 export { useTrainingStore } from './src/stores/trainingStore.js';
                 export { useArchitectureHistory, startArchitectureSession } from './src/stores/architectureHistory.js';
                 export { gpt2Storyboard } from './src/storyboards/gpt2.js';
+                export { resnetStoryboard } from './src/storyboards/resnet.js';
             `,
             resolveDir: projectRoot,
         },
@@ -65,7 +66,7 @@ try {
 } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
 }
-const { ArchitectureWorkspace, useArchitectureStore, useTemplatesStore, useTrainingStore, useArchitectureHistory, startArchitectureSession, gpt2Storyboard } = app;
+const { ArchitectureWorkspace, useArchitectureStore, useTemplatesStore, useTrainingStore, useArchitectureHistory, startArchitectureSession, gpt2Storyboard, resnetStoryboard } = app;
 let container;
 let root;
 
@@ -133,6 +134,16 @@ const history = () => useArchitectureHistory.getState();
 async function openTable() {
     await click(byAria('Show model table'));
     assert.ok(mainTable(), 'The table opens in the main pane');
+}
+/** Start again from another storyboard, optionally changed before the first render. */
+async function seed(storyboard, prepare) {
+    await act(() => root.unmount());
+    for (const store of [useArchitectureStore, useTemplatesStore, useTrainingStore]) store.setState(store.getInitialState(), true);
+    startArchitectureSession(() => storyboard({ architectureStore: useArchitectureStore, templatesStore: useTemplatesStore, trainingStore: useTrainingStore }));
+    prepare?.();
+    useArchitectureHistory.getState().clear();
+    root = createRoot(container);
+    await act(() => root.render(h(ArchitectureWorkspace)));
 }
 async function editConfig(label) {
     const cell = cellOf(label, 3);
@@ -390,4 +401,30 @@ test('each pane has its own table', async () => {
     await click(byAria('Show model table'));
     assert.ok(side.querySelector('[aria-label="Model table"]'), 'The ribbon targets the active side pane');
     assert.equal(mainTable(), null, 'The main pane keeps its own view');
+});
+
+test('an exposed field bound on its instance is edited where the instance binds it', async () => {
+    await seed(resnetStoryboard, () => {
+        const block = Object.values(templates()).find((template) => template.name === 'ConvBlock');
+        const conv = Object.values(block.graph.nodes).find((node) => node.libraryKey === 'torch.nn.Conv2d');
+        useTemplatesStore.getState().toggleFieldExposure(block.id, { nodeId: conv.id, field: 'stride', spec: { name: 'stride', type: 'tuple', default: 1 }, defaultValue: 1, label: 'Stride' });
+        const stages = rootNode('ResNet stages');
+        useArchitectureStore.getState().patchRootNode(stages.id, { bindings: { ...stages.bindings, stride: 2 } });
+    });
+    await openTable();
+    const cell = cellOf('Conv2d', 3);
+    assert.match(cell.textContent, /s=2/);
+    assert.match(cell.getAttribute('title'), /stride: Sets stride on ResNet stages · all 3 instances/);
+    const editor = await editConfig('Conv2d');
+    const input = editor.querySelector('input[aria-label="Conv2d stride"]');
+    assert.equal(input.value, '2', 'The editor starts from the value the cell shows');
+    await typeText(input, '3');
+    await key(input, 'Enter');
+    const block = Object.values(templates()).find((template) => template.name === 'ConvBlock');
+    assert.equal(rootNode('ResNet stages').bindings.stride, 3, 'The binding the instances read changes');
+    assert.equal(block.freeParameters.find((parameter) => parameter.name === 'stride').default, 1, 'The unused default stays');
+    assert.match(cellOf('Conv2d', 3).textContent, /s=3/);
+    assert.equal(history().undoLabel, 'Set Conv2d stride');
+    await act(() => history().undo());
+    assert.equal(rootNode('ResNet stages').bindings.stride, 2);
 });
