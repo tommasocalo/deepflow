@@ -120,12 +120,15 @@ export function drawnShapeLength(text, glyphs = PLAIN_GLYPHS) {
 }
 
 /**
- * A shape label within `budget` characters: whole axes only, so
- * `B×64…256×32×32` becomes `B×64…256×…`, never `B×64…256×3…`. An axis that
- * varies across instances says the most, so axes that do not give way first:
- * `B×1024×1536…3072` becomes `B×…×1536…3072`, not `B×1024×…`. A collection
- * (`12 tensors [B × 1024 × 64]`) is measured as drawn, `12×[B×1024×64]`,
- * and cut inside its brackets. `glyphs` gives the drawn width of separators.
+ * A shape label within `budget` characters, whole axes only (never
+ * `B×64…256×3…`). The middle gives way first, so the batch axis and the last
+ * axis stay: `B×1024×1000` becomes `B×…×1000`, and `B×64×32×32` becomes
+ * `B×64×…×32`. An axis that varies across instances says the most, so fixed
+ * axes give way before it: `B×1024×1536…3072` becomes `B×…×1536…3072`, and
+ * `B×64…256×32×32` becomes `B×64…256×…` once the last axis no longer fits.
+ * A collection (`12 tensors [B × 1024 × 64]`) is measured as drawn,
+ * `12×[B×1024×64]`, and cut inside its brackets. `glyphs` gives the drawn
+ * width of separators.
  */
 export function fitShapeText(text, budget, glyphs = PLAIN_GLYPHS) {
     if (!text || !Number.isFinite(budget) || budget <= 0) return text;
@@ -137,19 +140,29 @@ export function fitShapeText(text, budget, glyphs = PLAIN_GLYPHS) {
     }
     if (drawnShapeLength(text, glyphs) <= budget) return text;
     const axes = text.split(' × ');
+    const last = axes.length - 1;
     const width = (parts) => parts.join('').length + (parts.length - 1) * glyphs.times;
-    const trailing = [...axes];
-    while (trailing.length > 1 && width([...trailing, '…']) > budget) trailing.pop();
-    const ranges = axes.map((axis, index) => axis.includes('…') ? index : -1).filter((index) => index > 0);
-    // The trailing cut drops a range: keep the batch axis and the ranges, eliding fixed axes in between.
-    if (ranges.length && ranges.at(-1) >= trailing.length) {
-        const kept = [];
+    const ranges = axes.map((axis, index) => index > 0 && axis.includes('…') ? index : -1).filter((index) => index > 0);
+    // The axes kept, by index; each run of the others reads as one "…".
+    const label = (kept) => {
+        const parts = [];
         axes.forEach((axis, index) => {
-            const keep = index === 0 || ranges.includes(index);
-            if (keep) kept.push(axis);
-            else if (kept.at(-1) !== '…') kept.push('…');
+            if (kept.has(index)) parts.push(axis);
+            else if (parts.at(-1) !== '…') parts.push('…');
         });
-        if (width(kept) <= budget) return kept.join(' × ');
+        return parts;
+    };
+    const leading = (count) => Array.from({ length: count }, (_, index) => index);
+    // In order of preference: leading axes, the ranges and the last axis; then
+    // without the last axis; then leading axes only.
+    const choices = [];
+    for (let count = last - 1; count >= 1; count--) choices.push(new Set([...leading(count), ...ranges, last]));
+    for (let count = last - 1; count >= 1; count--) choices.push(new Set([...leading(count), ...ranges]));
+    for (let count = last; count >= 1; count--) choices.push(new Set(leading(count)));
+    for (const kept of choices) {
+        if (kept.size >= axes.length) continue;
+        const parts = label(kept);
+        if (width(parts) <= budget) return parts.join(' × ');
     }
-    return `${trailing.join(' × ')} × …`;
+    return `${axes[0]} × …`;
 }

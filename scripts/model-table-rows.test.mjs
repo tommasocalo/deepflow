@@ -466,8 +466,10 @@ test('text cut to fit never reads as another value', () => {
     assert.deepEqual(fit(linear, 23), ['$d_model → $vocab_size', 3], 'The note gives way first');
     assert.deepEqual(fit(linear, 20), ['$d_model → $vocab_…', 3], 'An in → out pair stays together');
     assert.equal(fitShapeText('B × 64…256 × 32 × 32', 12), 'B × 64…256 × …', 'Shapes keep whole axes');
+    assert.equal(fitShapeText('B × 1024 × 1000', 9), 'B × … × 1000', 'The middle gives way, so the last axis stays');
+    assert.equal(fitShapeText('B × 64 × 32 × 32', 9), 'B × 64 × … × 32', 'with as many leading axes as fit');
     assert.equal(fitShapeText('12 tensors [B × 1024 × 64]', 14), '12 tensors [B × 1024 × 64]', 'A collection is measured as drawn: 12×[B×1024×64]');
-    assert.equal(fitShapeText('12 tensors [B × 1024 × 64]', 12), '12 tensors [B × …]', 'and cut inside its brackets');
+    assert.equal(fitShapeText('12 tensors [B × 1024 × 64]', 12), '12 tensors [B × … × 64]', 'and cut inside its brackets');
 });
 
 test('an Input shape is checked in the grammar validation reads before it is written', () => {
