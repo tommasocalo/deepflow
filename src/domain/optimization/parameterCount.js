@@ -9,6 +9,8 @@ const positive = (value) => Number.isSafeInteger(value) && value > 0 ? value : n
 
 /** Modules with no learned weights. Anything else unrecognized may hide weights. */
 const WEIGHT_FREE_MODULE = /^torch\.nn\.(ReLU|LeakyReLU|GELU|SiLU|Tanh|Sigmoid|Softmax|LogSoftmax|Dropout|Dropout2d|Dropout3d|Flatten|Identity|MaxPool[123]d|AvgPool[123]d|AdaptiveAvgPool[123]d|AdaptiveMaxPool[123]d|Upsample)$/;
+/** Gate blocks per recurrent cell, as PyTorch stacks them in weight_ih and weight_hh. */
+export const RECURRENT_GATES = { 'torch.nn.LSTM': 4, 'torch.nn.GRU': 3, 'torch.nn.RNN': 1 };
 
 /** Spatial rank from the module name: Conv1d → 1, ConvTranspose2d → 2. */
 export function spatialRank(libraryKey) {
@@ -81,6 +83,28 @@ export function layerSize(node, scope) {
     } else if (key === 'deepflow.nn.PositionalEmbedding') {
         if (!n('max_len') || !n('embedding_dim')) return null;
         total = n('max_len') * n('embedding_dim');
+    } else if (RECURRENT_GATES[key]) {
+        // Per layer and direction: W_ih (g·h × in), W_hh (g·h × h), b_ih and b_hh (g·h each).
+        const gates = RECURRENT_GATES[key];
+        const hidden = n('hidden_size');
+        const layers = n('num_layers') ?? 1;
+        if (!n('input_size') || !hidden || !layers) return null;
+        const directions = p.bidirectional === true ? 2 : 1;
+        for (let index = 0; index < layers; index++) {
+            const input = index === 0 ? n('input_size') : hidden * directions;
+            total += directions * gates * hidden * (input + hidden + (p.bias === false ? 0 : 2));
+        }
+    } else if (key === 'torch.nn.MultiheadAttention' || key === 'deepflow.nn.CausalSelfAttention') {
+        // Q, K, V and output projections of E × E (one fused 3E × E for Q, K, V), with biases.
+        const embed = n('embed_dim');
+        if (!embed || !n('num_heads') || embed % n('num_heads')) return null;
+        total = 4 * embed * embed + (p.bias === false ? 0 : 4 * embed) + (p.add_bias_kv === true ? 2 * embed : 0);
+    } else if (key === 'torch.nn.TransformerEncoderLayer') {
+        // Self-attention, linear1 (d → ff), linear2 (ff → d) and two LayerNorms.
+        const d = n('d_model');
+        const ff = n('dim_feedforward');
+        if (!d || !ff || !n('nhead') || d % n('nhead')) return null;
+        total = (4 * d * d + 4 * d) + (d * ff + ff) + (ff * d + d) + 4 * d;
     } else if (key?.startsWith('torch.nn.') || key?.startsWith('deepflow.nn.')) {
         // An unrecognized neural module may contain hidden weights.
         if (!WEIGHT_FREE_MODULE.test(key)) return null;

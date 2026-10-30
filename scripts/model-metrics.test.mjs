@@ -127,17 +127,102 @@ test('layer sizes cover convolution kernels, transposed convolutions, frozen and
     assert.equal(computeModelMetrics(graph, templates).totals.params, 210065);
 });
 
+test('recurrent and attention modules count PyTorch weights and products in closed form', () => {
+    // nn.LSTM(10, 20): weight_ih 80 × 10, weight_hh 80 × 20, two 80-wide biases.
+    assert.deepEqual(layerSize(layer('torch.nn.LSTM', { input_size: 10, hidden_size: 20 }), {}), { total: 2560, trainable: 2560 });
+    // Two bidirectional layers: the second reads both directions (40 features).
+    assert.equal(layerSize(layer('torch.nn.LSTM', { input_size: 10, hidden_size: 20, num_layers: 2, bidirectional: true }), {}).total, 5120 + 9920);
+    assert.equal(layerSize(layer('torch.nn.GRU', { input_size: 10, hidden_size: 20 }), {}).total, 1920);
+    // in_proj (3E × E + 3E) and out_proj (E × E + E).
+    assert.equal(layerSize(layer('torch.nn.MultiheadAttention', { embed_dim: 512, num_heads: 8 }), {}).total, 1050624);
+    assert.equal(layerSize(layer('torch.nn.MultiheadAttention', { embed_dim: 512, num_heads: 7 }), {}), null, 'PyTorch rejects embed_dim not divisible by num_heads');
+    // Fused qkv Linear(E, 3E) and proj Linear(E, E), as generated: the GPT-2 attention size.
+    assert.equal(layerSize(layer('deepflow.nn.CausalSelfAttention', { embed_dim: 768, num_heads: 12 }), {}).total, 2362368);
+    assert.equal(layerSize(layer('deepflow.nn.CausalSelfAttention', { embed_dim: 768, num_heads: 12, bias: false }), {}).total, 4 * 768 * 768);
+    // Self-attention, linear1, linear2 and two LayerNorms.
+    assert.equal(layerSize(layer('torch.nn.TransformerEncoderLayer', { d_model: 512, nhead: 8, dim_feedforward: 2048 }), {}).total, 3152384);
+
+    const tokens = [null, 1024, 768];
+    assert.equal(layerMacs(layer('deepflow.nn.CausalSelfAttention', { embed_dim: 768, num_heads: 12 }), {}, [tokens], tokens), 4026531840,
+        'Projections plus the full T × T products: the op-level GPT-2 attention total');
+    assert.equal(layerMacs(layer('torch.nn.MultiheadAttention', { embed_dim: 512, num_heads: 8 }), {}, [[null, 10, 512]], [null, 10, 512]), 4 * 10 * 512 * 512 + 2 * 10 * 10 * 512);
+    assert.equal(layerMacs(layer('torch.nn.LSTM', { input_size: 10, hidden_size: 20 }), {}, [[null, 5, 10]], [null, 5, 10]), 5 * 2400);
+    assert.equal(layerMacs(layer('torch.nn.LSTM', { input_size: 10, hidden_size: 20, batch_first: false }), {}, [[null, 5, 10]], [null, 5, 10]), null,
+        'A sequence-first input has no batch-first time axis to count');
+});
+
+test('an unresolved repeat count leaves everything after it unknown instead of using placeholder shapes', () => {
+    const { graph, templates } = load(gpt2Storyboard);
+    const blocks = Object.values(graph.nodes).find((node) => node.label === 'Transformer blocks');
+    const broken = { ...graph, nodes: { ...graph.nodes, [blocks.id]: { ...blocks, count: '$missing' } } };
+    const metrics = computeModelMetrics(broken, templates);
+    const lmHead = subtreeMetrics(byLabel(metrics.root, 'lm_head'));
+    assert.equal(lmHead.macs, 0, 'Validation gives lm_head a batch-less placeholder input; nothing is computed from it');
+    assert.equal(lmHead.unresolved.macs.size, 1);
+    assert.match([...lmHead.unresolved.macs.values()][0].reason, /^after Transformer blocks: its repeat count is unresolved/);
+    assert.equal(lmHead.params, 38597376, 'Weights do not depend on shapes');
+    const lnF = byLabel(metrics.root, 'ln_f');
+    assert.equal(subtreeMetrics(lnF).activation, 0);
+    assert.equal(subtreeMetrics(lnF).unresolved.activation.size, 1);
+    assert.ok(lnF.shapeUnknown, 'The ln_f output shape is a guess');
+    assert.equal(metrics.totals.largest.label, 'token embedding', 'The largest known activation comes before the unresolved stack');
+    assert.ok(metrics.totals.unresolved.activation.size > 0, 'so it is only a lower bound');
+    assert.ok(metrics.issues.errors.some((error) => error.label === 'Transformer blocks'), 'The count error is listed');
+});
+
+test('a shape error makes its own layer unknown while later layers use the declared settings', () => {
+    const { graph, templates } = load(gpt2Storyboard);
+    const block = Object.values(templates).find((template) => template.name === 'Transformer block');
+    const fc = Object.values(block.graph.nodes).find((node) => node.label === 'mlp fc');
+    const narrower = { ...block, graph: { ...block.graph, nodes: { ...block.graph.nodes, [fc.id]: { ...fc, parameterValues: { ...fc.parameterValues, out_features: '2 * d_model' } } } } };
+    const metrics = computeModelMetrics(graph, { ...templates, [block.id]: narrower });
+    assert.deepEqual(metrics.issues.errors.map((error) => [error.label, error.messages]),
+        [['Transformer blocks › mlp proj › input × weightᵀ', ['MatMul inner dimensions mismatch: 1536 vs 3072']]], 'One error, counted once for all 12 blocks');
+    const firstBlock = byLabel(metrics.root, 'Transformer blocks').instances[0].level;
+    const product = byLabel(byLabel(firstBlock, 'mlp proj').instances[0].level, 'input × weightᵀ');
+    assert.equal(product.macs, null, 'The mismatched MatMul is not counted');
+    assert.equal(product.reasons.macs, 'MatMul inner dimensions mismatch: 1536 vs 3072');
+    assert.equal(subtreeMetrics(byLabel(firstBlock, 'mlp proj')).unresolved.activation.size, 1, 'Nor is the output of the module around it');
+    assert.equal(subtreeMetrics(byLabel(firstBlock, 'mlp fc')).macs, 1207959552, 'Half the width, half the MACs');
+    assert.equal(subtreeMetrics(byLabel(metrics.root, 'lm_head')).macs, 39523713024, 'Layers after the error keep their declared shapes');
+    assert.equal(metrics.totals.macs, 145824153600 - 12 * (2415919104 + 2415919104) + 12 * 1207959552);
+    assert.equal(metrics.totals.unresolved.macs.size, 1);
+});
+
+test('the node budget stops the analysis with lower bounds, not errors', () => {
+    const { graph, templates } = load(gpt2Storyboard);
+    const huge = { ...graph, parameters: graph.parameters.map((parameter) => ['n_layers', 'n_heads'].includes(parameter.name) ? { ...parameter, default: 96 } : parameter) };
+    const metrics = computeModelMetrics(huge, templates);
+    assert.equal(metrics.issues.limits.budget, true);
+    assert.deepEqual(metrics.issues.errors, [], 'Where validation stopped is a limit of the analysis');
+    const blocks = byLabel(metrics.root, 'Transformer blocks');
+    assert.equal(blocks.complete, false);
+    assert.equal(blocks.incompleteReason, 'the analysis stopped at 20,000 expanded nodes');
+    assert.ok(blocks.instances.length < 96);
+    assert.ok(metrics.totals.unresolved.params.size > 0, 'Totals are lower bounds');
+});
+
 test('unknown modules and counts give partial totals, never NaN', () => {
     const input = layer('deepflow.io.Input', { shape: '(16, 32)' });
-    const lstm = layer('torch.nn.LSTM', { input_size: 32, hidden_size: 64 });
+    // Not in the library (an ONNX import can produce one): weights, compute and shape are unknown.
+    const unknown = { id: 'bilinear', kind: 'layer', libraryKey: 'torch.nn.Bilinear', label: 'Bilinear', parameters: {}, position: { x: 0, y: 0 } };
     const linear = layer('torch.nn.Linear', { in_features: 32, out_features: 10 });
     const output = layer('deepflow.io.Output');
-    const partial = computeModelMetrics(chain(input, lstm, linear, output), {});
+    const partial = computeModelMetrics(chain(input, unknown, linear, output), {});
     assert.equal(partial.totals.params, 330, 'Only the Linear weights are known');
-    assert.equal(partial.totals.unresolved.params.size, 1);
-    assert.deepEqual([...partial.totals.unresolved.params.values()], ['LSTM']);
-    assert.equal(partial.totals.unresolved.macs.size, 1);
-    assert.deepEqual([...partial.totals.unresolved.activation.values()], ['LSTM'], 'An LSTM output has no shape rule, so its size is unknown');
+    assert.deepEqual([...partial.totals.unresolved.params.values()].map((item) => item.label), ['Bilinear']);
+    assert.deepEqual([...partial.totals.unresolved.macs.values()].map((item) => item.label), ['Bilinear', 'Linear'],
+        'The Linear reads a guessed input shape, so its MACs are unknown too');
+    const linearEntry = partial.root.nodes[linear.id];
+    assert.equal(linearEntry.macs, null);
+    assert.match(linearEntry.reasons.macs, /^after Bilinear: /);
+    assert.deepEqual([...partial.totals.unresolved.activation.values()].map((item) => item.label), ['Bilinear', 'Linear']);
+
+    const lstm = layer('torch.nn.LSTM', { input_size: 32, hidden_size: 64 });
+    const recurrent = computeModelMetrics(chain(layer('deepflow.io.Input', { shape: '(16, 32)' }), lstm, layer('deepflow.io.Output')), {});
+    assert.equal(recurrent.totals.params, 4 * 64 * (32 + 64 + 2), 'LSTM weights have a closed form');
+    assert.equal(recurrent.totals.macs, 16 * 4 * 64 * (32 + 64), 'Gate products per time step');
+    assert.deepEqual([...recurrent.totals.unresolved.activation.values()].map((item) => item.label), ['LSTM'], 'An LSTM keeps gate activations the table cannot see');
 
     const body = createTemplate({ name: 'Body', graph: chain(layer('deepflow.template.Input'), layer('torch.nn.Linear', { in_features: 32, out_features: 32 }), layer('deepflow.template.Output')) });
     const repeat = createRepeatNode({ templateId: body.id, position: { x: 0, y: 0 }, count: '$missing', label: 'Stack' });
@@ -145,7 +230,8 @@ test('unknown modules and counts give partial totals, never NaN', () => {
     const stack = Object.values(unresolvedRepeat.root.nodes).find((entry) => entry.node.label === 'Stack');
     assert.equal(stack.instances.length, 0);
     assert.equal(stack.complete, false);
-    assert.deepEqual([...unresolvedRepeat.totals.unresolved.params.values()], ['Stack']);
+    assert.deepEqual([...unresolvedRepeat.totals.unresolved.params.values()].map((item) => item.label), ['Stack']);
+    assert.equal([...unresolvedRepeat.totals.unresolved.params.values()][0].reason, 'its repeat count is unresolved');
 
     const everyNumber = (level) => {
         for (const entry of Object.values(level.nodes)) {
@@ -158,6 +244,7 @@ test('unknown modules and counts give partial totals, never NaN', () => {
         }
     };
     everyNumber(partial.root);
+    everyNumber(recurrent.root);
     everyNumber(unresolvedRepeat.root);
     everyNumber(computeModelMetrics(load(gpt2Storyboard).graph, templatesStore.getState().templates).root);
     for (const text of [formatCount(null), formatMacs(Number.NaN), formatBytes(undefined), formatShare(Number.NaN)]) assert.ok(!String(text).includes('NaN'));
@@ -179,7 +266,7 @@ test('model metrics are cached across position-only edits and recomputed for par
 
 test('validate collects instance reports only on request', () => {
     const strip = (report) => {
-        const { scope: _scope, children: _children, ...rest } = report;
+        const { scope: _scope, children: _children, shapeIssues: _shapeIssues, ...rest } = report;
         return rest;
     };
     for (const storyboard of [gpt2Storyboard, resnetStoryboard]) {

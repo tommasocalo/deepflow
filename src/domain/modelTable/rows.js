@@ -127,7 +127,7 @@ function metricSummary(list, occurrences, metric) {
     return {
         total,
         unresolved: unresolved.size,
-        unresolvedLabels: unique([...unresolved.values()]),
+        unresolvedLabels: unique([...unresolved.values()].map((item) => item.label)),
         each: occurrences.length > 1 ? { min: Math.min(...values), max: Math.max(...values) } : null,
         trainable: metric === 'params' ? list.reduce((sum, merged) => sum + subtreeMetrics(merged.metrics).trainable, 0) : undefined,
     };

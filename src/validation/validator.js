@@ -21,18 +21,25 @@ const MAX_VALIDATED_NODES = 20000;
  * resolved `scope` and, per repeat or component, one `children` entry per
  * instance: { index, templateId, scope, inputs, report, parameterIssues,
  * instanceIssues }. The issues are the instance's own problems, which
- * otherwise appear only in the container's summary. Without the option,
- * reports are unchanged.
+ * otherwise appear only in the container's summary. `shapeIssues` repeats
+ * the errors that make a node's output shape unreliable (shape rules and
+ * missing or ambiguous inputs), apart from setting errors such as a dropout
+ * probability above 1. Without the option, reports are unchanged.
  */
 export function validate(graph, opts = {}) {
     const { templates = {}, externalInputs = {}, depth = 0 } = opts;
     const collect = opts.collect === true;
     const children = collect ? {} : null;
+    const shapeIssues = collect ? {} : null;
     const scope = withGlobalParameters(graph, opts.scope ?? {});
     const budget = opts.budget ?? { remaining: MAX_VALIDATED_NODES };
     const { order: topo, cyclic, adjacency: adj } = topologicalSort(graph);
     const errors = {}, warnings = {}, shapes = {}, globalErrors = [];
     const push = (bucket, id, message) => (bucket[id] ??= []).push(message);
+    const pushShape = (id, message) => {
+        push(errors, id, message);
+        if (collect) push(shapeIssues, id, message);
+    };
 
     if (cyclic.length) {
         for (const id of cyclic) push(errors, id, 'This node is part of a cycle');
@@ -82,9 +89,9 @@ export function validate(graph, opts = {}) {
         if (node.kind === 'layer') {
             const operationPorts = getOperationInputIds(node);
             if (operationPorts) {
-                for (const issue of validateInputPorts(edges, operationPorts)) push(errors, id, issue);
+                for (const issue of validateInputPorts(edges, operationPorts)) pushShape(id, issue);
                 if (edges.length !== operationPorts.length || orderOperationEdges(node, edges).some((edge) => !edge)) {
-                    push(errors, id, `${node.libraryKey.split('.').at(-1)} needs ${operationPorts.length} connected inputs (${operationPorts.join(' and ')})`);
+                    pushShape(id, `${node.libraryKey.split('.').at(-1)} needs ${operationPorts.length} connected inputs (${operationPorts.join(' and ')})`);
                 }
             }
             if (node.libraryKey === TEMPLATE_INPUT && Object.hasOwn(externalInputs, id)) {
@@ -93,7 +100,7 @@ export function validate(graph, opts = {}) {
             }
             const result = inferShape(node.libraryKey, inputShapes, resolveLayerParameters(node, scope).parameters);
             shapes[id] = result.output;
-            for (const error of result.errors) push(errors, id, error);
+            for (const error of result.errors) pushShape(id, error);
             continue;
         }
         if (node.kind !== 'supernode' && node.kind !== 'repeat') {
@@ -197,6 +204,6 @@ export function validate(graph, opts = {}) {
     }
     const ok = Object.keys(errors).length === 0 && globalErrors.length === 0;
     return collect
-        ? { topo, cyclic, shapes, errors, warnings, globalErrors, ok, scope, children }
+        ? { topo, cyclic, shapes, errors, warnings, globalErrors, ok, scope, children, shapeIssues }
         : { topo, cyclic, shapes, errors, warnings, globalErrors, ok };
 }

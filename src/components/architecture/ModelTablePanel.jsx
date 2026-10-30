@@ -86,7 +86,7 @@ function Footer({ metrics, assumptionsId }) {
     const unresolved = (metric) => totals.unresolved[metric];
     const partial = (metric) => unresolved(metric).size > 0;
     const unresolvedText = (metric) => `${unresolved(metric).size} row${unresolved(metric).size === 1 ? '' : 's'} unresolved`;
-    const unresolvedTitle = (metric) => partial(metric) ? `Not counted (unknown size): ${[...new Set(unresolved(metric).values())].join(', ')}` : '';
+    const unresolvedTitle = (metric) => partial(metric) ? `Not counted (unknown size): ${[...new Set([...unresolved(metric).values()].map((item) => item.label))].join(', ')}` : '';
     const frozen = totals.params - totals.trainable;
     const largest = totals.largest;
     const inputs = metrics.inputs.map((input) => `${input.label} ${shapeSummary([input.shape]).text ?? '?'}`).join(' · ');
