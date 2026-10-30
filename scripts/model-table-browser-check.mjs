@@ -84,23 +84,33 @@ try {
         await page.close();
     }
 
-    // The ribbon keeps one row from 1040px up, with one pane and with two.
+    // The ribbon keeps one row from 1040px up, with one pane and with two, and
+    // 10px labels from 1191px. Two panes always show which pane it acts on.
     {
         const { page } = await open({ width: 1440, height: 900 });
+        const widths = [940, 1000, 1191, 1301, 1305, 1309, 1310];
+        for (let width = 1040; width <= 1600; width += 20) widths.push(width);
         for (const panes of ['one', 'two']) {
             if (panes === 'two') {
                 await page.setViewportSize({ width: 1440, height: 900 });
                 await page.getByRole('button', { name: 'Open to the side' }).click();
                 await page.locator('[data-graph-pane="side"]').waitFor();
             }
-            for (let width = 1040; width <= 1600; width += 20) {
+            for (const width of widths.sort((a, b) => a - b)) {
                 await page.setViewportSize({ width, height: 900 });
                 await settle(page);
-                const overflow = await page.evaluate(() => {
+                const ribbon = await page.evaluate(() => {
                     const row = document.querySelector('.df-ribbon-row');
-                    return row.scrollWidth - row.clientWidth;
+                    const visible = (element) => !!element && element.getBoundingClientRect().width > 2 && getComputedStyle(element).display !== 'none';
+                    return {
+                        overflow: row.scrollWidth - row.clientWidth,
+                        label: parseFloat(getComputedStyle(document.querySelector('.df-ribbon-button')).fontSize),
+                        cue: visible(document.querySelector('.df-ribbon-pane-cue')) || visible(document.querySelector('.df-graph-pane.is-active .df-pane-cue')),
+                    };
                 });
-                assert.ok(overflow <= 0, `${panes} pane(s) at ${width}px: the ribbon overflows by ${overflow}px`);
+                if (width >= 1040) assert.ok(ribbon.overflow <= 0, `${panes} pane(s) at ${width}px: the ribbon overflows by ${ribbon.overflow}px`);
+                if (width >= 1191) assert.ok(ribbon.label >= 10, `${panes} pane(s) at ${width}px: ribbon labels are ${ribbon.label}px`);
+                if (panes === 'two') assert.ok(ribbon.cue, `Two panes at ${width}px: no visible cue names the pane the ribbon acts on`);
             }
         }
         await page.close();

@@ -1,5 +1,5 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, X } from 'lucide-react';
+import { ArrowUp, ExternalLink, X } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { ArchitectureStoreProvider, createArchitecturePaneStore, useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
 import ArchitectureCanvas from './ArchitectureCanvas.jsx';
@@ -48,7 +48,7 @@ function CanvasCommandBridge({ paneId, register }) {
     return <span ref={markerRef} hidden />;
 }
 
-function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
+function GraphPane({ id, active, split = false, onActivate, onClose, registerCommands }) {
     const importSource = useArchitectureStore((state) => state.graph.importSource);
     const atRoot = useArchitectureStore((state) => state.currentPath.length === 0);
     const showModelTable = useArchitectureStore((state) => state.showModelTable);
@@ -59,6 +59,8 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
             onDropCapture={(event) => { onActivate(); event.currentTarget.focus({ preventScroll: true }); }}>
             <div className="df-graph-pane-header">
                 <LevelTabs />
+                {/* Drawn in split view when the ribbon has no room for its own cue; the ribbon announces it. */}
+                {split && active && <span className="df-pane-cue" aria-hidden="true" title="The ribbon's commands act on this pane"><ArrowUp size={11} />Ribbon acts here</span>}
                 {onClose && <button type="button" className="df-side-close" onClick={onClose} aria-label="Close side view" title="Close side view"><X size={13} strokeWidth={3} /></button>}
             </div>
             <div className="df-architecture-body">
@@ -141,7 +143,7 @@ export default function ArchitectureWorkspace() {
             </ArchitectureStoreProvider>
             <div ref={workspaceRef} className={`df-architecture-split${sideStore ? ' is-split' : ''}`}
                 style={sideStore ? { gridTemplateColumns: `minmax(0, ${ratio}fr) 7px minmax(0, ${100 - ratio}fr)` } : undefined}>
-                <GraphPane id="main" active={activePane === 'main'} onActivate={() => setActivePane('main')} registerCommands={registerCommands} />
+                <GraphPane id="main" active={activePane === 'main'} split={!!sideStore} onActivate={() => setActivePane('main')} registerCommands={registerCommands} />
                 {sideStore && <>
                     <div className="df-pane-divider" role="separator" aria-label="Resize graph panes" aria-orientation="vertical"
                         aria-valuemin={30} aria-valuemax={70} aria-valuenow={Math.round(ratio)} tabIndex={0}
@@ -157,7 +159,7 @@ export default function ArchitectureWorkspace() {
                             setRatio((value) => event.key === 'Home' ? 30 : event.key === 'End' ? 70 : Math.max(30, Math.min(70, value + (event.key === 'ArrowRight' ? 5 : -5))));
                         }} />
                     <ArchitectureStoreProvider store={sideStore}>
-                        <GraphPane id="side" active={activePane === 'side'} onActivate={() => setActivePane('side')} onClose={closeSide} registerCommands={registerCommands} />
+                        <GraphPane id="side" active={activePane === 'side'} split onActivate={() => setActivePane('side')} onClose={closeSide} registerCommands={registerCommands} />
                     </ArchitectureStoreProvider>
                 </>}
             </div>

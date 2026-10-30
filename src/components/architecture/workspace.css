@@ -17,6 +17,11 @@
 .df-architecture-body { container: df-architecture-body / inline-size; }
 .df-architecture-split.is-split .df-levels { padding-left: 10px; padding-right: 8px; }
 .df-architecture-split.is-split .df-graph-pane.is-active .df-graph-pane-header { box-shadow: inset 2px 0 #111; }
+/* Where the ribbon has no room for its target cue, the pane it acts on says so in its header. */
+.df-pane-cue { display: none; align-items: center; flex-shrink: 0; gap: 3px; padding: 0 8px; border-bottom: 1px solid #e3e3dc; color: #555; font-size: 10px; font-weight: 600; white-space: nowrap; }
+@media (min-width: 761px) and (max-width: 1309px) {
+    .df-graph-pane.is-active .df-pane-cue { display: inline-flex; }
+}
 .df-side-close { display: grid; place-items: center; flex-shrink: 0; width: 30px; border-bottom: 1px solid #e3e3dc; color: #555; }
 .df-side-close:hover { background: #e7e7e2; color: #111; }
 .df-side-close:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }

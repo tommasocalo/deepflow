@@ -63,25 +63,30 @@
 .df-insert-menu--templates .df-insert-items { grid-template-columns: minmax(0, 1fr); }
 .df-insert-menu--templates .df-insert-item { min-height: 33px; }
 .df-insert-empty { margin: 0; padding: 12px 5px; font-size: 11px; color: #777; }
-/* With the View group's Table toggle, the full-size row needs about 1240px. */
+/* With the View group's Table toggle, the full-size row needs about 1230px.
+   Tighter spacing keeps the 10px labels down to 1191px, as before the toggle;
+   below that the labels shrink. */
 @media (max-width: 1240px) {
     .df-ribbon-row { padding-left: 8px; padding-right: 8px; gap: 6px; }
     .df-ribbon-group { padding-right: 6px; }
     .df-ribbon-actions { gap: 1px; }
-    .df-ribbon-button { min-width: 36px; padding-left: 4px; padding-right: 4px; font-size: 9px; }
-    .df-ribbon-view-options button { font-size: 9px; padding-left: 3px; padding-right: 3px; }
+    .df-ribbon-button { min-width: 38px; padding-left: 4px; padding-right: 4px; }
+    .df-ribbon-view-options button { padding-left: 3px; padding-right: 3px; }
+}
+@media (max-width: 1190px) {
+    .df-ribbon-button { min-width: 36px; font-size: 9px; }
+    .df-ribbon-view-options button { font-size: 9px; }
 }
 @media (max-width: 1100px) {
     .df-ribbon-row { padding-left: 6px; padding-right: 6px; gap: 3px; }
     .df-ribbon-group { padding-right: 3px; }
 }
-/* Two panes: the cue naming the pane the ribbon acts on needs room beside the
-   History group. Without it, screen readers still hear it, and the active
-   pane's header is marked. */
-@media (max-width: 1300px) {
+/* Two panes: below 1310px the row has no room beside the History group for
+   the cue naming the pane the ribbon acts on. Screen readers still hear it
+   here, and the active pane's header shows it (.df-pane-cue). */
+@media (max-width: 1309px) {
     .df-ribbon-pane-cue { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
-@media (max-width: 930px) { .df-ribbon-pane-cue { display: none; } }
 @media (max-width: 760px) {
     .df-ribbon-button { min-width: 30px; font-size: 8px; padding-left: 3px; padding-right: 3px; }
     .df-ribbon-row { gap: 4px; }
