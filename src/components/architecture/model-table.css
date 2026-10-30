@@ -67,8 +67,12 @@
 .df-mt-row.is-selected { --row-bg: #fff6cf; }
 .df-mt-row > th, .df-mt-row > td { box-sizing: border-box; height: 26px; padding: 0 6px; border-bottom: 1px solid #efefea; background: var(--row-bg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; text-align: left; font-weight: 400; }
 .df-mt-row.is-selected > th { box-shadow: inset 2px 0 #111; }
-.df-mt-row > [data-col]:focus { outline: none; }
+/* The active cell: a thin frame after a click, so "click again to edit" can be
+   seen; the ring from the keyboard. A row the canvas does not select (one at
+   another level) is tinted while it holds focus; → still reads at 4.5:1 on it. */
+.df-mt-row > [data-col]:focus { outline: 1px solid #111; outline-offset: -1px; }
 .df-mt-row > [data-col]:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.df-mt-row:not(.is-selected):focus-within { --row-bg: #f5f5f1; }
 /* A switched-off parameter holds no weights. */
 .df-mt-row.is-off .df-mt-label, .df-mt-row.is-off .df-mt-shape, .df-mt-row.is-off .df-mt-glyph { opacity: .5; }
 

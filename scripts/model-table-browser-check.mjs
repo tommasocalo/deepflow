@@ -162,6 +162,18 @@ try {
         assert.equal(semantics.multiselectable, 'true', 'Several rows can be selected, as on the canvas');
         assert.ok(semantics.after, 'The table follows the canvas in reading order');
         assert.equal(semantics.skip, 'Skip to the model table');
+        // A click frames the active cell and, on a row the canvas does not select, tints the row; keys draw the ring.
+        const activeCell = () => page.evaluate(() => {
+            const cell = document.activeElement;
+            const style = getComputedStyle(cell);
+            return { outline: `${style.outlineStyle} ${style.outlineWidth}`, row: getComputedStyle(cell.closest('tr')).backgroundColor, selected: cell.closest('tr').getAttribute('aria-selected') };
+        });
+        await table(page).locator('tbody tr[role="row"]').filter({ has: page.locator('.df-mt-label', { hasText: /^mlp fc$/ }) }).locator('[data-col="0"]').click();
+        const clicked = await activeCell();
+        assert.deepEqual([clicked.outline, clicked.selected], ['solid 1px', 'false'], 'A clicked cell is framed');
+        assert.ok(!['rgb(255, 255, 255)', 'rgb(255, 246, 207)'].includes(clicked.row), `The active row is tinted, not white or selected: ${clicked.row}`);
+        await page.keyboard.press('ArrowDown');
+        assert.equal((await activeCell()).outline, 'solid 2px', 'The keyboard ring stays');
         await table(page).locator('tbody [data-col="0"]').first().focus();
         await page.keyboard.press('Escape');
         assert.equal(await page.evaluate(() => !!document.activeElement.closest('[data-graph-pane="main"] [data-architecture-canvas]')), true, 'Escape focuses the canvas');
