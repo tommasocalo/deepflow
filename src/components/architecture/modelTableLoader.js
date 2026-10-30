@@ -15,3 +15,9 @@ const focusRequests = new Set();
 export const requestModelTableFocus = (paneId) => { focusRequests.add(paneId); };
 /** True once per request: the panel focuses itself. */
 export const takeModelTableFocus = (paneId) => focusRequests.delete(paneId);
+
+/** Move focus into an open table: its active cell, or its first control while it loads. */
+export function focusModelTable(paneId) {
+    const aside = document.getElementById(`df-model-table-${paneId}`);
+    (aside?.querySelector('[role="treegrid"] [data-col][tabindex="0"]') ?? aside?.querySelector('[role="radio"][aria-checked="true"]'))?.focus();
+}

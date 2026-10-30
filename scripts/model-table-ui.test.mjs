@@ -589,17 +589,24 @@ test('read-only values explain themselves, and an input method keeps Enter', asy
     assert.equal(rootNode('Dropout').parameters.p, 0.3);
 });
 
-test('the grid is reached from the toggle, before the canvas', async () => {
+test('the table follows the canvas in reading order, and the toggle and a skip link reach its grid', async () => {
+    const canvas = () => container.querySelector('[data-graph-pane="main"] [data-architecture-canvas]');
+    assert.equal(canvas().querySelector('.df-skip-link'), null, 'Without the table the canvas is unchanged');
     await openTable();
     await nextFrame();
     const active = document.activeElement;
     assert.ok(mainTable().contains(active) && active.matches('[role="treegrid"] [data-col]'), 'Opening the table focuses its active cell');
     assert.equal(byAria('Show model table').getAttribute('aria-controls'), mainTable().id);
-    const canvas = container.querySelector('[data-graph-pane="main"] [data-architecture-canvas]');
-    assert.ok(mainTable().compareDocumentPosition(canvas) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'Tab reaches the table before the canvas nodes');
+    assert.ok(canvas().compareDocumentPosition(mainTable()) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'The table comes after the canvas, as drawn');
+    const firstStop = [...canvas().querySelectorAll('button, [tabindex="0"]')].find((element) => !element.disabled);
+    assert.equal(firstStop.textContent, 'Skip to the model table', 'The canvas starts with a way past its nodes');
+    await act(() => canvas().focus());
+    await click(firstStop);
+    assert.ok(document.activeElement.matches('[role="treegrid"] [data-col][tabindex="0"]'), 'The skip link lands on the active cell');
     await click(byAria('Close model table', mainTable()));
     await nextFrame();
     assert.equal(document.activeElement, byAria('Show model table'), 'Closing returns focus to the toggle');
+    assert.equal(canvas().querySelector('.df-skip-link'), null);
 });
 
 test('a default the cell leaves out can still be edited', async () => {

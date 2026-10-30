@@ -75,7 +75,7 @@ function toFlowEdges(edges, selectedEdgeSet, residuals, gradients) {
     }));
 }
 
-const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = true }) => {
+const Inner = ({ children, overlay, aside, asideSkip, paneId = 'main', keyboardActive = true }) => {
     const architectureStore = useArchitectureStoreApi();
     const clipboardNotice = useArchitectureClipboard(architectureStore, keyboardActive);
     const storeId = useMemo(() => architectureStore.getState().getMutationContext().storeId, [architectureStore]);
@@ -405,10 +405,6 @@ const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = tru
     return (
         <div className="df-architecture-workspace" style={{ display: 'flex', width: '100%', height: '100%', minWidth: 0 }}>
             {children}
-            {/* A docked tool beside the canvas; it narrows the canvas, which keeps the graph
-                centred. It comes first in the DOM, so Tab reaches it before every canvas
-                node; CSS order draws it at the right. */}
-            {aside}
             <div
                 ref={wrapperRef}
                 data-architecture-canvas
@@ -439,6 +435,8 @@ const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = tru
                     fitView({ padding: 0.2, minZoom: 0.2, maxZoom: 1, duration: 220 });
                 }}
             >
+                {/* With a tool docked beside the canvas, its first Tab stop skips the graph's nodes. */}
+                {asideSkip && <button type="button" className="df-skip-link nokey" onClick={asideSkip.onSkip}>{asideSkip.label}</button>}
                 <GraphStatusPanel />
                 <ReactFlow
                     id={`architecture-${paneId}`}
@@ -515,13 +513,17 @@ const Inner = ({ children, overlay, aside, paneId = 'main', keyboardActive = tru
                 {keyboardActive && spacePressed && <div className="df-space-hint">Space: drag canvas</div>}
                 {clipboardNotice && !spacePressed && <div className="df-space-hint" role="status">{clipboardNotice}</div>}
             </div>
+            {/* A docked tool beside the canvas (below it in narrow panes) follows it in
+                reading and Tab order, as drawn; it narrows the canvas, which keeps the
+                graph centred. */}
+            {aside}
         </div>
     );
 };
 
-const ArchitectureCanvas = ({ children, overlay, aside, ...props }) => (
+const ArchitectureCanvas = ({ children, overlay, aside, asideSkip, ...props }) => (
     <ReactFlowProvider>
-        <Inner overlay={overlay} aside={aside} {...props}>{children}</Inner>
+        <Inner overlay={overlay} aside={aside} asideSkip={asideSkip} {...props}>{children}</Inner>
     </ReactFlowProvider>
 );
 

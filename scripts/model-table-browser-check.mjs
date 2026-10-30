@@ -149,14 +149,19 @@ try {
         const semantics = await table(page).evaluate((aside) => {
             const separator = aside.querySelector('[role="separator"]');
             const value = (name) => Number(separator.getAttribute(name));
+            const canvas = aside.parentElement.querySelector('[data-architecture-canvas]');
             return {
                 range: [value('aria-valuemin'), value('aria-valuenow'), value('aria-valuemax')],
                 multiselectable: aside.querySelector('[role="treegrid"]').getAttribute('aria-multiselectable'),
+                after: !!(canvas.compareDocumentPosition(aside) & Node.DOCUMENT_POSITION_FOLLOWING),
+                skip: canvas.querySelector('.df-skip-link')?.textContent ?? null,
             };
         });
         const [minimum, now, maximum] = semantics.range;
         assert.ok(minimum > 0 && minimum <= now && now <= maximum, `The resize separator states its range: ${semantics.range.join(' ≤ ')}`);
         assert.equal(semantics.multiselectable, 'true', 'Several rows can be selected, as on the canvas');
+        assert.ok(semantics.after, 'The table follows the canvas in reading order');
+        assert.equal(semantics.skip, 'Skip to the model table');
         await table(page).locator('tbody [data-col="0"]').first().focus();
         await page.keyboard.press('Escape');
         assert.equal(await page.evaluate(() => !!document.activeElement.closest('[data-graph-pane="main"] [data-architecture-canvas]')), true, 'Escape focuses the canvas');

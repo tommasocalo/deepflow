@@ -4,8 +4,6 @@
     container: df-model-table / inline-size;
     position: relative;
     z-index: 4;
-    /* First in the DOM, so Tab reaches it before the canvas nodes; drawn at the right. */
-    order: 2;
     display: flex;
     /* Default: 760px, at least 640px so every column fits; a width the user drags applies up to 72%. */
     flex: 0 0 var(--model-table-width, clamp(640px, 58%, 760px));
