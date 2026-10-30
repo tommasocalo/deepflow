@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ExternalLink, X } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import { ArchitectureStoreProvider, createArchitecturePaneStore, useArchitectureStore, useArchitectureStoreApi } from '../../stores/architectureStore.js';
@@ -6,7 +6,7 @@ import ArchitectureCanvas from './ArchitectureCanvas.jsx';
 import ArchitectureRibbon from './ArchitectureRibbon.jsx';
 import LevelTabs from './LevelTabs.jsx';
 import NodeInspector from './NodeInspector.jsx';
-import ModelTablePanel from './ModelTablePanel.jsx';
+import { ModelTablePanel } from './modelTableLoader.js';
 import { OpenToSideProvider } from './OpenToSideContext.jsx';
 import { useArchitectureHistoryKeys } from '../../hooks/useArchitectureHistoryKeys.js';
 import './workspace.css';
@@ -62,7 +62,7 @@ function GraphPane({ id, active, onActivate, onClose, registerCommands }) {
                 {onClose && <button type="button" className="df-side-close" onClick={onClose} aria-label="Close side view" title="Close side view"><X size={13} strokeWidth={3} /></button>}
             </div>
             <div className="df-architecture-body">
-                <ArchitectureCanvas paneId={id} keyboardActive={active} aside={showModelTable ? <ModelTablePanel paneId={id} /> : null} overlay={(
+                <ArchitectureCanvas paneId={id} keyboardActive={active} aside={showModelTable ? <Suspense fallback={null}><ModelTablePanel paneId={id} /></Suspense> : null} overlay={(
                     <>
                         <NodeInspector />
                         <CanvasCommandBridge paneId={id} register={registerCommands} />

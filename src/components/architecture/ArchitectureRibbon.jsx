@@ -11,6 +11,7 @@ import { useTrainingStore } from '../../stores/trainingStore.js';
 import { recordArchitectureEdit, startArchitectureSession, useArchitectureHistory } from '../../stores/architectureHistory.js';
 import HuggingFaceImport from '../HuggingFaceImport.jsx';
 import { useOpenToSide } from './OpenToSideContext.jsx';
+import { preloadModelTable, requestModelTableFocus } from './modelTableLoader.js';
 import BlockPalette from './BlockPalette.jsx';
 import OptimizationPanel from './OptimizationPanel.jsx';
 import RepeatIterationBar from './RepeatIterationBar.jsx';
@@ -264,18 +265,14 @@ export default function ArchitectureRibbon({ paneId, split, onInsert, onFitView 
                 <RibbonButton icon={Maximize} onClick={onFitView} title={`Fit graph in ${targetLabel.toLowerCase()}`} aria-label="Fit active graph">Fit</RibbonButton>
                 <RibbonButton icon={Table2} aria-label="Show model table" aria-pressed={!!showModelTable}
                     aria-controls={showModelTable ? `df-model-table-${paneId}` : undefined}
+                    onPointerEnter={preloadModelTable} onFocus={preloadModelTable}
                     onClick={() => {
                         closePopup();
                         const opening = !showModelTable;
-                        architectureStore.getState().setShowModelTable(opening);
                         // Go straight to the grid. After a mouse click the browser draws no
                         // focus ring there; from the keyboard (Enter or Space) it does.
-                        if (opening) {
-                            requestAnimationFrame(() => {
-                                const table = document.querySelector(`[data-graph-pane="${paneId}"] .df-model-table`);
-                                (table?.querySelector('[role="treegrid"] [data-col][tabindex="0"]') ?? table?.querySelector('[role="radio"][aria-checked="true"]'))?.focus();
-                            });
-                        }
+                        if (opening) requestModelTableFocus(paneId);
+                        architectureStore.getState().setShowModelTable(opening);
                     }}
                     title={`Model table in ${targetLabel.toLowerCase()}: shapes, settings, parameters and MACs of the whole model`}>Table</RibbonButton>
                 <div className="df-ribbon-view-options">

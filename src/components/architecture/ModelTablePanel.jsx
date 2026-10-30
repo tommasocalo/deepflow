@@ -11,6 +11,7 @@ import { parameterSuggestions } from '../../domain/parameterBindings.js';
 import { useModelMetrics } from '../../hooks/useModelMetrics.js';
 import ModelTableRow from './ModelTableRow.jsx';
 import { applyModelTableEdit, COLUMNS, CONFIG_COLUMN, fieldTargets } from './modelTableEdits.js';
+import { takeModelTableFocus } from './modelTableLoader.js';
 import './model-table.css';
 
 const RENDER_STEP = 300;
@@ -305,6 +306,15 @@ export default function ModelTablePanel({ paneId = 'main' }) {
         if (!id) return;
         revealKey(rowKey([...state.currentPath, id]));
     }), [revealKey, store]);
+
+    // Opened from the toggle: focus the active cell, so the grid is one step
+    // away. The cells exist once mounted; focus already inside stays put.
+    useEffect(() => {
+        if (!takeModelTableFocus(paneId)) return;
+        const aside = asideRef.current;
+        if (!aside || aside.contains(document.activeElement)) return;
+        (aside.querySelector('[role="treegrid"] [data-col][tabindex="0"]') ?? aside.querySelector('[role="radio"][aria-checked="true"]'))?.focus();
+    }, [paneId]);
 
     // The panel docks at the right, or becomes a bottom sheet in narrow panes.
     useEffect(() => {
