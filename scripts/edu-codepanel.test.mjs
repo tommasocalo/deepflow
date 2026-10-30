@@ -148,6 +148,24 @@ test('the tabs carry spotlight targets and follow the tab the UI store asks for'
     assert.equal(container.innerHTML, '');
 });
 
+test('Esc closes the panel, and focus inside it returns to the Code button', async () => {
+    const codeButton = document.createElement('button');
+    codeButton.className = 'df-action-segment';
+    codeButton.setAttribute('aria-label', 'Code');
+    document.body.append(codeButton);
+    try {
+        await render(h(WiredPanel));
+        await act(() => useEduUiStore.getState().openCode('model'));
+        target('code-tab-train').focus();
+        await act(async () => { document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
+        assert.equal(useEduUiStore.getState().codeOpen, false);
+        assert.equal(container.innerHTML, '');
+        assert.equal(document.activeElement, codeButton);
+    } finally {
+        codeButton.remove();
+    }
+});
+
 test('without a controlling tab the panel keeps its own', async () => {
     await render(h(CodePanel, { open: true, onClose: () => {} }));
     assert.ok(code().startsWith('import torch'));

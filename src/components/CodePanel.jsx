@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Code2, Copy, Download, NotebookText, X } from 'lucide-react';
 import { useArchitectureStore } from '../stores/architectureStore.js';
 import { useTemplatesStore } from '../stores/templatesStore.js';
@@ -91,6 +91,20 @@ const CodePanel = ({ open, onClose, tab, onTabChange }) => {
         }
     }, [open, archGraph, templates, trainGraph, data]);
 
+    // Esc closes the panel, as it closes DeepFlow's menus (in a lesson it never exits the lesson). Focus inside the
+    // panel returns to the Code button instead of falling back to the page.
+    const panelRef = useRef(null);
+    useEffect(() => {
+        if (!open) return undefined;
+        const onKeyDown = (event) => {
+            if (event.key !== 'Escape' || event.defaultPrevented) return;
+            if (panelRef.current?.contains(document.activeElement)) document.querySelector('.df-action-segment[aria-label="Code"]')?.focus();
+            onClose?.();
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [open, onClose]);
+
     if (!open || !sources) return null;
     const code = sources[activeTab] ?? '';
     const fileName = TABS.find((t) => t.id === activeTab)?.label ?? 'code.py';
@@ -104,6 +118,7 @@ const CodePanel = ({ open, onClose, tab, onTabChange }) => {
 
     return (
         <div
+            ref={panelRef}
             className="df-panel-subtle absolute flex flex-col overflow-hidden pointer-events-auto"
             role="dialog"
             aria-label="Generated code"
