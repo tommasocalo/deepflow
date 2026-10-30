@@ -83,7 +83,7 @@ export default {
     'm2.s7.body': 'In **XOR**, a point is orange when x₁ and x₂ have the same sign. Build a network from Input to Output that solves it, then train it. Aim for 90% validation accuracy.',
     'm2.s7.hint1': 'Same recipe as the circle: Linear → ReLU → Linear.',
     'm2.s7.hint2': 'Linear with Input 2 and Output 8, then ReLU, then Linear with Input 8 and Output 1. Then press **Train**.',
-    'm2.s7.done': 'Validation accuracy: {measured}. You built that network yourself.',
+    'm2.s7.done': 'Validation accuracy: {measured}. The circle\'s recipe, Linear → ReLU → Linear, also solves XOR.',
 
     'm2.s8.title': 'Find the ReLU in the code',
     'm2.s8.body': 'Press **Code** and open **model.py**. The `forward` method runs the blocks in order. Each Linear appears as a `torch.matmul` followed by a `torch.add`.',
