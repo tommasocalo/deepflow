@@ -126,12 +126,15 @@ function adoptBlocks(blocks, ctx, anchors) {
     return picked;
 }
 
-/** Make room below `node`: every root node lower on the canvas moves down by rows × 130 px. */
+/**
+ * Make room for `rows` new blocks below `node`: the root nodes lower on the canvas move down together, only as far
+ * as the new rows need (a fixture's Output several rows below keeps its place), so the column stays compact.
+ */
 function pushDown(node, rows, except = new Set()) {
-    const moves = Object.values(rootGraph().nodes)
-        .filter((other) => !except.has(other.id) && other.position.y > node.position.y)
-        .map((other) => ({ id: other.id, position: { x: other.position.x, y: other.position.y + rows * ROW_GAP } }));
-    if (moves.length) architecture().moveNodes(moves);
+    const below = Object.values(rootGraph().nodes).filter((other) => !except.has(other.id) && other.position.y > node.position.y);
+    if (!below.length) return;
+    const shift = node.position.y + (rows + 1) * ROW_GAP - Math.min(...below.map((other) => other.position.y));
+    if (shift > 0) architecture().moveNodes(below.map((other) => ({ id: other.id, position: { x: other.position.x, y: other.position.y + shift } })));
 }
 
 function connectOrThrow(source, target, handles = {}) {

@@ -56,6 +56,23 @@ test('insertBetween removes the edge and wires from → new → to, pushing lowe
     assert.equal(graph().nodes.out.position.y, before.out + 130);
 });
 
+test('lower nodes move only as far as the new rows need, so a distant Output keeps its place', async () => {
+    const h = createFixtureHelpers();
+    restoreWorkspace(h.snapshot({ nodes: [h.input('in', [2]), h.output('out', { row: 5 })], edges: [] }));
+    const inY = graph().nodes.in.position.y;
+    const outY = graph().nodes.out.position.y;
+    assert.equal(outY - inY, 5 * 130);
+    await runActions([{ do: 'buildChain', from: { type: 'Input' }, to: { type: 'Output' }, blocks: [{ block: 'torch.nn.ReLU' }, { block: 'torch.nn.Tanh' }] }]);
+    await runActions([{ do: 'insertAfter', block: 'torch.nn.Sigmoid', after: { type: 'Tanh' } }]);
+    await runActions([{ do: 'insertAfter', block: 'torch.nn.GELU', after: { type: 'Sigmoid' } }]);
+    assert.equal(graph().nodes.out.position.y, outY, 'four new rows fit between the Input and the Output');
+    await runActions([{ do: 'insertAfter', block: 'torch.nn.Dropout', after: { type: 'GELU' } }]);
+    assert.equal(graph().nodes.out.position.y, outY + 130, 'the fifth row moves the Output down by one row');
+    const ys = ['torch.nn.ReLU', 'torch.nn.Tanh', 'torch.nn.Sigmoid', 'torch.nn.GELU', 'torch.nn.Dropout']
+        .map((key) => Object.values(graph().nodes).find((node) => node.libraryKey === key).position.y - inY);
+    assert.deepEqual(ys, [130, 260, 390, 520, 650]);
+});
+
 test('insertAfter moves the outgoing edges of `after` to the new block', async () => {
     await runActions([{ do: 'insertAfter', block: 'torch.nn.Dropout', after: { id: 'lin1' }, params: { p: 0.5 } }]);
     const dropout = Object.values(graph().nodes).find((node) => node.libraryKey === 'torch.nn.Dropout');
