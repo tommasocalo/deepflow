@@ -372,6 +372,29 @@ test('every step fails on entry and passes after its Show me, module after modul
     assert.ok(seconds < 60, `the walk took ${seconds.toFixed(1)} s (budget 60 s)`);
 });
 
+test('the M6 residual check guides each wire of the skip connection', async () => {
+    const module = MODULES.find((item) => item.id === 'm6');
+    const { buildFixtureSnapshot } = await import('../src/edu/lessons/engine/workspace.js');
+    const residual = () => module.checks.residualAdd(buildCheckContext({ module }));
+    const act = async (actions) => assert.equal((await runActions(actions, { module, headless: true })).ok, true);
+    const reset = () => restoreWorkspace(buildFixtureSnapshot(module, module.start));
+    reset();
+    assert.equal(residual().detail.key, 'm6.check.noAdd');
+    await act([{ do: 'insertAfter', block: 'deepflow.op.Add', after: { id: 'r2' } }]);
+    assert.equal(residual().detail.key, 'm6.check.addPlace', 'an Add after relu2 is in the wrong place');
+    reset();
+    await act([{ do: 'insertBetween', block: 'deepflow.op.Add', from: { id: 'b2' }, to: { id: 'r2' } }]);
+    assert.equal(residual().detail.key, 'm6.check.addSkip', 'bn2 → Add → relu2 still needs the skip wire');
+    await act([{ do: 'connect', from: { id: 'relu0' }, to: { type: 'Add' } }]);
+    assert.equal(residual().pass, true);
+    await act([{ do: 'connect', from: { id: 'bn0' }, to: { type: 'Add' } }]);
+    assert.equal(residual().detail.key, 'm6.check.addTwo', 'a third input is one too many');
+    reset();
+    await act([{ do: 'insertBetween', block: 'deepflow.op.Add', from: { id: 'b2' }, to: { id: 'r2' } }, { do: 'connect', from: { id: 'relu0' }, to: { type: 'Add' } }, { do: 'disconnect', from: { id: 'c1' }, to: { id: 'b1' } }]);
+    assert.equal(residual().detail.key, 'm6.check.blockChain', 'the block chain must stay wired');
+    for (const key of ['noAdd', 'addPlace', 'addSkip', 'addTwo', 'blockChain']) assert.ok(EN[`m6.check.${key}`], key);
+});
+
 test('every step that reads the code quotes the export it points at', () => {
     for (const module of MODULES) {
         for (const step of module.steps.filter((item) => item.subgoal === 'export')) {
