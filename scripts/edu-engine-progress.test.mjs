@@ -70,20 +70,42 @@ test('module status and completion', () => {
     assert.equal(progress.modules.demo.completedAt, 5);
 });
 
-test('migrate keeps surviving step records after a module version bump and drops a removed current step', () => {
+test('migrate starts an updated module\'s steps again and keeps the answers, quiz and warm-up results whose ids remain', () => {
     let progress = P.startModule(P.emptyProgress(), 'demo', 1);
     for (const id of ['s1', 's2', 's3']) progress = P.passStep(P.enterStep(progress, 'demo', id), 'demo', id);
     progress = P.enterStep(progress, 'demo', 's3');
+    progress = P.recordAnswer(progress, 'demo', 'demo.params', 24, true);
+    progress = P.recordAnswer(progress, 'demo', 'demo.gone', 1, true);
+    progress = P.recordQuiz(progress, 'demo', 'demo.q1', 'twenty-four', true);
+    progress = P.recordQuiz(progress, 'demo', 'demo.q2', 'bend', true);
+    progress = P.recordWarmup(progress, 'demo', 'demo.w1', 'false', true);
+    progress = P.tagRun(progress, 'demo', 'demo.old', { runId: 'r1' });
+    progress = P.completeModule(progress, 'demo', 5);
+    // Version 2 puts a new step at s2 (review r2: M5's "The final score" at s5) and drops quiz item q2.
+    const steps = [...TEST_MODULE.steps];
+    steps.splice(1, 0, { ...TEST_MODULE.steps[0], id: 'new' });
     const bumped = {
         ...TEST_MODULE, version: 2,
-        steps: TEST_MODULE.steps.filter((step) => step.id !== 's3').map((step) => (step.id === 's2' ? { ...step, id: 's2b' } : step)),
+        steps: steps.map((step, index) => ({ ...step, id: `s${index + 1}` })),
+        quiz: TEST_MODULE.quiz.filter((item) => item.id !== 'demo.q2'),
     };
-    const migrated = P.migrate(progress, [bumped]);
-    assert.equal(migrated.modules.demo.moduleVersion, 2);
-    assert.deepEqual(Object.keys(migrated.modules.demo.steps), ['s1']);
-    assert.equal(migrated.modules.demo.currentStepId, null);
-    assert.equal(migrated.modules.demo.status, 'in-progress');
+    assert.deepEqual(P.updatedModules(progress, [bumped]).map((module) => module.id), ['demo']);
+    const migrated = P.migrate(progress, [bumped]).modules.demo;
+    assert.deepEqual([migrated.moduleVersion, migrated.migratedFrom], [2, 1]);
+    assert.deepEqual(migrated.steps, {}, 'a step id may now name another step');
+    assert.equal(migrated.currentStepId, null);
+    assert.equal(migrated.status, 'in-progress', 'a completed module is completed no more');
+    assert.equal(migrated.completedAt, undefined);
+    assert.deepEqual(Object.keys(migrated.answers), ['demo.params'], 'answers to predictions that still exist');
+    assert.deepEqual(Object.keys(migrated.quiz), ['demo.q1']);
+    assert.deepEqual(Object.keys(migrated.warmup), ['demo.w1']);
+    assert.deepEqual(migrated.runTags, {}, 'no step tags demo.old any more');
+    assert.equal(P.moduleStatus({ modules: { demo: migrated } }, bumped).firstOpenIndex, 0);
+
     assert.equal(P.migrate(progress, [TEST_MODULE]).modules.demo, progress.modules.demo, 'same version: untouched');
+    assert.deepEqual(P.updatedModules(progress, [TEST_MODULE]), []);
+    const untouched = P.migrate(P.startModule(P.emptyProgress(), 'demo', 1), [bumped]).modules.demo;
+    assert.equal(untouched.status, 'in-progress', 'a started module stays started');
     assert.deepEqual(P.migrate({ version: 99 }, [TEST_MODULE]), P.emptyProgress(), 'unknown formats start over');
     assert.deepEqual(P.migrate(null, []), P.emptyProgress());
 });

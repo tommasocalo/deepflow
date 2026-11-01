@@ -159,29 +159,39 @@ export function moduleStatus(progress, module) {
     return { status, done, total: steps.length, currentStepId: record?.currentStepId ?? null, currentIndex, firstOpenIndex: firstOpen, record };
 }
 
+const readable = (progress) => !!progress && typeof progress === 'object' && progress.version === PROGRESS_VERSION && typeof progress.modules === 'object';
+
+/** The modules whose stored records were made for another version of the module (see migrate). */
+export function updatedModules(progress, modules = []) {
+    if (!readable(progress)) return [];
+    return modules.filter((module) => progress.modules[module.id] && (progress.modules[module.id].moduleVersion ?? 1) !== (module.version ?? 1));
+}
+
 /**
- * Bring stored progress up to date with the installed modules. When a module's version changed, step records
- * whose ids still exist are kept, the others dropped, and `currentStepId` is dropped if its step is gone.
+ * Bring stored progress up to date with the installed modules. A new module version may renumber its steps (review
+ * r2: M5 version 2 put "The final score" at s5 and moved Dropout to s6), so the old step records, current step and
+ * completion no longer say which step they belong to: they are dropped, and the module's steps start again. What
+ * names its question rather than its place is kept while its id exists: prediction answers, quiz and warm-up
+ * results, and run tags. `migratedFrom` keeps the old version.
  */
 export function migrate(progress, modules = []) {
-    if (!progress || typeof progress !== 'object' || progress.version !== PROGRESS_VERSION || typeof progress.modules !== 'object') {
-        return emptyProgress();
-    }
+    if (!readable(progress)) return emptyProgress();
     const next = { ...emptyProgress(), ...progress, modules: { ...progress.modules } };
-    for (const module of modules) {
+    const keep = (entries, ids) => Object.fromEntries(Object.entries(entries ?? {}).filter(([id]) => ids.has(id)));
+    for (const module of updatedModules(progress, modules)) {
         const record = next.modules[module.id];
-        if (!record) continue;
-        if ((record.moduleVersion ?? 1) === (module.version ?? 1)) continue;
-        const ids = new Set((module.steps ?? []).map((step) => step.id));
-        const steps = Object.fromEntries(Object.entries(record.steps ?? {}).filter(([id]) => ids.has(id)));
-        const completed = record.status === 'completed' && isModuleComplete({ modules: { [module.id]: { ...record, steps } } }, module);
+        const steps = module.steps ?? [];
+        const answers = keep(record.answers, new Set(steps.map((step) => step.predict?.id).filter(Boolean)));
+        const quiz = keep(record.quiz, new Set((module.quiz ?? []).map((item) => item.id)));
+        const warmup = keep(record.warmup, new Set((module.warmup ?? []).map((item) => item.id)));
+        const runTags = keep(record.runTags, new Set(steps.map((step) => step.tagRun).filter(Boolean)));
+        const started = (record.status ?? 'not-started') !== 'not-started' || [answers, quiz, warmup].some((entries) => Object.keys(entries).length);
         next.modules[module.id] = {
             ...emptyModuleRecord(module.version ?? 1),
-            ...record,
-            moduleVersion: module.version ?? 1,
-            steps,
-            currentStepId: ids.has(record.currentStepId) ? record.currentStepId : null,
-            status: completed ? 'completed' : Object.keys(steps).length ? 'in-progress' : record.status === 'not-started' ? 'not-started' : 'in-progress',
+            answers, quiz, warmup, runTags,
+            ...(record.warmupSkipped ? { warmupSkipped: true } : {}),
+            status: started ? 'in-progress' : 'not-started',
+            migratedFrom: record.moduleVersion ?? 1,
         };
     }
     if (next.lastModuleId && !modules.some((module) => module.id === next.lastModuleId) && modules.length) next.lastModuleId = null;

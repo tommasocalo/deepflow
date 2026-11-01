@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronUp, Minus, PanelRightOpen, Redo2, Undo2, X } from 'lucide-react';
 import { useArchitectureHistory } from '../../stores/architectureHistory.js';
 import { factValues } from '../lessons/engine/context.js';
@@ -111,6 +111,9 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
     const step = module?.steps?.[stepIndex] ?? null;
     const result = useStepEvaluation(`${moduleId}:${phase}:${stepIndex}`, { enabled: !!module && phase === 'steps' && !!step, delay: checkDelay });
     const session = useLessonSession.getState();
+    // A lesson left inside a module that has been updated since reloads that module's start (session initialState).
+    const restart = useLessonSession((state) => state.restart);
+    useEffect(() => { if (restart) useLessonSession.getState().startModule(restart); }, [restart]);
 
     if (!module) {
         return <aside className="edu-lesson-panel" aria-label={t('panel.label')}><p className="edu-muted">{t('panel.noModule')}</p></aside>;
@@ -188,7 +191,8 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
             onNext={() => session.startModule(next.id)} onLearn={exit} />;
     } else if (step) {
         body = <StepView key={`${module.id}-${step.id}`} module={module} step={step} index={stepIndex} total={total} record={record?.steps?.[step.id] ?? null}
-            answers={record?.answers ?? {}} runTags={record?.runTags ?? {}} runtime={runtime} result={result} facts={facts} isLast={stepIndex === total - 1} />;
+            answers={record?.answers ?? {}} runTags={record?.runTags ?? {}} runtime={runtime} result={result} facts={facts} isLast={stepIndex === total - 1}
+            updated={!!record?.migratedFrom && !Object.values(record.steps ?? {}).some((item) => ['passed', 'skipped'].includes(item.status))} />;
     }
 
     const countText = phase === 'steps' ? t('panel.step', { index: stepIndex + 1, total })

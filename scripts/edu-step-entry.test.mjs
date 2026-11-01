@@ -98,17 +98,17 @@ test('M2: jumping ahead fills in the steps between, Skip fills in the step, and 
 
     // A segment back opens s2 read-only: its setup (the twoLinear fixture) does not run again.
     const before = JSON.stringify(useArchitectureStore.getState().graph.edges);
-    assert.equal(await session().goToStep(1), true);
+    const indexOf = (id) => m2.steps.findIndex((step) => step.id === id);
+    assert.equal(await session().goToStep(indexOf('s2')), true);
     assert.equal(session().currentStep().id, 's2');
     assert.equal(JSON.stringify(useArchitectureStore.getState().graph.edges), before, 'the workspace is unchanged');
 
     // Forward again over filled-in and passed steps: nothing is replayed twice (one ReLU, still valid).
-    assert.equal(await session().goToStep(5), true);
+    assert.equal(await session().goToStep(indexOf('s6')), true);
     assert.equal(session().currentStep().id, 's6');
     const relus = Object.values(useArchitectureStore.getState().graph.nodes).filter((node) => node.libraryKey === 'torch.nn.ReLU');
     assert.equal(relus.length, 1, 'the ReLU is not inserted a second time');
     assert.equal(session().runtime.error, null);
-    assert.equal(m2.steps.length, 8);
 });
 
 test('a pass is kept while the learner explores, until Reset step', async () => {

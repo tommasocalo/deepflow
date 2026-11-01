@@ -96,6 +96,7 @@ export default {
     'panel.dismiss': 'Dismiss',
     'panel.actionFailed': 'That did not work: {error}',
     'panel.skippedAhead': 'You skipped ahead, so the lesson made the changes of the steps in between.',
+    'panel.moduleUpdated': 'This module was updated since your last visit, so its steps start again from the first one.',
     'panel.working': 'Working…',
     'panel.trainLocked': 'Answer the question first, then train.',
     'panel.noModule': 'This lesson is not available.',

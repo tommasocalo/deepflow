@@ -225,7 +225,7 @@ function showProblem(problem) {
     }, 60);
 }
 
-export default function StepView({ module, step, index, total, record, answers, runTags = {}, runtime, result, facts, isLast }) {
+export default function StepView({ module, step, index, total, record, answers, runTags = {}, runtime, result, facts, isLast, updated = false }) {
     const session = useLessonSession.getState();
     const id = useId();
     const headingRef = useRef(null);
@@ -372,6 +372,7 @@ export default function StepView({ module, step, index, total, record, answers, 
             {runtime?.error && <p className="edu-callout edu-callout-error" role="alert">{t('panel.actionFailed', { error: runtime.error })}</p>}
             {showMe && !showMe.passed && !runtime?.error && !passing && <p className="edu-callout edu-callout-error" role="alert">{t('panel.showMeIncomplete')}</p>}
             {runtime?.skippedAhead > 0 && !done && <p className="edu-muted">{t('panel.skippedAhead')}</p>}
+            {updated && <p className="edu-muted">{t('panel.moduleUpdated')}</p>}
 
             <HintLadder textPrefix={prefix} level={record?.hintLevel ?? 0} passed={passing} busy={busy} facts={params} onHint={() => session.useHint()}
                 now={stateHint(result)} />

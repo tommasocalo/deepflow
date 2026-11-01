@@ -16,8 +16,8 @@ import * as P from './progress.js';
 import { getModule, getModules, stepIndexById } from './registry.js';
 import { eduKey, eduKeys, readJSON, removeKey, writeJSON } from './storage.js';
 import {
-    captureWorkspace, clearStepEntry, loadFixtureIntoWorkspace, loadSlot, loadStepEntry, restoreSettings, restoreWorkspace, runStoryboard,
-    saveSlot, saveStepEntry, slotKey,
+    captureWorkspace, clearStepEntry, deleteSlot, loadFixtureIntoWorkspace, loadSlot, loadStepEntry, restoreSettings, restoreWorkspace,
+    runStoryboard, saveSlot, saveStepEntry, slotKey, STEP_ENTRY_KEY,
 } from './workspace.js';
 
 /**
@@ -76,10 +76,25 @@ function loadSession() {
     return session;
 }
 
+/**
+ * The stored session and progress, brought up to date. A module installed in a new version starts its steps again
+ * (P.migrate): its saved workspace and step entry belong to its old steps and are dropped, and a lesson left inside it
+ * reopens at its first step and reloads its start (`restart`, which the lesson panel or a deep link acts on).
+ */
 function initialState() {
     const session = loadSession();
-    const progress = P.migrate(readJSON(PROGRESS_KEY, null), getModules());
-    return { ...session, progress, headless: false, runtime: freshRuntime({ visitedTabs: [useEduUiStore.getState().activeTab] }) };
+    const stored = readJSON(PROGRESS_KEY, null);
+    const updated = P.updatedModules(stored, getModules());
+    const progress = P.migrate(stored, getModules());
+    for (const module of updated) {
+        deleteSlot(module.id);
+        if (readJSON(STEP_ENTRY_KEY, null)?.moduleId === module.id) clearStepEntry();
+        logEvent('module-updated', { module: module.id, data: { from: stored.modules[module.id].moduleVersion ?? 1, to: module.version ?? 1 } });
+    }
+    if (updated.length) writeJSON(PROGRESS_KEY, progress);
+    const restart = session.mode === 'lesson' && updated.some((module) => module.id === session.moduleId) ? session.moduleId : null;
+    if (restart) Object.assign(session, { phase: 'steps', stepIndex: 0, quizIndex: 0, warmupIndex: 0 });
+    return { ...session, progress, restart, headless: false, runtime: freshRuntime({ visitedTabs: [useEduUiStore.getState().activeTab] }) };
 }
 
 export const useLessonSession = create((set, get) => {
@@ -294,7 +309,9 @@ export const useLessonSession = create((set, get) => {
             if (!target) return false;
             const state = get();
             if (state.runtime.busy) return false;
-            const sameModule = state.mode === 'lesson' && state.moduleId === id;
+            // A module updated since the learner's last visit starts from its start fixture (initialState).
+            const restart = state.restart === id;
+            const sameModule = state.mode === 'lesson' && state.moduleId === id && !restart;
             // Continue returns to the quiz, or to the recap of an unfinished module, when the learner left it there.
             // Review of a completed module starts again at the first step.
             const completed = state.progress.modules?.[id]?.status === 'completed';
@@ -303,10 +320,11 @@ export const useLessonSession = create((set, get) => {
             // The step the workspace belongs to, where a deep link further on starts filling in (see fastForward).
             let origin = sameModule ? jumpOrigin() : 0;
             if (!sameModule) {
-                saveSlot(state.mode === 'lesson' && state.moduleId ? state.moduleId : 'sandbox', captureWorkspace());
+                // The workspace on screen is kept in its slot, unless it is an updated module's old one.
+                if (!restart) saveSlot(state.mode === 'lesson' && state.moduleId ? state.moduleId : 'sandbox', captureWorkspace());
                 // The code panel shows the outgoing workspace's code: close it with that workspace.
                 useEduUiStore.getState().closeCode();
-                set({ mode: 'lesson', moduleId: id, runtime: freshRuntime({ busy: true }) });
+                set({ mode: 'lesson', moduleId: id, restart: null, runtime: freshRuntime({ busy: true }) });
                 const slot = loadSlot(id);
                 try {
                     if (slot) {
