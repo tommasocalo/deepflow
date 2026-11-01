@@ -7,8 +7,9 @@ import RichText from './RichText.jsx';
 /**
  * One quiz or warm-up item per screen (docs/edu/SPEC.md §3.3). Choosing an option only selects it; **Check** commits
  * it and shows that option's explanation (review r1: radios that committed on change logged a wrong first answer for a
- * keyboard user arrowing past the distractors). Retries are unlimited and only the first checked answer counts in the
- * log. Options appear in the learner's seeded order (engine/order.js).
+ * keyboard user arrowing past the distractors). Choosing another option hides that explanation until it is checked.
+ * Retries are unlimited and only the first checked answer counts in the log. Options appear in the learner's seeded
+ * order (engine/order.js).
  */
 export default function QuizView({ kind, items, index, records = {}, facts, onAnswer, onNext, onBack, onSkip }) {
     const item = items[index];
@@ -57,7 +58,8 @@ export default function QuizView({ kind, items, index, records = {}, facts, onAn
                 <button type="submit" className={`df-button edu-submit${pending ? ' df-button-primary' : ''}`} disabled={!pending}>{t('quiz.check')}</button>
             </form>
             <div role="status" aria-live="polite" className="edu-quiz-feedback">
-                {checked && (
+                {/* The feedback belongs to the checked option: choosing another one hides it until Check (review r2). */}
+                {checked && !pending && (
                     <div className={`edu-callout ${correct ? 'edu-callout-success' : 'edu-callout-misconception'}`}>
                         <strong>{t(correct ? 'quiz.correct' : 'quiz.incorrect')}. </strong>
                         <RichText inline text={t(`${item.id}.why.${checked}`)} params={facts} />

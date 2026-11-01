@@ -6,7 +6,9 @@ import { runActions } from './actions.js';
 import { requestFit } from './canvasBridge.js';
 import { completedEpochs, createCheckContext, evaluateCheck, evaluateStep, finalMetrics, trainerRuns, workspaceCheck } from './checks.js';
 import { buildCheckContext, factValues, readUiState, subscribeCheckContext } from './context.js';
+import { hasText } from './i18n.js';
 import { clearLog, logEvent } from './log.js';
+import { isOutcomePrediction } from './observe.js';
 import { learnerSeed, predictionOrder, quizOrder } from './order.js';
 import { paletteUsed } from './palette.js';
 import { gradePrediction } from './predict.js';
@@ -87,6 +89,8 @@ export const useLessonSession = create((set, get) => {
     const updateProgress = (reducer) => set((state) => ({ progress: reducer(state.progress) }));
     const updateRuntime = (patch) => set((state) => ({ runtime: { ...state.runtime, ...patch } }));
     const log = (type, extra = {}) => logEvent(type, { module: get().moduleId, ...extra });
+    // What the learner was shown in this visit to a step, logged once each (review r2: the status log had doubles).
+    const shownThisVisit = new Set();
     const actionContext = (label) => ({
         module: module(),
         headless: get().headless,
@@ -115,6 +119,7 @@ export const useLessonSession = create((set, get) => {
         const previous = record()?.steps?.[target.id];
         const firstEntry = !previous?.enteredAt && !previous?.filledIn;
         set({ phase: 'steps', stepIndex: index, runtime: freshRuntime({ busy: firstEntry && runSetup && !!target.setup?.length }) });
+        shownThisVisit.clear();
         if (firstEntry && runSetup && target.setup?.length) {
             const result = await runActions(target.setup, actionContext('step setup'));
             if (!result.ok) updateRuntime({ error: result.error });
@@ -486,6 +491,18 @@ export const useLessonSession = create((set, get) => {
             return true;
         },
 
+        /**
+         * Log something the panel showed in this visit to the step (a status message, a misconception callout) once,
+         * however often the panel renders it. `key` tells shown things apart. Returns whether it was logged.
+         */
+        logShown: (type, key, extra = {}) => {
+            const id = `${get().moduleId}|${get().stepIndex}|${type}|${key}`;
+            if (shownThisVisit.has(id)) return false;
+            shownThisVisit.add(id);
+            log(type, extra);
+            return true;
+        },
+
         /** A step's extra action button, e.g. M7 s7 "Load GPT-2 small". */
         runButton: async (buttonId) => {
             const current = module();
@@ -510,7 +527,12 @@ export const useLessonSession = create((set, get) => {
             updateProgress((progress) => P.recordAnswer(progress, current.id, id, value, grade.correct, { source }));
             // The options as this learner saw them, so position effects can be studied (engine/order.js).
             const shown = owner.predict.kind === 'choice' ? { shown: predictionOrder(owner.predict, `${current.id}.${owner.id}`) } : {};
-            log('predict', { step: owner.id, data: { id, value, correct: grade.correct, source, ...shown } });
+            const misconception = grade.misconception ?? null;
+            log('predict', { step: owner.id, data: { id, value, correct: grade.correct, source, misconception, ...shown } });
+            // A prediction about the tool reveals at once, with its misconception callout; one about a run waits for it.
+            if (misconception && hasText(`mis.${misconception}`) && !isOutcomePrediction(owner)) {
+                get().logShown('misconception-shown', `predict:${misconception}`, { step: owner.id, data: { id: misconception, source: 'predict', item: id } });
+            }
             if (owner === step()) updateRuntime({ revealShown: true });
             return get().progress.modules[current.id].answers[id];
         },
@@ -524,7 +546,10 @@ export const useLessonSession = create((set, get) => {
             const correct = optionId === item.correct;
             const attempt = ((warmup ? record()?.warmup : record()?.quiz)?.[id]?.attempts ?? 0) + 1;
             updateProgress((progress) => (warmup ? P.recordWarmup : P.recordQuiz)(progress, current.id, id, optionId, correct));
-            log(warmup ? 'warmup' : 'quiz', { data: { id, option: optionId, correct, attempt, shown: quizOrder(item) } });
+            const misconception = correct ? null : item.misconceptions?.[optionId] ?? null;
+            log(warmup ? 'warmup' : 'quiz', { data: { id, option: optionId, correct, attempt, misconception, shown: quizOrder(item) } });
+            // Every Check shows that option's explanation, with its misconception.
+            if (misconception && hasText(`mis.${misconception}`)) log('misconception-shown', { data: { id: misconception, source: warmup ? 'warmup' : 'quiz', item: id } });
             return { correct };
         },
 

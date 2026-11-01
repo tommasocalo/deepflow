@@ -110,3 +110,30 @@ test('the Sigmoid trap is named at once (firm); a half-done model and an unfinis
     assert.equal(partial.misconception, 'one-output-multiclass');
     assert.equal(partial.firm, undefined);
 });
+
+test('the study log: misconceptions of predictions, and each status message once per visit', async () => {
+    const { readLog } = await import('../src/edu/lessons/engine/log.js');
+    const shown = () => readLog().filter((event) => event.type === 'misconception-shown');
+    // A prediction about the tool reveals at once: its misconception callout is logged with the answer.
+    await open('m1', 's2');
+    session().submitPrediction('m1.params', 2);
+    const predict = readLog().find((event) => event.type === 'predict');
+    assert.equal(predict.data.misconception, 'forgot-bias');
+    assert.deepEqual(shown().map((event) => [event.step, event.data.id, event.data.source, event.data.item]), [['s2', 'forgot-bias', 'predict', 'm1.params']]);
+    // A prediction about a run reveals with the run: nothing is shown on Submit.
+    await open('m1', 's3');
+    session().submitPrediction('m1.boundary', 'curve');
+    assert.equal(readLog().find((event) => event.type === 'predict').data.misconception, 'neuron-bends');
+    assert.equal(shown().length, 0);
+
+    // logShown logs a thing once per visit to a step, and again in the next visit.
+    assert.equal(session().logShown('status-shown', 'check.answered', { step: 's3', data: { key: 'check.answered' } }), true);
+    assert.equal(session().logShown('status-shown', 'check.answered', { step: 's3', data: { key: 'check.answered' } }), false);
+    await session().back();
+    assert.equal(session().currentStep().id, 's2');
+    session().submitPrediction('m1.params', 3);
+    assert.equal(await session().next(), true);
+    assert.equal(session().currentStep().id, 's3');
+    assert.equal(session().logShown('status-shown', 'check.answered', { step: 's3', data: { key: 'check.answered' } }), true, 'a new visit');
+    assert.equal(readLog().filter((event) => event.type === 'status-shown').length, 2);
+});

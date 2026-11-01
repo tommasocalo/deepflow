@@ -10,6 +10,7 @@ import { hasText, t } from '../lessons/engine/i18n.js';
 import { logEvent } from '../lessons/engine/log.js';
 import { isOutcomePrediction, observePrediction } from '../lessons/engine/observe.js';
 import { predictionOrder } from '../lessons/engine/order.js';
+import { gradePrediction } from '../lessons/engine/predict.js';
 import { revealValues } from '../lessons/engine/reveal.js';
 import { isTargetDone, isVisible, reachedOpenTarget, resolveNodeTargetId, resolveTarget } from '../lessons/engine/targets.js';
 import { useLessonSession } from '../lessons/engine/session.js';
@@ -134,23 +135,17 @@ function useSettledMisconception(diagnosed, { trainerSeq, hintLevel }) {
 }
 
 /**
- * The study log (review r1, RQ2): which misconception callouts a learner saw and which status messages, each once per
- * visit to the step.
+ * The study log (review r1, RQ2): which misconception callouts a learner saw in the step (`source`: the callout, or
+ * the status line for a finished wrong model) and which status messages, each once per visit to the step (the session
+ * keeps what it logged, so a re-render or a remount does not log it again; review r2 found doubles).
  */
-function useStudyLog(moduleId, stepId, { misconception, status }) {
-    const seen = useRef(new Set());
-    const statusKey = status?.key ?? null;
-    useEffect(() => { seen.current = new Set(); }, [moduleId, stepId]);
+function useStudyLog(stepId, { misconception, source, statusKey }) {
     useEffect(() => {
-        if (!misconception || seen.current.has(`m:${misconception}`)) return;
-        seen.current.add(`m:${misconception}`);
-        logEvent('misconception-shown', { module: moduleId, step: stepId, data: { id: misconception } });
-    }, [misconception, moduleId, stepId]);
+        if (misconception) useLessonSession.getState().logShown('misconception-shown', `step:${misconception}`, { step: stepId, data: { id: misconception, source } });
+    }, [misconception, source, stepId]);
     useEffect(() => {
-        if (!statusKey || seen.current.has(`s:${statusKey}`)) return;
-        seen.current.add(`s:${statusKey}`);
-        logEvent('status-shown', { module: moduleId, step: stepId, data: { key: statusKey } });
-    }, [statusKey, moduleId, stepId]);
+        if (statusKey) useLessonSession.getState().logShown('status-shown', statusKey, { step: stepId, data: { key: statusKey } });
+    }, [statusKey, stepId]);
 }
 
 /**
@@ -278,7 +273,12 @@ export default function StepView({ module, step, index, total, record, answers, 
         if (!outcome || !observation || !answer || loggedReveal.current || !passing) return;
         loggedReveal.current = true;
         logEvent('predict-observed', { module: module.id, step: step.id, data: { id: step.predict.id, said: answer.value, observed: observedOption, text: observation.text } });
-    }, [outcome, observation, observedOption, answer, passing, module.id, step.id, step.predict?.id]);
+        // The reveal brings the prediction's misconception callout with it.
+        const revealed = gradePrediction(step.predict, answer.value).misconception;
+        if (revealed && hasText(`mis.${revealed}`)) {
+            useLessonSession.getState().logShown('misconception-shown', `predict:${revealed}`, { step: step.id, data: { id: revealed, source: 'predict', item: step.predict.id } });
+        }
+    }, [outcome, observation, observedOption, answer, passing, module.id, step.id, step.predict]);
 
     // On a pass, show what it says: the reveal of an outcome prediction, otherwise the done sentence.
     const doneRef = useRef(null);
@@ -322,7 +322,8 @@ export default function StepView({ module, step, index, total, record, answers, 
     const targets = step.target ?? [];
     const targetsUsed = targets.length > 0 && targets.every((ref) => isTargetDone(ref, globalThis.document, targetOptions));
     const spotlightTargets = targetsUsed && problem?.nodeId ? [{ node: { id: problem.nodeId } }] : targets;
-    useStudyLog(module.id, step.id, { misconception: firm ? diagnosed : misconception, status: passing || (done && !drift) ? null : result?.issue ?? result?.detail ?? null });
+    const statusShown = passing || (done && !drift) ? null : firm ? { key: `mis.${diagnosed}` } : result?.issue ?? result?.detail ?? null;
+    useStudyLog(step.id, { misconception: firm ? diagnosed : misconception, source: firm ? 'status' : 'callout', statusKey: statusShown?.key ?? null });
     const embeds = step.embeds ?? [];
     // An outcome prediction is answered above the trainer card and revealed below it, next to the run's result.
     const revealBelow = outcome && observed && !!answer && embeds.includes('trainer');

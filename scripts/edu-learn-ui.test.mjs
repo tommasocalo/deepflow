@@ -392,6 +392,12 @@ test('the quiz explains each option at once, keeps the first answer and ends in 
     assert.equal(session().progress.modules.demo.quiz?.['demo.q1'], undefined, 'no attempt before Check');
     await click(button('Check'));
     assert.match(text(panel().querySelector('.edu-quiz-feedback')), /Not quite\. Right number of weights, but add the 8 biases\. Each output unit also has one bias/);
+    const quizEvents = readLog().filter((event) => event.data?.item === 'demo.q1' || event.data?.id === 'demo.q1');
+    assert.ok(quizEvents.some((event) => event.type === 'quiz' && event.data.misconception === 'forgot-bias'), 'the quiz event names the misconception');
+    assert.ok(quizEvents.some((event) => event.type === 'misconception-shown' && event.data.source === 'quiz' && event.data.id === 'forgot-bias'), 'and its callout is logged');
+    // Choosing another option hides the checked option's explanation until Check (review r2).
+    await choose('twenty-four');
+    assert.equal(text(panel().querySelector('.edu-quiz-feedback')), '', 'no stale feedback under a new choice');
     await answer('seven');
     assert.match(text(panel().querySelector('.edu-quiz-feedback')), /That counts nothing per weight/);
     await answer('twenty-four');
