@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Crosshair, MapPin, RotateCcw, Undo2, X } fro
 import { useArchitectureHistory } from '../../stores/architectureHistory.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
 import TrainerCard from '../trainer/components/TrainerCard.jsx';
-import { focusNode, requestFit, requestTrainingFit } from '../lessons/engine/canvasBridge.js';
+import { focusNode, requestFit, requestTrainingFit, selectEdge } from '../lessons/engine/canvasBridge.js';
 import { hasText, t } from '../lessons/engine/i18n.js';
 import { revealValues } from '../lessons/engine/reveal.js';
 import { isTargetDone, isVisible, resolveNodeTargetId, resolveTarget } from '../lessons/engine/targets.js';
@@ -80,8 +80,26 @@ function scrollToElement(element) {
 function statusText(result, busy) {
     if (busy) return t('panel.working');
     if (result?.issue) return t(result.issue.key, result.issue.params);
-    if (result?.detail) return t(result.detail.key, result.detail.params);
-    return '';
+    // The check says what to connect; a block left without wires is named after it.
+    return [result?.detail ? t(result.detail.key, result.detail.params) : '', result?.hint ? t(result.hint.key, result.hint.params) : ''].filter(Boolean).join(' ');
+}
+
+const WIRE_DELETES = new Set(['fb.extra-wire', 'fb.too-many-inputs', 'fb.too-many-inputs.ports', 'fb.port-twice']);
+
+/** What Hint 1 adds for the state the learner is in: how to delete a wire, or how to draw one. */
+function stateHint(result) {
+    if (!result || result.pass) return null;
+    if (result.issue && WIRE_DELETES.has(result.issue.key)) return 'hint.wireDelete';
+    if (result.hint) return 'hint.wireAdd';
+    return null;
+}
+
+/** "Show on canvas" for the problem the status names: the wire to delete, or the block. */
+function showProblem(problem) {
+    useEduUiStore.getState().setTab('architecture');
+    setTimeout(() => {
+        if (!problem.edgeId || !selectEdge(problem.edgeId)) focusNode(problem.nodeId);
+    }, 60);
 }
 
 export default function StepView({ module, step, index, total, record, answers, runTags = {}, runtime, result, facts, isLast }) {
@@ -126,6 +144,7 @@ export default function StepView({ module, step, index, total, record, answers, 
         else setTargetMissing(false);
     };
     const misconception = !passing && result?.misconception && hasText(`mis.${result.misconception}`) ? result.misconception : null;
+    const problem = result?.issue ?? result?.hint ?? null;
     const embeds = step.embeds ?? [];
     const nextLabel = isLast ? (module.quiz?.length ? t('nav.toQuiz') : t('nav.next')) : t('nav.next');
     const canAdvance = passing || done;
@@ -169,9 +188,9 @@ export default function StepView({ module, step, index, total, record, answers, 
                     </>
                 )}
             </div>
-            {!passing && result?.issue?.nodeId && (
-                <button type="button" className="edu-link-button edu-show-on-canvas" onClick={() => { useEduUiStore.getState().setTab('architecture'); setTimeout(() => focusNode(result.issue.nodeId), 60); }}>
-                    <Crosshair size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.showOnCanvas')}
+            {!passing && problem?.nodeId && (
+                <button type="button" className="edu-link-button edu-show-on-canvas" onClick={() => showProblem(problem)}>
+                    <Crosshair size={12} strokeWidth={2.5} aria-hidden="true" />{t(problem.edgeId ? 'panel.showWire' : 'panel.showOnCanvas')}
                 </button>
             )}
             {done && !passing && !runtime?.passedHere && <p className="edu-muted">{t('panel.reviewing')}</p>}
@@ -183,7 +202,7 @@ export default function StepView({ module, step, index, total, record, answers, 
                 <p className="edu-callout edu-callout-misconception"><strong>{t('panel.misconception')}: </strong><RichText inline text={t(`mis.${misconception}`)} /></p>
             )}
             {runtime?.error && <p className="edu-callout edu-callout-error" role="alert">{t('panel.actionFailed', { error: runtime.error })}</p>}
-            {runtime?.skippedAhead > 0 && !done && <p className="edu-callout edu-callout-info">{t('panel.skippedAhead')}</p>}
+            {runtime?.skippedAhead > 0 && !done && <p className="edu-muted">{t('panel.skippedAhead')}</p>}
             {targetMissing && !passing && (step.target ?? []).some((ref) => !isTargetDone(ref, globalThis.document, targetOptions)) && (
                 <button type="button" className="edu-link-button" onClick={() => revealTarget(step, targetOptions)}>
                     <MapPin size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.whereIsIt')}
@@ -199,7 +218,8 @@ export default function StepView({ module, step, index, total, record, answers, 
                 </div>
             )}
 
-            <HintLadder textPrefix={prefix} level={record?.hintLevel ?? 0} passed={passing} busy={busy} facts={params} onHint={() => session.useHint()} />
+            <HintLadder textPrefix={prefix} level={record?.hintLevel ?? 0} passed={passing} busy={busy} facts={params} onHint={() => session.useHint()}
+                now={stateHint(result)} />
 
             <footer className="edu-nav">
                 <button type="button" className="df-button" onClick={() => session.back()} disabled={busy || index === 0} aria-label={t('nav.back')}>

@@ -4,7 +4,7 @@ import { resolveRepeatCount, withGlobalParameters } from '../../../domain/expres
 import { countArchitectureParameters } from '../../../domain/optimization/parameterCount.js';
 import { effectiveObjective } from '../../objective.js';
 import { formatAccuracy } from '../../trainer/charts.js';
-import { friendlyIssues } from './feedback.js';
+import { friendlyIssues, wiringHints } from './feedback.js';
 import { formatNumber, hasText, paramLabel, t } from './i18n.js';
 import {
     describeMatch, formatShape, matchNodes, nodeMatches, nodeType, orderedNodeIds, paramValue, sameShape, sameValue, typeMatches,
@@ -66,6 +66,7 @@ export function createCheckContext({
     lazy(ctx, 'paramCount', () => countArchitectureParameters(ctx.graph, ctx.templates));
     lazy(ctx, 'objective', () => effectiveObjective(ctx.training, ctx.graph));
     lazy(ctx, 'issues', () => friendlyIssues(ctx.report, ctx.graph, ctx.templates));
+    lazy(ctx, 'hints', () => wiringHints(ctx.report, ctx.graph, ctx.templates));
     return ctx;
 }
 
@@ -274,7 +275,8 @@ const handlers = {
             : fail('outputShape', 'check.outputShape', { actual: formatShape(actual), expected: formatShape(shape) });
     },
     valid(expected, ctx) {
-        const ok = !!ctx.report.ok;
+        // A second wire into a one-input block (a ReLU, the Output) validates in DeepFlow, but it is a wiring mistake.
+        const ok = !!ctx.report.ok && !ctx.issues.some((issue) => issue.structural);
         if (ok === (expected !== false)) return pass('valid');
         const issue = ctx.issues[0];
         return issue ? fail('valid', issue.key, issue.params, { nodeId: issue.nodeId }) : fail('valid', 'check.valid');
@@ -360,8 +362,17 @@ const handlers = {
         const runs = runsSinceEntry(ctx);
         const passing = runs.filter((run) => !runFailure(run, query, ctx));
         if (passing.length) return pass('run', { runId: passing.at(-1).id });
+        // What to do next, about the live model: change it first, fix what blocks training, or (re)train it.
+        const live = query.model ? evaluateCheck(query.model, ctx) : null;
+        const modelFirst = () => fail('run', 'check.run.modelFirst', { detail: live.detail ? t(live.detail.key, live.detail.params) : '' });
+        const detail = runs.length ? runFailure(runs.at(-1), query, ctx) : null;
+        if (!runs.length || detail.key === 'check.run.model') {
+            if (live && !live.pass) return modelFirst();
+            const blocker = ctx.trainer?.preflight?.errors?.[0];
+            if (blocker?.message && ctx.trainer.preflight.datasetId === (ctx.data?.datasetId ?? null)) return fail('run', 'check.run.preflight', { message: blocker.message });
+            if (detail) return fail('run', 'check.run.retrain');
+        }
         if (!runs.length) return fail('run', query.initOnly ? 'check.run.init' : 'check.run.none');
-        const detail = runFailure(runs.at(-1), query, ctx);
         return fail('run', detail.key, detail.params);
     },
     runs(spec, ctx) {
@@ -561,6 +572,11 @@ export function evaluateStep(step, ctx) {
     }
     if (!misconception && step.kind === 'task') misconception = globalDiagnostics(ctx);
     let issue = null;
-    if (GRAPH_PREDICATES.has(result.predicate) && ctx.report && !ctx.report.ok) issue = ctx.issues[0] ?? null;
-    return { ...result, misconception, issue };
+    let hint = null;
+    if (GRAPH_PREDICATES.has(result.predicate) && ctx.report) {
+        if (!ctx.report.ok || ctx.issues.some((item) => item.structural)) issue = ctx.issues[0] ?? null;
+        // A block on the canvas without wires: the check says what to connect, the hint which block is still loose.
+        else hint = ctx.hints[0] ?? null;
+    }
+    return { ...result, misconception, issue, hint };
 }

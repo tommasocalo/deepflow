@@ -30,6 +30,14 @@ export function requestInsert(entry, isTemplate = false) {
     return dispatch({ command: 'insert', entry, isTemplate, result: null }).result ?? null;
 }
 
+/** Select a wire of the root level and centre the view on it (wiring feedback); true when the canvas did. */
+export function selectEdge(id) {
+    if (!id) return false;
+    const store = useArchitectureStore.getState();
+    if (store.currentPath.length) store.goToLevel(0);
+    return dispatch({ command: 'selectEdge', id, result: false }).result === true;
+}
+
 /** Select a root node, open its settings and centre the view on it. */
 export function focusNode(id) {
     if (!id) return;

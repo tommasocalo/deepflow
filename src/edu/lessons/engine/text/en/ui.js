@@ -73,6 +73,7 @@ export default {
     'panel.paletteInsert': 'Insert {name}',
     'panel.paletteLeft': '×{count}',
     'panel.paletteHint': 'A chip adds the block to the canvas. Then wire it with the others.',
+    'panel.paletteHintSplice': 'A chip puts the block into its wire for you.',
     'panel.notYet': 'Not yet',
     'panel.done': 'Done',
     'panel.stepComplete': 'Step complete',
@@ -94,6 +95,10 @@ export default {
     'hint.showMe': 'Show me',
     'hint.again': 'Show me again',
     'hint.label': 'Hint {level}',
+    'hint.now': 'Right now:',
+    'hint.wireAdd': 'To wire two blocks, drag from the dot at the bottom of one block to the dot at the top of the next.',
+    'hint.wireDelete': 'To delete a wire, click it so it turns dark, then press Delete or Backspace.',
+    'panel.showWire': 'Show the wire',
     'nav.back': 'Back',
     'nav.reset': 'Reset step',
     'nav.next': 'Next',
@@ -204,6 +209,9 @@ export default {
     'check.component.contains': '**{type}** blocks in your component: {count} needed, {actual} now. Select all of them before **Group**.',
     'check.custom': 'Not done yet.',
     'check.not': 'Not done yet.',
+    'check.run.modelFirst': 'Change the model first: {detail}',
+    'check.run.retrain': 'You changed the model since the last run: press **Train** again.',
+    'check.run.preflight': 'Fix this before training: {message}',
     'check.any': 'Not done yet.',
     'check.unknown': 'This check is not available.',
 
@@ -234,6 +242,7 @@ export default {
     'type.LearnedPositions': 'Learned positions',
     'type.SinusoidalPositions': 'Sinusoidal positions',
 
+    'value.and': ' and ',
     // Loss and optimizer names
     'loss.cross_entropy': 'Cross-Entropy',
     'loss.bce': 'BCE',
@@ -290,3 +299,10 @@ export default {
     'shell.resetLesson': 'Reset this lesson\'s workspace to empty graphs? Your lesson progress is kept.',
     'shell.resetSandbox': 'Reset architecture and training graphs to empty?',
 };
+    'fb.extra-wire': '**{label}** has {count} incoming wires but takes one input. The old wire from **{from}** skips **{via}**: click that wire and press Delete.',
+    'fb.too-many-inputs': '**{label}** has {count} incoming wires, from {sources}, but takes one input. Click the wire that does not belong and press Delete.',
+    'fb.too-many-inputs.ports': '**{label}** has {count} incoming wires, from {sources}, but takes {ports} inputs. Click the extra wire and press Delete.',
+    'fb.port-twice': 'Two wires, from {sources}, end at the **{port}** input of **{label}**. Keep one: click the other and press Delete.',
+    'fb.unwired': '**{label}** has no wires yet.',
+    'fb.unwired-in': 'Nothing flows into **{label}** yet.',
+    'fb.unwired-out': '**{label}** does not feed into another block yet.',

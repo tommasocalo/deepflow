@@ -63,7 +63,9 @@ import { isValidTargetRef } from './targets.js';
  * @property {string} correct
  * @property {Object<string, string>} [misconceptions]   option id → misconception id
  *
- * @typedef {{ block: BlockRef, count?: number, distractor?: string }} PaletteItem   distractor = misconception id
+ * @typedef {{ block: BlockRef, count?: number, distractor?: string, into?: { from: object, to: object }, params?: object }} PaletteItem
+ *           distractor = misconception id; `into` splices the block into the wire from → to while it exists;
+ *           `params` are the new block's starting parameters (a Linear also starts at the open end's width)
  * @typedef {string} BlockRef        'component:linear' | a library key such as 'torch.nn.ReLU' | 'deepflow.op.Add'
  * @typedef {'trainer'|'paramCount'|'softmaxTemperature'} EmbedId
  * @typedef {{ id: string, actions: ActionSpec[] }} StepButton        label text `<m>.<s>.button.<id>`
@@ -272,7 +274,14 @@ export function validateModule(module, text = {}, { datasetIds, limits = true } 
             if (p.kind === 'shape' && !Array.isArray(p.expectedShape)) errors.push(`${s}.predict: shape predictions need expectedShape`);
             if (p.kind === 'choice' && (!Array.isArray(p.options) || !p.options.includes(p.correct))) errors.push(`${s}.predict: correct must be one of the options`);
         }
-        for (const item of step.palette ?? []) if (!isValidBlockRef(item.block)) errors.push(`${s}.palette: unknown block ${item.block}`);
+        for (const item of step.palette ?? []) {
+            if (!isValidBlockRef(item.block)) errors.push(`${s}.palette: unknown block ${item.block}`);
+            if (item.into !== undefined) {
+                checkNodeMatch(item.into?.from, `${s}.palette.into.from`, errors);
+                checkNodeMatch(item.into?.to, `${s}.palette.into.to`, errors);
+            }
+            if (item.params !== undefined && (!item.params || typeof item.params !== 'object' || Array.isArray(item.params))) errors.push(`${s}.palette: params must be an object`);
+        }
         for (const embed of step.embeds ?? []) if (!EMBEDS.includes(embed)) errors.push(`${s}: unknown embed ${embed}`);
         for (const ref of step.target ?? []) if (!isValidTargetRef(ref)) errors.push(`${s}: unknown target ${JSON.stringify(ref)}`);
         if (step.locks?.gate && step.locks.gate !== 'train') errors.push(`${s}: unknown gate ${step.locks.gate}`);

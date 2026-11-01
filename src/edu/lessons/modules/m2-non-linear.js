@@ -75,7 +75,8 @@ export default {
         },
         {
             id: 's3', kind: 'task', subgoal: 'model', tab: 'architecture', target: ['lesson.palette', 'ribbon.components'],
-            palette: [{ block: 'torch.nn.ReLU', count: 1 }],
+            // The chip splices ReLU into the Linear 1 → Linear 2 wire (review r1: wiring it by hand was a dead end).
+            palette: [{ block: 'torch.nn.ReLU', count: 1, into: { from: { id: 'lin1' }, to: { id: 'lin2' } } }],
             check: { all: [
                 { chain: [{ type: 'Input' }, { type: 'Linear' }, { type: 'Activation' }, { type: 'Linear' }, { type: 'Output' }] },
                 { valid: true },
@@ -132,7 +133,8 @@ export default {
             id: 's7', kind: 'task', subgoal: 'model', tab: 'architecture', target: ['lesson.palette'],
             setup: [{ do: 'loadFixture', id: 'xor' }],
             palette: [
-                { block: 'component:linear', count: 2 },
+                // A new Linear takes the open end's width (2, then 8) and outputs 8 hidden units, not 768.
+                { block: 'component:linear', count: 2, params: { out_features: 8 } },
                 { block: 'torch.nn.ReLU', count: 1 },
                 { block: 'torch.nn.Sigmoid', count: 1, distractor: 'sigmoid-before-bce' },
             ],

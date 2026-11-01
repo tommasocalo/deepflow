@@ -97,7 +97,7 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     const showGradientFlow = useArchitectureStore((s) => s.showGradientFlow);
     const gradientReport = useGradientFlow(showGradientFlow);
 
-    const { screenToFlowPosition, getViewport, setViewport, setNodes, fitView } = useReactFlow();
+    const { screenToFlowPosition, getViewport, setViewport, setNodes, fitView, getNode, setCenter, getZoom } = useReactFlow();
     const flowStore = useFlowStoreApi();
     const wrapperRef = useRef(null);
     const completedMarqueeRef = useRef(false);
@@ -125,6 +125,24 @@ const Inner = ({ children, overlay, paneId = 'main', keyboardActive = true }) =>
     const tensorFlowIds = useMemo(() => tensorFlowNodeIds(viewGraph), [viewGraph]);
     const [initialNodes] = useState(() => syncFlowNodes([], viewGraph, selectedNodeIds, tensorFlowIds, levelKey));
     const selectedEdgeSet = useMemo(() => new Set(selectedEdgeIds), [selectedEdgeIds]);
+    // Edu canvas bridge (docs/edu/SPEC.md §6.12): a lesson's wiring feedback selects the wire it names, centred, so
+    // Delete removes exactly that wire.
+    useEffect(() => {
+        if (paneId !== 'main') return undefined;
+        const onCanvas = ({ detail = {} }) => {
+            if (detail.command !== 'selectEdge') return;
+            const edge = viewGraph.edges.find((item) => item.id === detail.id);
+            const source = edge && getNode(edge.source);
+            const target = edge && getNode(edge.target);
+            if (!source || !target) return;
+            clearSelection();
+            setSelectedEdgeIds([edge.id]);
+            setCenter((source.position.x + target.position.x) / 2, (source.position.y + target.position.y) / 2 + 18, { zoom: Math.max(getZoom(), 0.85), duration: 220 });
+            detail.result = true;
+        };
+        window.addEventListener('deepflow-edu:canvas', onCanvas);
+        return () => window.removeEventListener('deepflow-edu:canvas', onCanvas);
+    }, [paneId, viewGraph.edges, getNode, setCenter, getZoom, clearSelection]);
     // Moving nodes does not change the topology or rebuild stationary wires.
     const residuals = useMemo(() => residualEdgeIds(viewGraph.edges), [viewGraph.edges]);
     const edges = useMemo(
