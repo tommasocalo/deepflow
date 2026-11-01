@@ -27,16 +27,32 @@ function segmentStatus(record, step, current) {
     return status === 'passed' || status === 'skipped' || status === 'visited' ? status : 'todo';
 }
 
+/**
+ * The step segments are one tab stop (review r1: eight stops on every step): Tab reaches the current step's segment,
+ * the arrow keys, Home and End move between them, Enter or Space opens one.
+ */
 function ProgressSegments({ module, record, stepIndex, phase, onGo }) {
+    const buttons = useRef([]);
+    const stop = phase === 'steps' ? stepIndex : 0;
+    const onKeyDown = (event) => {
+        const index = buttons.current.indexOf(event.target);
+        if (index < 0) return;
+        const last = module.steps.length - 1;
+        const next = { ArrowRight: index + 1, ArrowDown: index + 1, ArrowLeft: index - 1, ArrowUp: index - 1, Home: 0, End: last }[event.key];
+        if (next === undefined) return;
+        event.preventDefault();
+        buttons.current[Math.max(0, Math.min(last, next))]?.focus();
+    };
     return (
-        <ol className="edu-segments" aria-label={t('panel.progress')}>
+        <ol className="edu-segments" aria-label={t('panel.progress')} onKeyDown={onKeyDown}>
             {module.steps.map((step, index) => {
                 const current = phase === 'steps' && index === stepIndex;
                 const status = segmentStatus(record, step, current);
                 const label = t('panel.segment', { index: index + 1, title: t(`${module.id}.${step.id}.title`), status: t(`panel.segment.${status}`) });
                 return (
                     <li key={step.id}>
-                        <button type="button" className={`edu-segment is-${status}`} aria-label={label} title={`${t(`subgoal.${step.subgoal}`)} · ${t(`${module.id}.${step.id}.title`)}`}
+                        <button type="button" ref={(element) => { buttons.current[index] = element; }} tabIndex={index === stop ? 0 : -1}
+                            className={`edu-segment is-${status}`} aria-label={label} title={`${t(`subgoal.${step.subgoal}`)} · ${t(`${module.id}.${step.id}.title`)}`}
                             aria-current={current ? 'step' : undefined} onClick={() => onGo(index)} />
                     </li>
                 );

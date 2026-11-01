@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Crosshair, MapPin, RotateCcw, Undo2, X } from 'lucide-react';
 import { useArchitectureHistory } from '../../stores/architectureHistory.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
+import { useTemplatesStore } from '../../stores/templatesStore.js';
+import { useTrainingStore } from '../../stores/trainingStore.js';
 import TrainerCard from '../trainer/components/TrainerCard.jsx';
 import { focusNode, requestFit, requestTrainingFit, selectEdge } from '../lessons/engine/canvasBridge.js';
 import { hasText, t } from '../lessons/engine/i18n.js';
@@ -101,6 +103,56 @@ function stateHint(result) {
     return null;
 }
 
+const MISCONCEPTION_SETTLE_MS = 6000;
+
+/**
+ * The misconception to show: `diagnosed` once the workspace has not changed for MISCONCEPTION_SETTLE_MS, or at once
+ * after a training run or a hint that came after the last edit (the learner signals they think they are done).
+ */
+function useSettledMisconception(diagnosed, { trainerSeq, hintLevel }) {
+    const graph = useArchitectureStore((state) => state.graph);
+    const templates = useTemplatesStore((state) => state.templates);
+    const training = useTrainingStore((state) => state.graph);
+    const [shown, setShown] = useState(null);
+    // Settled: the same workspace for a moment.
+    useEffect(() => {
+        if (!diagnosed) return undefined;
+        const timer = setTimeout(() => setShown({ id: diagnosed, graph, templates, training }), MISCONCEPTION_SETTLE_MS);
+        return () => clearTimeout(timer);
+    }, [diagnosed, graph, templates, training]);
+    // Signalled: a run or a hint since the last edit shows it at once.
+    const signals = useRef(null);
+    useEffect(() => {
+        const previous = signals.current;
+        signals.current = { trainerSeq, hintLevel };
+        if (!previous || !diagnosed || (trainerSeq <= previous.trainerSeq && hintLevel <= previous.hintLevel)) return undefined;
+        const timer = setTimeout(() => setShown({ id: diagnosed, graph, templates, training }), 0);
+        return () => clearTimeout(timer);
+    }, [trainerSeq, hintLevel, diagnosed, graph, templates, training]);
+    // Any edit hides it again until the new state settles.
+    return shown && shown.id === diagnosed && shown.graph === graph && shown.templates === templates && shown.training === training ? diagnosed : null;
+}
+
+/**
+ * The study log (review r1, RQ2): which misconception callouts a learner saw and which status messages, each once per
+ * visit to the step.
+ */
+function useStudyLog(moduleId, stepId, { misconception, status }) {
+    const seen = useRef(new Set());
+    const statusKey = status?.key ?? null;
+    useEffect(() => { seen.current = new Set(); }, [moduleId, stepId]);
+    useEffect(() => {
+        if (!misconception || seen.current.has(`m:${misconception}`)) return;
+        seen.current.add(`m:${misconception}`);
+        logEvent('misconception-shown', { module: moduleId, step: stepId, data: { id: misconception } });
+    }, [misconception, moduleId, stepId]);
+    useEffect(() => {
+        if (!statusKey || seen.current.has(`s:${statusKey}`)) return;
+        seen.current.add(`s:${statusKey}`);
+        logEvent('status-shown', { module: moduleId, step: stepId, data: { key: statusKey } });
+    }, [statusKey, moduleId, stepId]);
+}
+
 /**
  * Bring `element` into the panel's scrolling area, above the sticky dock: its top when `top` (a reveal to read from
  * its heading), else its bottom (the done sentence under the trainer card). Only the panel body scrolls.
@@ -197,8 +249,12 @@ export default function StepView({ module, step, index, total, record, answers, 
         if (found === null) missingTimer.current = setTimeout(() => setTargetMissing(true), 1200);
         else setTargetMissing(false);
     };
-    const misconception = !passing && result?.misconception && hasText(`mis.${result.misconception}`) ? result.misconception : null;
+    const diagnosed = !passing && result?.misconception && hasText(`mis.${result.misconception}`) ? result.misconception : null;
+    // A misconception callout waits until the learner seems finished (review r1: it fired after only Input was set):
+    // the model has stayed the same for a moment, or they trained or asked for a hint since their last edit.
+    const misconception = useSettledMisconception(diagnosed, { trainerSeq: trainer?.seq ?? 0, hintLevel: record?.hintLevel ?? 0 });
     const problem = result?.issue ?? result?.hint ?? null;
+    useStudyLog(module.id, step.id, { misconception, status: passing || done ? null : result?.issue ?? result?.detail ?? null });
     const embeds = step.embeds ?? [];
     const nextLabel = isLast ? (module.quiz?.length ? t('nav.toQuiz') : t('nav.next')) : t('nav.next');
     const canAdvance = passing || done;

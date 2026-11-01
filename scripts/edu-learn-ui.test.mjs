@@ -80,6 +80,7 @@ try {
                 export { setModuleRegistry } from './src/edu/lessons/engine/registry.js';
                 export { restoreWorkspace, buildFixtureSnapshot } from './src/edu/lessons/engine/workspace.js';
                 export { readLog, resetLogForTests } from './src/edu/lessons/engine/log.js';
+                export { runActions } from './src/edu/lessons/engine/actions.js';
                 export { resetStorageForTests } from './src/edu/lessons/engine/storage.js';
                 export * as P from './src/edu/lessons/engine/progress.js';
                 export { TEST_MODULE, TEST_TEXT } from './scripts/fixtures/edu-test-module.js';
@@ -104,7 +105,7 @@ try {
 const {
     LearnHome, LessonPanel, useArchitectureStore, useArchitectureHistory, readSource, registerSource, useEduUiStore, applyDeepLink, parseLearnHash, syncHash,
     useLessonSession, setModuleRegistry, restoreWorkspace, buildFixtureSnapshot, readLog, resetLogForTests, resetStorageForTests, P,
-    TEST_MODULE, TEST_TEXT,
+    TEST_MODULE, TEST_TEXT, runActions,
 } = bundle;
 
 // A second module so Learn shows a not-started card that is recommended after the first.
@@ -543,4 +544,38 @@ test('collapse keeps a rail on wide screens; below 900 px the drawer handle togg
     assert.ok(heading());
     await act(() => panel().querySelector('.edu-drawer-handle').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
     assert.match(panel().getAttribute('style') ?? '', /height: \d+px/, 'the arrow keys resize the drawer');
+});
+
+test('the progress segments are one tab stop, the arrows move between them, and Undo and Redo sit in the panel header', async () => {
+    await openStep(2);
+    const segments = [...panel().querySelectorAll('.edu-segment')];
+    assert.deepEqual(segments.map((segment) => segment.tabIndex), segments.map((_, index) => (index === 2 ? 0 : -1)), 'only the current step is a tab stop');
+    segments[2].focus();
+    await act(() => segments[2].dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    assert.ok(document.activeElement === segments[3], 'ArrowRight moves to the next segment');
+    await act(() => segments[3].dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true })));
+    assert.ok(document.activeElement === segments[0], 'Home moves to the first');
+    const undo = button('Undo the last edit', panel());
+    assert.ok(undo && button('Redo the edit', panel()), 'Undo and Redo are in the lesson panel');
+    assert.equal(undo.disabled, true, 'nothing to undo yet');
+    await run(() => runActions([{ do: 'insertBetween', block: 'torch.nn.ReLU', from: { id: 'lin1' }, to: { id: 'lin2' } }], { label: 'test' }));
+    await settle();
+    assert.equal(button('Undo the last edit', panel()).disabled, false);
+    await click(button('Undo the last edit', panel()));
+    assert.ok(!Object.values(arch().graph.nodes).some((node) => node.libraryKey === 'torch.nn.ReLU'), 'the panel Undo reverts the edit');
+    assert.ok(panel().querySelector('.edu-step-dock .edu-status[role="status"]') && panel().querySelector('.edu-step-dock footer.edu-nav'), 'the status and the navigation share the dock');
+});
+
+test('a misconception callout waits until the learner signals they are done, and the log records it', async () => {
+    await openStep(2);
+    // ReLU after the last Linear: the demo step's diagnose rule (activation at the output).
+    await run(() => runActions([{ do: 'insertBetween', block: 'torch.nn.ReLU', from: { id: 'lin2' }, to: { id: 'out' } }], { label: 'test' }));
+    await settle(60);
+    assert.equal(panel().querySelector('.edu-callout-misconception'), null, 'not while the learner may still be editing');
+    await click(button('Hint'));
+    await settle(60);
+    assert.match(text(panel().querySelector('.edu-callout-misconception')), /A common mix-up:/, 'a hint after the edit shows it at once');
+    const events = readLog();
+    assert.ok(events.some((event) => event.type === 'misconception-shown' && event.data.id === 'activation-at-output'), 'the shown misconception is logged');
+    assert.ok(events.some((event) => event.type === 'status-shown' && event.step === 's3'), 'status messages are logged');
 });
