@@ -3,7 +3,7 @@ import { startArchitectureSession, useArchitectureHistory } from '../../../store
 import { useTemplatesStore } from '../../../stores/templatesStore.js';
 import { useTrainingStore } from '../../../stores/trainingStore.js';
 import { STORYBOARDS } from '../../../storyboards/index.js';
-import { workspaceSlices } from '../../bridge.js';
+import { callSource, readSource, workspaceSlices } from '../../bridge.js';
 import { createFixtureHelpers } from './fixtures.js';
 import { eduKey, readJSON, removeKey, writeJSON } from './storage.js';
 
@@ -73,6 +73,30 @@ export function restoreWorkspace(snapshot) {
     });
     restoreSlices(snapshot.slices);
     useArchitectureHistory.getState().clear();
+}
+
+/**
+ * Put a snapshot's model back as an ordinary edit, inside the caller's history transaction: the root graph and the
+ * templates, with the navigation reset. Show me starts a step over this way, as one undo step (engine/actions.js).
+ */
+export function replaceDocument(snapshot) {
+    useArchitectureStore.getState().goToLevel(0);
+    useTemplatesStore.setState({ templates: snapshot.templates ?? {} });
+    useArchitectureStore.setState({ graph: snapshot.graph, ...NAVIGATION_RESET });
+}
+
+/**
+ * The rest of a snapshot, which the undo history does not hold: the training graph, the data binding, the trainer
+ * settings and the view flags. Unlike restoreWorkspace, the trainer's runs stay for comparison.
+ */
+export function restoreSettings(snapshot) {
+    useTrainingStore.setState({ graph: snapshot.training ?? { nodes: {}, edges: [] }, selectedNodeIds: [], expandedNodeId: null });
+    const slices = new Map(workspaceSlices());
+    if (snapshot.slices?.data !== undefined) slices.get('data')?.restore(snapshot.slices.data);
+    if (snapshot.slices?.trainer?.settings && readSource('trainer')) callSource('trainer', 'setSettings', snapshot.slices.trainer.settings);
+    const architecture = useArchitectureStore.getState();
+    architecture.setShowDimensions(snapshot.ui?.showDimensions ?? true);
+    architecture.setShowGradientFlow(snapshot.ui?.showGradientFlow ?? false);
 }
 
 export function saveSlot(id, snapshot = captureWorkspace()) {

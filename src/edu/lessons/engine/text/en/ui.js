@@ -82,6 +82,8 @@ export default {
     'panel.showOnCanvas': 'Show on canvas',
     'panel.misconception': 'A common mix-up',
     'panel.showMeDone': 'Show me made this change for you.',
+    'panel.showMeRestarted': 'Show me started this step over and made the change for you.',
+    'panel.showMeIncomplete': 'Show me made its changes, but the step is not done yet: the status below says what is missing.',
     'panel.undo': 'Undo',
     'panel.history': 'Edit history',
     'panel.undoEdit': 'Undo the last edit',

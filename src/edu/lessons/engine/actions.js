@@ -12,7 +12,7 @@ import { effectiveObjective } from '../../objective.js';
 import { useEduUiStore } from '../../shell/uiStore.js';
 import { ROW_GAP } from './fixtures.js';
 import { describeMatch, matchNodes, orderedNodeIds } from './nodes.js';
-import { loadFixtureIntoWorkspace, runStoryboard } from './workspace.js';
+import { loadFixtureIntoWorkspace, replaceDocument, runStoryboard } from './workspace.js';
 
 /**
  * Lesson actions (docs/edu/SPEC.md §6.5). `runActions` runs a list in order and awaits each action. Consecutive
@@ -23,7 +23,8 @@ import { loadFixtureIntoWorkspace, runStoryboard } from './workspace.js';
  * Insert actions (insertBetween, insertAfter, buildChain) first reuse blocks of the same kind that the learner added
  * in this step and left unwired, or wired only to the blocks the action connects (a palette chip, Components ▾).
  * Show me then completes the learner's attempt instead of adding a duplicate beside it. The caller passes the ids of
- * the root nodes at step entry as `ctx.entryNodeIds`; without them nothing is reused.
+ * the root nodes at step entry as `ctx.entryNodeIds`; without them nothing is reused. A palette chip (`ctx.lift`)
+ * also takes such a block out of a wire elsewhere, so a chip never adds a second ReLU beside the learner's own.
  */
 export const ACTIONS = Object.freeze([
     'loadFixture', 'loadStoryboard', 'useDataset', 'setDatasetOptions', 'setParam', 'setGlobal', 'insertBetween', 'insertAfter',
@@ -120,16 +121,19 @@ export function blockRefOf(node, templateMap = templates()) {
 
 /**
  * Blocks added since the step began whose wires, if any, all end at `anchors` or at another such block: the
- * candidates an insert action may adopt, in canvas order. Empty without `ctx.entryNodeIds`.
+ * candidates an insert action may adopt, in canvas order. With `ctx.lift` (a palette chip), the other blocks of
+ * those kinds added in this step follow, to be lifted out of the wires they sit in. Empty without `ctx.entryNodeIds`.
+ * @returns {{ node: object, lift: boolean }[]}
  */
 function adoptableBlocks(ctx, anchors, refs) {
     if (!Array.isArray(ctx?.entryNodeIds)) return [];
     const graph = rootGraph();
     const entry = new Set(ctx.entryNodeIds);
     const wanted = new Set(refs);
-    const candidates = new Set(Object.values(graph.nodes)
+    const added = new Set(Object.values(graph.nodes)
         .filter((node) => !entry.has(node.id) && wanted.has(blockRefOf(node)))
         .map((node) => node.id));
+    const candidates = new Set(added);
     const allowed = (id) => anchors.has(id) || candidates.has(id);
     // Dropping one candidate can disqualify a neighbour wired to it: repeat until nothing changes.
     for (let changed = true; changed;) {
@@ -140,19 +144,35 @@ function adoptableBlocks(ctx, anchors, refs) {
             }
         }
     }
-    return orderedNodeIds(graph).filter((id) => candidates.has(id)).map((id) => graph.nodes[id]);
+    const order = orderedNodeIds(graph);
+    const loose = order.filter((id) => candidates.has(id)).map((id) => ({ node: graph.nodes[id], lift: false }));
+    if (!ctx.lift) return loose;
+    return [...loose, ...order.filter((id) => added.has(id) && !candidates.has(id)).map((id) => ({ node: graph.nodes[id], lift: true }))];
 }
 
-/** Pick one adoptable node per block (in order) and unwire the picked ones, so the action can wire them afresh. */
+/**
+ * Pick one adoptable node per block (in order) and unwire the picked ones, so the action can wire them afresh. A
+ * block lifted out of a wire elsewhere (M2 s3: a ReLU between Linear 2 and the Output) leaves that wire whole.
+ */
 function adoptBlocks(blocks, ctx, anchors) {
     const spare = adoptableBlocks(ctx, anchors, blocks.map((item) => item.block));
     const picked = blocks.map((item) => {
-        const index = spare.findIndex((node) => blockRefOf(node) === item.block);
-        return index >= 0 ? spare.splice(index, 1)[0].id : null;
+        const index = spare.findIndex((candidate) => blockRefOf(candidate.node) === item.block);
+        return index >= 0 ? spare.splice(index, 1)[0] : null;
     });
-    const ids = new Set(picked.filter(Boolean));
-    for (const edge of rootGraph().edges.filter((item) => ids.has(item.source) || ids.has(item.target))) architecture().removeEdge(edge.id);
-    return picked;
+    for (const { node, lift } of picked.filter(Boolean)) {
+        const edges = rootGraph().edges.filter((edge) => edge.source === node.id || edge.target === node.id);
+        for (const edge of edges) architecture().removeEdge(edge.id);
+        const incoming = edges.filter((edge) => edge.target === node.id);
+        const outgoing = edges.filter((edge) => edge.source === node.id);
+        if (!lift || incoming.length !== 1 || outgoing.length !== 1 || incoming[0].source === outgoing[0].target) continue;
+        try {
+            connectOrThrow(incoming[0].source, outgoing[0].target, { sourceHandle: incoming[0].sourceHandle, targetHandle: outgoing[0].targetHandle });
+        } catch {
+            // The two neighbours do not fit together: they stay apart, as the learner would see after deleting the block.
+        }
+    }
+    return picked.map((candidate) => candidate?.node.id ?? null);
 }
 
 /**
@@ -386,22 +406,32 @@ async function runBarrier(action, ctx) {
 
 /**
  * @param {object[]} actions ActionSpec list: { do: 'setParam', … }
- * @param {{ module?, headless?, label?, answer?: (id, value) => void, answers?: object, entryNodeIds?: string[]|null }} ctx
+ * @param {{ module?, headless?, label?, answer?: (id, value) => void, answers?: object, entryNodeIds?: string[]|null,
+ *   lift?: boolean, startFrom?: object|null }} ctx `startFrom`: a workspace snapshot whose model (graph and
+ *   templates) replaces the live one first, in the same undo step as the first edits (Show me starting over).
  * @returns {Promise<{ ok: boolean, error?: string, action?: object }>}
  */
 export async function runActions(actions = [], ctx = {}) {
     const label = `Lesson: ${ctx.label ?? 'show me'}`;
+    let start = ctx.startFrom ?? null;
+    const startOver = () => {
+        if (start) replaceDocument(start);
+        start = null;
+    };
     let index = 0;
     while (index < actions.length) {
         const action = actions[index];
         try {
             if (!ACTIONS.includes(action?.do)) throw new ActionError(`Unknown action ${action?.do}`);
             if (BARRIERS.has(action.do)) {
+                // A fixture or storyboard replaces the whole workspace anyway.
+                start = null;
                 await runBarrier(action, ctx);
                 index++;
                 continue;
             }
             if (ASYNC.has(action.do)) {
+                if (start) recordArchitectureEdit(label, startOver);
                 await runTrainer(action.do, ctx);
                 index++;
                 continue;
@@ -414,6 +444,7 @@ export async function runActions(actions = [], ctx = {}) {
             const pending = [];
             try {
                 recordArchitectureEdit(label, () => {
+                    startOver();
                     for (const item of batch) {
                         const result = SYNC[item.do](item, ctx);
                         if (result && typeof result.then === 'function') pending.push(result);
@@ -429,5 +460,6 @@ export async function runActions(actions = [], ctx = {}) {
             return { ok: false, error: error?.message ?? String(error), action };
         }
     }
+    if (start) recordArchitectureEdit(label, startOver);
     return { ok: true };
 }

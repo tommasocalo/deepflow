@@ -4,7 +4,7 @@ import { callSource, onSourceRegistered, readSource, registerSource, subscribeSo
 import { useEduUiStore } from '../../shell/uiStore.js';
 import { runActions } from './actions.js';
 import { requestFit } from './canvasBridge.js';
-import { completedEpochs, evaluateStep, finalMetrics, trainerRuns } from './checks.js';
+import { completedEpochs, evaluateCheck, evaluateStep, finalMetrics, trainerRuns, workspaceCheck } from './checks.js';
 import { buildCheckContext, factValues, subscribeCheckContext } from './context.js';
 import { clearLog, logEvent } from './log.js';
 import { learnerSeed, predictionOrder, quizOrder } from './order.js';
@@ -13,8 +13,8 @@ import * as P from './progress.js';
 import { getModule, getModules, stepIndexById } from './registry.js';
 import { eduKey, eduKeys, readJSON, removeKey, writeJSON } from './storage.js';
 import {
-    captureWorkspace, clearStepEntry, loadFixtureIntoWorkspace, loadSlot, loadStepEntry, restoreWorkspace, runStoryboard, saveSlot,
-    saveStepEntry, slotKey,
+    captureWorkspace, clearStepEntry, loadFixtureIntoWorkspace, loadSlot, loadStepEntry, restoreSettings, restoreWorkspace, runStoryboard,
+    saveSlot, saveStepEntry, slotKey,
 } from './workspace.js';
 
 /**
@@ -26,8 +26,11 @@ export const PROGRESS_KEY = eduKey('progress:v1');
 const PHASES = ['warmup', 'steps', 'quiz', 'recap'];
 const PERSISTED = ['mode', 'moduleId', 'phase', 'stepIndex', 'quizIndex', 'warmupIndex', 'collapsed'];
 const freshRuntime = (overrides = {}) => ({
-    enteredAtSeq: 0, visitedTabs: [], revealShown: false, busy: false, error: null, showMe: null, skippedAhead: 0, passedHere: false, ...overrides,
+    enteredAtSeq: 0, visitedTabs: [], revealShown: false, busy: false, error: null, showMe: null, skippedAhead: 0, passedHere: false,
+    entryNodeIds: null, ...overrides,
 });
+/** Show me actions that train: they wait until the model is right, so a wrong attempt is never trained. */
+const TRAINING_ACTIONS = new Set(['train', 'evaluateInit']);
 
 /** Show me actions that change the workspace. Answers, training runs and navigation are never replayed for a learner. */
 const WORKSPACE_ACTIONS = new Set([
@@ -117,9 +120,12 @@ export const useLessonSession = create((set, get) => {
         }
         showStepTab(target);
         const kept = !firstEntry && resume ? loadStepEntry(current.id, target.id) : null;
-        if (!kept) saveStepEntry(current.id, target.id, captureWorkspace());
+        const entry = kept ?? saveStepEntry(current.id, target.id, captureWorkspace());
         updateProgress((progress) => P.enterStep(progress, current.id, target.id));
-        updateRuntime({ enteredAtSeq: trainerSeq(), visitedTabs: [useEduUiStore.getState().activeTab], revealShown: false, busy: false });
+        updateRuntime({
+            enteredAtSeq: trainerSeq(), visitedTabs: [useEduUiStore.getState().activeTab], revealShown: false, busy: false,
+            entryNodeIds: Object.keys(entry?.graph?.nodes ?? {}),
+        });
         log('step-enter', { step: target.id });
         return true;
     }
@@ -134,6 +140,34 @@ export const useLessonSession = create((set, get) => {
         }
         if (current.quiz?.length) set({ phase: 'quiz', quizIndex: 0, runtime: freshRuntime() });
         else get().finishModule();
+    }
+
+    /** Whether the workspace part of a step's check holds now (engine/checks.js workspaceCheck). */
+    function workspaceReady(item) {
+        const part = workspaceCheck(item?.check);
+        if (!part) return true;
+        const current = module();
+        return evaluateCheck(part, buildCheckContext({ module: current, step: get().stepInfo(), facts: factValues(current) })).pass;
+    }
+
+    /**
+     * Run a step's Show me edits on the learner's attempt, reusing the blocks they added in it (§6.5). When that does
+     * not give the model the step asks for (review r2: a Sigmoid before the Output, a second ReLU beside the first),
+     * the step starts over from its entry snapshot instead: the model and its edits form one undo step, so Undo brings
+     * the attempt back; the training graph, data binding and trainer settings return to the entry's.
+     * @returns {Promise<{ ok: boolean, error?: string, restarted: boolean }>}
+     */
+    async function completeAttempt(item, edits, label) {
+        const current = module();
+        const entry = loadStepEntry(current.id, item.id);
+        const history = () => useArchitectureHistory.getState();
+        const undoBefore = history().undoCount;
+        const first = await runActions(edits, { ...actionContext(label), entryNodeIds: entry ? Object.keys(entry.graph?.nodes ?? {}) : null });
+        if (!entry || (first.ok && workspaceReady(item))) return { ...first, restarted: false };
+        while (history().undoCount > undoBefore && history().undo()) { /* back to the learner's attempt */ }
+        restoreSettings(entry);
+        const again = await runActions(edits, { ...actionContext(label), startFrom: entry });
+        return { ...again, restarted: true };
     }
 
     /**
@@ -164,8 +198,8 @@ export const useLessonSession = create((set, get) => {
                 if (!result.ok) return done({ ok: false, error: result.error });
             }
             if (edits.length) {
-                const entryNodes = entered ? loadStepEntry(current.id, item.id)?.graph?.nodes : null;
-                const result = await runActions(edits, { ...actionContext(`skip ${item.id}`), entryNodeIds: entryNodes ? Object.keys(entryNodes) : null });
+                // The step the learner is on completes their attempt, or starts over when it cannot (completeAttempt).
+                const result = entered ? await completeAttempt(item, edits, `skip ${item.id}`) : await runActions(edits, actionContext(`skip ${item.id}`));
                 if (!result.ok) return done({ ok: false, error: result.error });
             }
             filled.push(item.id);
@@ -392,16 +426,21 @@ export const useLessonSession = create((set, get) => {
             const target = step();
             if (!current || !target || get().runtime.busy) return { ok: false };
             const undoBefore = useArchitectureHistory.getState().undoCount;
-            updateRuntime({ busy: true, error: null });
-            // Blocks added since the step began (a palette chip) are completed, not duplicated (§6.5).
-            const entryNodes = loadStepEntry(current.id, target.id)?.graph?.nodes;
-            const result = await runActions(target.solution ?? [], { ...actionContext('show me'), entryNodeIds: entryNodes ? Object.keys(entryNodes) : null });
+            updateRuntime({ busy: true, error: null, showMe: null });
+            // The edits first, on the learner's attempt or from the step's start (completeAttempt); training after them.
+            const solution = target.solution ?? [];
+            const cut = solution.findIndex((action) => TRAINING_ACTIONS.has(action?.do));
+            let result = await completeAttempt(target, cut < 0 ? solution : solution.slice(0, cut), 'show me');
+            const { restarted } = result;
+            if (result.ok && cut >= 0) result = await runActions(solution.slice(cut), actionContext('show me'));
             updateProgress((progress) => P.raiseHint(progress, current.id, target.id, 3));
-            log('show-me', { step: target.id, data: { ok: result.ok } });
+            // Show me only claims a change that passed the step (review r2); otherwise the panel says it is not done.
+            const passed = !!get().evaluate().pass;
+            log('show-me', { step: target.id, data: { ok: result.ok, restarted, passed } });
             const undoable = useArchitectureHistory.getState().undoCount > undoBefore;
-            updateRuntime({ busy: false, error: result.ok ? null : result.error, showMe: { at: Date.now(), undoable } });
+            updateRuntime({ busy: false, error: result.ok ? null : result.error, showMe: { at: Date.now(), undoable, restarted, passed } });
             fitSoon();
-            return result;
+            return { ok: result.ok, error: result.error, restarted, passed };
         },
 
         /** The Show me toast's Undo: revert the change and, when Show me passed the step just now, open it again. */

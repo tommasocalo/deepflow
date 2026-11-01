@@ -205,18 +205,22 @@ export default function StepView({ module, step, index, total, record, answers, 
     const outcome = isOutcomePrediction(step);
     const observed = outcome && (passing || done);
     const observation = observed && answer ? observePrediction(step, { trainer, enteredAtSeq: runtime?.enteredAtSeq ?? 0, runId: result?.runId }, prefix) : null;
-    const showMeAt = runtime?.showMe?.at ?? null;
-    // Tabs visited in this step count as used targets, so the ring moves on to what comes next.
+    // Only a Show me that passed the step offers its toast (review r2: it toasted a change that left the step failing).
+    const showMe = runtime?.showMe ?? null;
+    const showMeAt = showMe?.passed ? showMe.at : null;
+    // Tabs visited in this step count as used targets, so the ring moves on to what comes next; so does the palette
+    // once its blocks are on the canvas.
     const visitedTabs = runtime?.visitedTabs;
-    const targetOptions = useMemo(() => ({ visitedTabs: visitedTabs ?? [] }), [visitedTabs]);
+    const entryNodeIds = runtime?.entryNodeIds ?? null;
+    const targetOptions = useMemo(() => ({ visitedTabs: visitedTabs ?? [], palette: step.palette ?? null, entryNodeIds }), [visitedTabs, step.palette, entryNodeIds]);
 
     useEffect(() => { headingRef.current?.focus({ preventScroll: false }); }, [module.id, step.id]);
     useEffect(() => {
-        if (!showMeAt || !runtime?.showMe?.undoable) return undefined;
+        if (!showMeAt || !showMe?.undoable) return undefined;
         const show = setTimeout(() => setToastAt(showMeAt), 0);
         const hide = setTimeout(() => setToastAt(null), 8000);
         return () => { clearTimeout(show); clearTimeout(hide); };
-    }, [showMeAt, runtime?.showMe?.undoable]);
+    }, [showMeAt, showMe?.undoable]);
 
     // The study log records what the learner's run showed next to what they predicted (once per visit).
     const loggedReveal = useRef(false);
@@ -254,6 +258,10 @@ export default function StepView({ module, step, index, total, record, answers, 
     // the model has stayed the same for a moment, or they trained or asked for a hint since their last edit.
     const misconception = useSettledMisconception(diagnosed, { trainerSeq: trainer?.seq ?? 0, hintLevel: record?.hintLevel ?? 0 });
     const problem = result?.issue ?? result?.hint ?? null;
+    // Once every target is used (the palette's blocks are on the canvas), the ring moves to the block the status names.
+    const targets = step.target ?? [];
+    const targetsUsed = targets.length > 0 && targets.every((ref) => isTargetDone(ref, globalThis.document, targetOptions));
+    const spotlightTargets = targetsUsed && problem?.nodeId ? [{ node: { id: problem.nodeId } }] : targets;
     useStudyLog(module.id, step.id, { misconception, status: passing || done ? null : result?.issue ?? result?.detail ?? null });
     const embeds = step.embeds ?? [];
     const nextLabel = isLast ? (module.quiz?.length ? t('nav.toQuiz') : t('nav.next')) : t('nav.next');
@@ -271,7 +279,7 @@ export default function StepView({ module, step, index, total, record, answers, 
                 </details>
             )}
 
-            {step.palette?.length > 0 && !passing && <PaletteChips items={step.palette} moduleId={module.id} stepId={step.id} />}
+            {step.palette?.length > 0 && !passing && <PaletteChips items={step.palette} moduleId={module.id} stepId={step.id} entryNodeIds={entryNodeIds} />}
             {step.predict && (
                 <PredictGate key={`${prefix}-${answer ? 'answered' : 'open'}`} predict={step.predict} textPrefix={prefix} answer={answer} params={params}
                     disabled={busy} focusReveal={!!runtime?.revealShown} onSubmit={(predictId, value) => session.submitPrediction(predictId, value)}
@@ -296,6 +304,7 @@ export default function StepView({ module, step, index, total, record, answers, 
                 <p className="edu-callout edu-callout-misconception"><strong>{t('panel.misconception')}: </strong><RichText inline text={t(`mis.${misconception}`)} /></p>
             )}
             {runtime?.error && <p className="edu-callout edu-callout-error" role="alert">{t('panel.actionFailed', { error: runtime.error })}</p>}
+            {showMe && !showMe.passed && !runtime?.error && !passing && <p className="edu-callout edu-callout-error" role="alert">{t('panel.showMeIncomplete')}</p>}
             {runtime?.skippedAhead > 0 && !done && <p className="edu-muted">{t('panel.skippedAhead')}</p>}
 
             <HintLadder textPrefix={prefix} level={record?.hintLevel ?? 0} passed={passing} busy={busy} facts={params} onHint={() => session.useHint()}
@@ -332,7 +341,7 @@ export default function StepView({ module, step, index, total, record, answers, 
                 )}
                 {toastAt && toastAt === showMeAt && (
                     <div className="edu-toast" role="status">
-                        <span>{t('panel.showMeDone')}</span>
+                        <span>{t(showMe?.restarted ? 'panel.showMeRestarted' : 'panel.showMeDone')}</span>
                         <button type="button" className="edu-link-button" disabled={!canUndo} onClick={() => { session.undoShowMe(); setToastAt(null); }}>
                             <Undo2 size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.undo')}
                         </button>
@@ -354,7 +363,7 @@ export default function StepView({ module, step, index, total, record, answers, 
                 </footer>
             </div>
             <p className="edu-sr-only">{t('panel.step', { index: index + 1, total })}</p>
-            <Spotlight targets={step.target ?? []} active={!passing && !done} onResolve={onResolve} options={targetOptions} />
+            <Spotlight targets={spotlightTargets} active={!passing && !done} onResolve={onResolve} options={targetOptions} />
         </article>
     );
 }

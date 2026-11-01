@@ -6,6 +6,7 @@ import { withGlobalParameters } from '../../../domain/expressions.js';
 import { effectiveObjective } from '../../objective.js';
 import { useEduUiStore } from '../../shell/uiStore.js';
 import { matchNodes } from './nodes.js';
+import { paletteUsed } from './palette.js';
 
 /**
  * Spotlight targets (docs/edu/SPEC.md §6.6). A TargetRef resolves to an element at render time. Ids and labels are
@@ -169,14 +170,22 @@ export function reachedOpenTarget(refs = []) {
     return null;
 }
 
+/** Ribbon buttons that add blocks: done, like the step's palette, once the blocks it asks for are on the canvas. */
+const ADDING_TARGETS = new Set(['lesson.palette', 'ribbon.components', 'ribbon.operations']);
+
 /**
  * A target the learner has already used, so the ring moves on to the next one: its tab was visited in this step
  * (`visitedTabs`; without it, the tab is open), the code panel is open (on that tab), the dataset row is the one
- * shown, or the main pane is inside the block a nodeOpen target names.
+ * shown, the main pane is inside the block a nodeOpen target names, or the step's palette (`palette`, with the
+ * root node ids at step entry, `entryNodeIds`) has all its blocks on the canvas (review r2: the ring stayed on the
+ * ReLU chip after the learner added a ReLU from the ribbon).
  */
-export function isTargetDone(ref, root = globalThis.document, { visitedTabs } = {}) {
+export function isTargetDone(ref, root = globalThis.document, { visitedTabs, palette, entryNodeIds } = {}) {
     if (ref && typeof ref === 'object') return !!ref.nodeOpen && reachedOpenTarget([ref]) !== null;
     if (typeof ref !== 'string') return false;
+    if (ADDING_TARGETS.has(ref) && palette?.length) {
+        return paletteUsed(palette, useArchitectureStore.getState().graph, useTemplatesStore.getState().templates, entryNodeIds);
+    }
     const ui = useEduUiStore.getState();
     if (TAB_TARGETS.includes(ref)) {
         const tab = ref.slice('tab.'.length);

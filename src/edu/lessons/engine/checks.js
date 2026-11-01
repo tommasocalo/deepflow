@@ -555,6 +555,34 @@ export function evaluateCheck(spec, ctx) {
     }
 }
 
+/** Predicates about what the learner did or looked at, not about the workspace. */
+const MOVE_PREDICATES = new Set(['visited', 'tab', 'answered', 'answeredCorrectly', 'level', 'ui', 'runs']);
+
+/**
+ * The part of a check the workspace decides (the model, the training graph, the data binding): a run keeps only its
+ * `model` condition, and answers, runs, tabs, open blocks and view flags are left out. null when nothing is left.
+ * Show me checks this part before it trains, and starts over when its edits did not make it pass (review r2).
+ * A spec that loses nothing comes back as the same object.
+ */
+export function workspaceCheck(spec) {
+    if (!spec || typeof spec !== 'object') return null;
+    const name = Object.keys(spec).find((key) => PREDICATES.includes(key));
+    if (!name || MOVE_PREDICATES.has(name)) return null;
+    if (name === 'run') return spec.run?.model ? workspaceCheck(spec.run.model) : null;
+    if (name === 'all' || name === 'any') {
+        const list = spec[name] ?? [];
+        const parts = list.map(workspaceCheck);
+        if (parts.every((part, index) => part === list[index])) return spec;
+        // A dropped alternative might be the one that passes: then `any` cannot be decided here.
+        if (name === 'any') return parts.every(Boolean) ? { any: parts } : null;
+        const kept = parts.filter(Boolean);
+        return kept.length ? { all: kept } : null;
+    }
+    // `not` of a weakened check would be stricter than the original, so it is kept only whole.
+    if (name === 'not') return workspaceCheck(spec.not) === spec.not ? spec : null;
+    return spec;
+}
+
 /** The node feeding the root Output directly, if any. */
 function nodeBeforeOutput(ctx) {
     const output = firstOfType(ctx, 'Output');
