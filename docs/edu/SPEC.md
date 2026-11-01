@@ -257,30 +257,57 @@ Behaviour:
   checks badge is unchanged.
 - **Misconception callouts** wait until the learner is done: a diagnosed misconception shows once the workspace has
   stayed unchanged for 6 s, or at once when the learner trains or asks for a hint after their last edit, and any
-  edit hides it until the new state settles (in M1 s5 and M2 s5 it used to correct a half-finished edit). Each
-  callout shown (`misconception-shown`, its id) and each status message shown (`status-shown`, its text key) is
-  logged once per visit to a step.
+  edit hides it until the new state settles (in M1 s5 and M2 s5 it used to correct a half-finished edit). A
+  **finished wrong model** is named at once instead, in the status line and styled like the callout ("A common
+  mix-up: DeepFlow's BCE is BCEWithLogitsLoss…" in M2 s7's Sigmoid trap): finished means the model is valid, has no
+  block without wires and holds all the palette's blocks, a diagnose rule names it that did not hold at the step's
+  entry, and the check fails on its structure (`chain`, `edge`, `has`, `component`), which its own message cannot
+  explain. A half-done model keeps the check's message and the 6 s wait. Each callout shown (`misconception-shown`,
+  its id) and each status message shown (`status-shown`, its text key) is logged once per visit to a step.
 - **On pass** the status turns to "✓ Done", with an optional `done` sentence such as "A single neuron can only draw a
   straight line." Next becomes the primary button, and the live region announces "Step complete". There is no
   automatic advance: the learner reads the reveal, then presses Next. The pass is saved at once, so exploring after
-  it (opening model.py in M3 s7) never un-passes the step; Reset step and the Show me toast's Undo open it again. On a
-  pass the panel scrolls to the reveal of an outcome prediction, else to the done sentence.
+  it (opening model.py in M3 s7) never un-passes the step; Reset step and the Show me toast's Undo open it again. A
+  kept pass that no longer holds says so: when the model part of the check fails again, the status reads "Passed
+  earlier · now: neuron: Output is 1; this step needs 3." and the done sentence is hidden until the model holds again
+  (a view or code-panel change, or a step reopened without a new run, is not counted). On a pass the panel scrolls
+  so that the trainer card's result and the reveal's "Your run shows" line are in view together, and aligns again
+  while the card draws its boundary and run list (for 2.5 s, or until the learner scrolls or clicks the panel);
+  without an outcome reveal it scrolls to the done sentence.
 - **Dock and header.** The status line, its "Show on canvas" and "Where is it?" links, the Show me toast and the
   navigation share a dock that sticks to the bottom of the panel (in the phone drawer only the navigation row
-  sticks), so "✓ Done" and Next stay in view after training. The header carries Undo and Redo (on the Architecture
-  tab), on the same history as the ribbon and ⌘Z. The progress segments are one tab stop; the arrow keys, Home and
-  End move along them.
+  sticks), so "✓ Done" and Next stay in view after training. The header carries Undo and Redo on the Architecture
+  and Training tabs, on the same history as the ribbon and ⌘Z, which training-graph edits now join (§3.5). The
+  progress segments are one tab stop; the arrow keys, Home and End move along them.
 - **Hint ladder.** The first press shows `hint1` (a nudge: where to look), the second `hint2` (specific values), the
-  third runs **Show me**. Show me performs `step.solution` as one undoable history entry labelled "Lesson: show
-  me", and a toast offers Undo. The hint level is logged.
+  third runs **Show me**. Show me applies `step.solution` to the learner's attempt first, reusing the blocks they
+  added (§6.5). If the model part of the step's check still fails, it starts the step over from its entry snapshot
+  and applies the solution there; either way the whole change is one undoable history entry, and training runs only
+  after the model holds. The toast appears only when the step passes: "Show me made this change for you.", or "Show
+  me started this step over and made the change for you." after a restart, both with Undo, which brings the
+  attempt back. Otherwise the panel says that Show me made its changes but the step is not done yet. (In the M2 s7
+  Sigmoid trap it used to splice a second chain into the attempt and end with "BCE needs 1 output score".) The hint
+  level is logged.
+- **Palette chips** show how many of their blocks the step still needs. A chip reuses a block of its kind that the
+  learner already added in the step: the M2 s3 chip moves an unwired or miswired ReLU into its wire (a ReLU between
+  Linear 2 and the Output leaves that wire whole), and a plain chip selects one of its blocks still missing a wire
+  once the step has as many as it asks for. Once the palette's blocks are on the canvas, the spotlight leaves the
+  chips and the ribbon's Components button and moves to the block the status line names.
 - **Back** revisits passed steps read-only: the check status shows, setup is not re-run, and the workspace is not
-  changed. **Reset step** restores the step-entry snapshot. **Skip** marks the step `skipped` and moves on.
+  changed. **Reset step** restores the step-entry snapshot. **Skip** marks the step `skipped` and moves on; it
+  completes the learner's attempt with the same logic as Show me, restart included, so the next step starts from a
+  working model.
+- **Updated modules.** When a module's `version` differs from the version its saved records were made for, the
+  learner who reopens it starts again at its first step, from its start fixture, and the first steps say "This
+  module was updated since your last visit, so its steps start again from the first one." Answers, quiz and warm-up
+  results are kept (§6.8.2).
 - **Prediction gates** (`kind: 'predict'` or a task with `predict`). The input is a number field, radio choices or a
   shape field (its help example is "B, 5, 7", a shape no lesson expects; it was "B, 8, 28, 28", M4 s2's answer).
   Submit locks the answer, and it cannot be changed (it can be retried after Reset step). A count or a shape reveals
   at once: "You said X · The tool shows Y" with the explanation. An **outcome prediction**, on a step whose check
   needs a training run (`run` or `runs`), shows only "Locked: you said X" until the step's check passes; then the
-  reveal reads "You said X · Your run shows Y", with the verdict and the explanation, announced in the live region.
+  reveal, placed below the trainer card next to the run's result, reads "You said X · Your run shows Y", with the
+  verdict and the explanation, announced in the live region (it does not take focus).
   Y is read from that run by an observer (`engine/observe.js`): the boundary's shape, whether it bends, the
   best-recognised class, the hidden width, the first loss, the learning rate with the lowest validation loss or
   which loss curve rose. `predict.observe` names it, otherwise it is inferred from the step (§6.3.1), and the log
@@ -293,8 +320,9 @@ Behaviour:
   numbers keep their ascending order (1, 2, 3, 8) and yes/no and true/false their reading order. Every quiz, warm-up
   and prediction event logs the order shown, `module-start` logs the seed, and the learning-log download carries it.
 - **Quiz** follows the last step: one item per screen. Choosing an option only selects it; **Check** commits it and
-  shows that option's explanation, so arrowing through the options logs nothing. Retry is unlimited, only checked
-  answers count as attempts, and the first is logged. Warm-up items use the same component before the first step
+  shows that option's explanation, so arrowing through the options logs nothing. The explanation belongs to the
+  checked option: choosing another option hides it until the next Check. Retry is unlimited, only checked answers
+  count as attempts, and the first is logged. Warm-up items use the same component before the first step
   and can be skipped.
 - **Recap**: 3 takeaways, "Next module ›" and "Back to Learn".
 - **Collapse (‒)** minimises the panel to a 44 px rail showing the step number and status. **Exit (✕)** saves the
@@ -362,6 +390,10 @@ The Training tab is split vertically. The top 55 % keeps DeepFlow's training can
 - **Run settings** (trainer store): epochs, batch size and training seed. Optimizer type and learning rate are shown
   as fields **bound to the training graph's optimizer node**, which stays the single source of truth
   (`patchHyperparameters`).
+- **Undo.** Training-graph edits (adding, changing, connecting and deleting optimizer, loss and phase blocks) are undo
+  steps in the same document history as architecture edits, labelled like "Change training block". ⌘Z works on the
+  Training tab, and the lesson panel shows Undo and Redo there. Moving a training block is not an undo step, since
+  the canvas moves it on every frame of a drag. A lesson's `setLoss` and `setOptimizer` join their batch's undo step.
 - **Train** (`data-edu-target="trainer-run"`) and **Stop**. **Check initial loss**
   (`data-edu-target="trainer-init-loss"`) evaluates the untrained model once and records an epoch-0 run.
 - **Loss chart** (`data-edu-target="trainer-curves"`): train and validation loss per epoch, with epoch 0 = before any
@@ -1780,7 +1812,9 @@ and `validateModule(module, text) → string[]` (an empty array means valid).
  *
  * @typedef {Object} LessonModule
  * @property {ModuleId} id
- * @property {number} version              bump when step ids or meaning change (§6.8.2)
+ * @property {number} version              bump whenever a step id comes to refer to another step (a step inserted,
+ *                                         removed or renumbered) or a step's meaning changes; keep run tags and
+ *                                         prediction, quiz and warm-up ids stable, since they survive it (§6.8.2)
  * @property {number} order                1..7
  * @property {number} minutes
  * @property {string[]} datasets           dataset ids used (must exist in the registry)
@@ -2096,6 +2130,16 @@ blocks, or other adopted blocks). An adopted block is unwired, moved into the co
 adopted, and setup and fixture actions pass no entry ids. So a palette chip followed by Show me leaves one block,
 not a stranded chip block beside a second one.
 
+Show me then checks the model part of the step's check (`workspaceCheck`: a `run` keeps only its `model` condition;
+answers and view state are left out). If it fails, the session returns to the attempt and starts the step over from
+its entry snapshot: the graph and templates, and the training graph, data binding and trainer settings, return to
+the entry's (runs stay), and the solution's edits apply there. The attempt, the restart and the edits are one undo
+step, so the toast's Undo brings the attempt back. Training actions run only after that, so a wrong model is never
+trained. The session logs `show-me` with `{ ok, restarted, passed }`, and Skip completes the current step the same
+way. `scripts/edu-show-me.test.mjs` covers the M2 s7 Sigmoid trap, a correct unfinished attempt (completed, not
+replaced), the double ReLU of M2 s3, the chip's adoption, and every build step from a perturbed entry state (an
+extra block, a wrong wire).
+
 ### 6.6 Spotlight targets (`engine/targets.js`, Stage A)
 
 A `TargetRef` is a string. The registry resolves it to an element at render time. Node targets filter
@@ -2166,6 +2210,11 @@ strings.
   steps stay "visited" and are never filled in twice; the jump is logged as `skip-ahead` with what changed.
   `scripts/edu-step-entry.test.mjs` opens every step from a fresh profile by deep link and by its progress segment
   and passes it with Show me.
+- **evaluate()** also reports `drift` for a kept pass whose model part no longer holds (the panel's "Passed earlier ·
+  now: …"), and the firm diagnosis of a finished wrong model (§3.3). Both compare with the step's entry: the root
+  nodes it started with and the misconception it started with (`entryInfo()`), read from the stored step entry after
+  a reload. **logShown(type, key)** logs a status message or a callout once per visit to a step, however often the
+  panel renders.
 - **finishModule()** marks the module completed and logs `module-complete`. The module counts as completed when every
   step is `passed` or `skipped` and every quiz item has an answer.
 - **exitLesson()** saves the slot, switches to sandbox (restoring its slot), and sets the tab to `learn`.
@@ -2214,9 +2263,19 @@ DeepFlow's own keys (`deepflow:architecture-graph`, `deepflow:templates`, `deepf
 ```
 
 Pure reducers in `engine/progress.js` (unit-tested): `enterStep`, `passStep`, `skipStep`, `raiseHint`,
-`recordAnswer`, `recordQuiz`, `recordWarmup`, `completeModule`, `moduleStatus`, and `migrate(progress, modules)`. When
-`moduleVersion` changes, `migrate` keeps step records whose ids still exist and drops `currentStepId` if that step is
-gone.
+`recordAnswer`, `recordQuiz`, `recordWarmup`, `completeModule`, `moduleStatus`, and `migrate(progress, modules)`.
+
+**Module versions.** A new version may renumber steps (M5 version 2 put "The final score" at s5 and moved Dropout to
+s6; M6 version 2 gained an s6), so step records cannot follow it by id. When a module's `version` differs from the
+`moduleVersion` of its records, `migrate` drops the step records, `currentStepId`, the completion and the run tags
+of steps that no longer tag runs. It keeps what names a question rather than a place, while its id still exists:
+prediction answers, quiz and warm-up results and run tags. `migratedFrom` records the old version, and the status
+becomes `in-progress` (or stays `not-started`). The module's saved workspace slot and step entry belong to its old
+steps and are dropped too; the migrated progress is saved at once and a `module-updated` event {from, to} is logged.
+A learner who left a lesson inside such a module reopens it at its first step, restarted from its start fixture
+without saving the old workspace, with the notice of §3.3. **Authoring rule:** bump `version` whenever a step id
+comes to refer to another step or a step's meaning changes, and keep run tags and prediction, quiz and warm-up ids
+stable. `scripts/edu-module-update.test.mjs` covers a learner inside and outside an updated module.
 
 #### 6.8.3 Workspace snapshots and slots (`engine/workspace.js`)
 
@@ -2246,9 +2305,13 @@ Ring buffer of the last 2,000 events: `{ t: epochMs, type, module, step?, data? 
 `step-enter`, `step-pass`, `step-skip`, `hint` {level}, `show-me`, `reset-step`, `predict` {id, value, correct},
 `warmup` / `quiz` {id, option, correct, attempt}, `run` {dataset, epochs, finalValAccuracy, finalValLoss},
 `code-open` {tab}, `module-complete`. Since the review fixes also `skip-ahead` {from, changed, ok}, `palette-insert`
-{block, distractor, inserted, spliced}, `predict-observed` {id, said, observed, text}, `misconception-shown` {id},
-`status-shown` {key}, `undo-show-me` and `step-button`; `module-start` carries {learnerSeed}, and quiz, warm-up and
-prediction events carry the option order shown. "Download learning log" exports `{ product: PRODUCT_NAME,
+{block, distractor, inserted, spliced}, `predict-observed` {id, said, observed, text}, `misconception-shown` {id,
+source: 'callout' | 'status' | 'predict' | 'quiz' | 'warmup', item}, `status-shown` {key}, `show-me` {ok, restarted,
+passed}, `undo-show-me`, `step-button` and `module-updated` {from, to}; `module-start` carries {learnerSeed}, and
+quiz, warm-up and prediction events carry the option order shown and the diagnosed `misconception`. A prediction's
+callout is logged as shown when its reveal shows it (at once for a value the tool computes, with the run for an
+outcome), and each Check that shows a quiz or warm-up misconception logs it. Status messages and callouts are logged
+once per visit to a step (`logShown`, §6.7). "Download learning log" exports `{ product: PRODUCT_NAME,
 curriculumVersion, learnerSeed, exportedAt, progress, events }`. Nothing leaves the browser otherwise.
 
 ### 6.9 Dataset registry (Stage B; image and text presets Stage C)
@@ -2881,7 +2944,14 @@ Browser checks (`*-browser-check.mjs`) are run by hand or by Stage E against por
   test score comes from the best epoch's weights, the final weights stay, and nothing is kept without a test split.
 - `edu-walkthrough-browser-check.mjs` now runs at 1440×900, 1280×800, 1024×768 and 390×844 by default (`--sizes`),
   answers quizzes through Check, opens Linear 1 in M2 s6 to check that the block stays open while "Where is it?"
-  finds Dimensions, and checks that "✓ Done" and Next are on screen after every step.
+  finds Dimensions, and checks that "✓ Done" and Next are on screen after every step and, at 1024 px and wider, that
+  the trainer card's result and "Your run shows" are in view together after every run with a reveal.
+- `edu-show-me.test.mjs`: Show me after a wrong attempt (§6.5): the M2 s7 Sigmoid trap and a Linear, ReLU, Sigmoid
+  attempt are started over, a correct unfinished attempt is completed, the double ReLU of M2 s3 and the chip's
+  adoption, and every build step from a perturbed entry state. `edu-module-update.test.mjs`: the module-version
+  migration for a learner inside and outside the updated module (§6.8.2).
+- `edu-step-status.test.mjs`: "Passed earlier · now: …" for a kept pass that no longer holds, and the firm diagnosis
+  of a finished wrong model. `training-history.test.mjs`: training-graph edits in the undo history (§3.5).
 
 ---
 
@@ -2910,9 +2980,11 @@ piloted:
    hidden.
 3. **The transfer dataset in the app.** Palmer Penguins (numeric columns) is not in the dataset registry; it must
    be added (CC0, with a Python loader and parity test like Iris), or the task must use a dataset the app has.
-4. **A complete log for RQ2: built.** The event log records the misconception id of every callout shown
-   (`misconception-shown`) and the key of every status message shown (`status-shown`), with the step and time, plus
-   the option order each learner saw (§6.8.4).
+4. **A complete log for RQ2: built.** The event log records the misconception id of every callout shown, whatever
+   shows it: the step's callout or status line, a prediction's reveal, or a quiz or warm-up explanation
+   (`misconception-shown` with its `source` and `item`; predict, quiz and warm-up events also carry the diagnosed
+   `misconception`). It records the key of every status message shown (`status-shown`), each once per visit to a
+   step, with the step and time, plus the option order each learner saw (§6.8.4).
 
 **Participants and power.** Students with at most one ML course and no neural-network training experience,
 screened with a 5-item prior-knowledge test. The first plan, 26 per arm (power 0.8, α 0.05, two-sided, d = 0.8),
@@ -3194,3 +3266,6 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-11-01 | Review fixes (round 2, content) | **Less load per step, and a Dropout reveal that agrees with the test score.** M1 s3's body keeps σ(z), BCE and the prediction; the update rule w ← w − lr · ∂loss/∂w, the learning rate and Adam moved to its Why?. M5 s4's reveal (about 95 words) keeps overfitting, underfitting and early stopping; the test split is a new short step, M5 s5 "The final score" (`m5.finalScore`: the test accuracy ✓; the validation accuracy at the ▲ → `validation-score-final`; after the last epoch → new `last-epoch-score`), whose reveal points at the run's test line. Dropout and the code step are now s6 and s7, M5's `version` is 2, and the course has 52 steps. `m5.q5` now asks about choosing between 5 models, so it transfers s5 rather than repeating it. M5 s6 said "Dropout reduced overfitting" next to a lower test score (86.7% against 90% for the fixture's seed); its reveal now adds that a higher test score is not to be expected, because early stopping had already kept the best epoch and one of 30 test points is 3.3% (fact `testPointShare`), and to choose between models on validation and report the chosen one's test score once. Re-measured (§11.2): the gap shrinks on 7 of 8 seeds, but the best validation loss is lower without Dropout on 8 of 8 and the test accuracy is never higher with it. |
 | 2026-11-01 | Review fixes (round 2, content) | **Export wording.** The torchvision loaders' docstring said "Iris and the toy datasets fit their scaling on the training split only", but the toy sets are not scaled: it now reads "Iris fits its scaling on the training split only; the toy datasets are not scaled" (also in `images.js`'s comment). A toy dataset's train.py header and its `DATA_SEED` comment say "train/validation/test split" when the split has a test part (M5's overfitting run), and a browser dataset's `DATA_SEED` comment names the test split too; M5 s7 quotes the `DATA_SEED` line and the test evaluation. |
 | 2026-11-01 | Review fixes (round 2, content) | **The tutoring lineage** (§0, §10). §0 now names the design the lesson panel follows, at the level the UIST review asked for: step-level checks, a graded hint sequence ending in a bottom-out solution, and buggy-rule misconception diagnosis, as in Cognitive Tutors and CTAT (Koedinger, Aleven et al.) and Andes (VanLehn et al.), VanLehn's "inner loop" (2006); and the help-seeking (Aleven et al.) and gaming-the-system (Baker et al.) work behind §10's Show me risk, whose row now cites it and notes that the log records hints and Show me per step. The README's positioning paragraph mirrors it. |
+| 2026-11-01 | Review fixes (round 2, engine and UI; recorded with the content) | **Show me, chips and the status line** (§3.3, §6.5, §6.7). Show me applies the solution to the learner's attempt, reusing their blocks, then checks the model part of the step's check (`workspaceCheck`); if it fails, it starts the step over from its entry snapshot (graph, templates, training graph, data binding and trainer settings; runs stay) as one undo step, and trains only after that. The toast appears only when the step passes ("Show me started this step over and made the change for you." after a restart), else the panel says the step is not done yet; Skip uses the same logic. Chips reuse a block the learner already added (the M2 s3 chip moves an unwired or miswired ReLU into its wire) and show how many the step still needs; once the palette's blocks are placed, the spotlight moves from the chips to the block the status names. A kept pass that no longer holds shows "Passed earlier · now: …" and hides its done sentence. A finished wrong model (valid, no unwired blocks, all palette blocks placed, its misconception absent at entry, the check failing on structure) is named at once; half-done models keep the 6 s wait. |
+| 2026-11-01 | Review fixes (round 2, engine and UI; recorded with the content) | **Reveals, quiz, log and undo** (§3.3, §3.5, §6.8.4, §9). Outcome reveals sit below the trainer card, and the panel keeps the card's result and "Your run shows" in view together while the card draws. Quiz feedback belongs to the checked option and hides when another is chosen until Check. The log adds `misconception` to predict, quiz and warm-up events, `source` and `item` to `misconception-shown`, `restarted` and `passed` to `show-me`, and a `module-updated` event; status messages and callouts are logged once per visit (`logShown`), so §9's prerequisite 4 is complete. Training-graph edits are in the undo history (Undo and Redo in the panel on the Training tab, ⌘Z there; moving a training block is not an undo step). The hint's wire line says a selected wire is highlighted, not that it turns dark. |
+| 2026-11-01 | Review fixes (round 2, engine and UI; recorded with the content) | **Module versions** (§6.3.1, §6.8.2). Progress was matched by step id, so M5's and M6's renumbered steps inherited old records. When a module's version differs from its saved records, the step records, current step, completion, orphaned run tags, saved workspace slot and step entry are dropped; prediction, quiz and warm-up results and run tags are kept while their ids exist; `migratedFrom` records the old version; a learner inside the module reopens it at step 1 with a one-line notice. Authoring rule: bump `version` whenever a step id comes to refer to another step, and keep run tags and prediction, quiz and warm-up ids stable. New tests: `edu-show-me.test.mjs`, `edu-module-update.test.mjs`, `edu-step-status.test.mjs`, `training-history.test.mjs` (§8.6). |
