@@ -255,14 +255,19 @@ export default function StepView({ module, step, index, total, record, answers, 
     };
     const diagnosed = !passing && result?.misconception && hasText(`mis.${result.misconception}`) ? result.misconception : null;
     // A misconception callout waits until the learner seems finished (review r1: it fired after only Input was set):
-    // the model has stayed the same for a moment, or they trained or asked for a hint since their last edit.
-    const misconception = useSettledMisconception(diagnosed, { trainerSeq: trainer?.seq ?? 0, hintLevel: record?.hintLevel ?? 0 });
+    // the model has stayed the same for a moment, or they trained or asked for a hint since their last edit. A
+    // complete wrong model (`firm`, review r2: the Sigmoid trap) is named at once, in the status line instead.
+    const settled = useSettledMisconception(diagnosed, { trainerSeq: trainer?.seq ?? 0, hintLevel: record?.hintLevel ?? 0 });
+    const firm = !!diagnosed && !!result?.firm && !done;
+    const misconception = firm ? null : settled;
+    // A pass kept from earlier whose model has changed since: the status says what holds now (review r2).
+    const drift = done && !passing && !!result?.drift;
     const problem = result?.issue ?? result?.hint ?? null;
     // Once every target is used (the palette's blocks are on the canvas), the ring moves to the block the status names.
     const targets = step.target ?? [];
     const targetsUsed = targets.length > 0 && targets.every((ref) => isTargetDone(ref, globalThis.document, targetOptions));
     const spotlightTargets = targetsUsed && problem?.nodeId ? [{ node: { id: problem.nodeId } }] : targets;
-    useStudyLog(module.id, step.id, { misconception, status: passing || done ? null : result?.issue ?? result?.detail ?? null });
+    useStudyLog(module.id, step.id, { misconception: firm ? diagnosed : misconception, status: passing || (done && !drift) ? null : result?.issue ?? result?.detail ?? null });
     const embeds = step.embeds ?? [];
     const nextLabel = isLast ? (module.quiz?.length ? t('nav.toQuiz') : t('nav.next')) : t('nav.next');
     const canAdvance = passing || done;
@@ -295,8 +300,9 @@ export default function StepView({ module, step, index, total, record, answers, 
                 </button>
             ))}
 
-            {done && !passing && !runtime?.passedHere && <p className="edu-muted">{t('panel.reviewing')}</p>}
-            <div ref={doneRef}>{(passing || done) && hasText(`${prefix}.done`) && <RichText className="edu-done" text={t(`${prefix}.done`)} params={params} />}</div>
+            {done && !passing && !drift && !runtime?.passedHere && <p className="edu-muted">{t('panel.reviewing')}</p>}
+            {/* The done sentence states facts about the model: it goes when the model no longer has them. */}
+            <div ref={doneRef}>{(passing || (done && !drift)) && hasText(`${prefix}.done`) && <RichText className="edu-done" text={t(`${prefix}.done`)} params={params} />}</div>
             {(passing || answer) && live.variant && hasText(`${prefix}.reveal.${live.variant}`) && (
                 <RichText className="edu-callout edu-callout-info" text={t(`${prefix}.reveal.${live.variant}`)} params={params} />
             )}
@@ -312,11 +318,24 @@ export default function StepView({ module, step, index, total, record, answers, 
 
             {/* The status and the way on stay at the bottom of the panel however long the step is (review r1). */}
             <div className="edu-step-dock">
-                <div className={`edu-status${passing || done ? ' is-done' : ''}`} role="status" aria-live="polite">
-                    {passing || done ? (
+                <div className={`edu-status${passing || done ? ' is-done' : ''}${drift ? ' is-drift' : ''}${firm ? ' is-misconception' : ''}`} role="status" aria-live="polite">
+                    {drift ? (
+                        <>
+                            <span className="edu-status-icon" aria-hidden="true">✓</span>
+                            <span>
+                                <strong>{t(status === 'skipped' ? 'panel.skippedEarlier' : 'panel.passedEarlier')}</strong>
+                                {' · '}{t('panel.now')}: <RichText inline text={statusText(result, busy)} />
+                            </span>
+                        </>
+                    ) : passing || done ? (
                         <>
                             <span className="edu-status-icon" aria-hidden="true">✓</span>
                             <span><strong>{t('panel.done')}</strong>{passing && <span className="edu-sr-only"> — {t('panel.stepComplete')}</span>}</span>
+                        </>
+                    ) : firm ? (
+                        <>
+                            <span className="edu-status-icon" aria-hidden="true">○</span>
+                            <span><strong>{t('panel.misconception')}: </strong><RichText inline text={t(`mis.${diagnosed}`)} /></span>
                         </>
                     ) : (
                         <>

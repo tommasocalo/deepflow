@@ -568,14 +568,28 @@ test('the progress segments are one tab stop, the arrows move between them, and 
 
 test('a misconception callout waits until the learner signals they are done, and the log records it', async () => {
     await openStep(2);
-    // ReLU after the last Linear: the demo step's diagnose rule (activation at the output).
-    await run(() => runActions([{ do: 'insertBetween', block: 'torch.nn.ReLU', from: { id: 'lin2' }, to: { id: 'out' } }], { label: 'test' }));
+    // The Sigmoid distractor after the last Linear, the ReLU not placed yet: diagnosed (activation at the output), but
+    // the model is not finished, so the callout waits.
+    await run(() => runActions([{ do: 'insertBetween', block: 'torch.nn.Sigmoid', from: { id: 'lin2' }, to: { id: 'out' } }], { label: 'test' }));
     await settle(60);
     assert.equal(panel().querySelector('.edu-callout-misconception'), null, 'not while the learner may still be editing');
+    assert.doesNotMatch(text(panel().querySelector('.edu-status')), /A common mix-up/);
     await click(button('Hint'));
     await settle(60);
     assert.match(text(panel().querySelector('.edu-callout-misconception')), /A common mix-up:/, 'a hint after the edit shows it at once');
     const events = readLog();
     assert.ok(events.some((event) => event.type === 'misconception-shown' && event.data.id === 'activation-at-output'), 'the shown misconception is logged');
     assert.ok(events.some((event) => event.type === 'status-shown' && event.step === 's3'), 'status messages are logged');
+});
+
+test('a finished wrong model is named in the status line at once (review r2: the Sigmoid trap)', async () => {
+    await openStep(2);
+    // The palette's ReLU placed after the last Linear: valid, nothing left to place, and the rule names it.
+    await run(() => runActions([{ do: 'insertBetween', block: 'torch.nn.ReLU', from: { id: 'lin2' }, to: { id: 'out' } }], { label: 'test' }));
+    await settle(60);
+    const status = panel().querySelector('.edu-status');
+    assert.match(text(status), /A common mix-up:/, 'named at once, in the status line');
+    assert.ok(status.classList.contains('is-misconception'));
+    assert.equal(panel().querySelector('.edu-callout-misconception'), null, 'not twice');
+    assert.ok(readLog().some((event) => event.type === 'misconception-shown' && event.data.id === 'activation-at-output'), 'logged');
 });

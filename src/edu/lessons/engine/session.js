@@ -4,10 +4,11 @@ import { callSource, onSourceRegistered, readSource, registerSource, subscribeSo
 import { useEduUiStore } from '../../shell/uiStore.js';
 import { runActions } from './actions.js';
 import { requestFit } from './canvasBridge.js';
-import { completedEpochs, evaluateCheck, evaluateStep, finalMetrics, trainerRuns, workspaceCheck } from './checks.js';
-import { buildCheckContext, factValues, subscribeCheckContext } from './context.js';
+import { completedEpochs, createCheckContext, evaluateCheck, evaluateStep, finalMetrics, trainerRuns, workspaceCheck } from './checks.js';
+import { buildCheckContext, factValues, readUiState, subscribeCheckContext } from './context.js';
 import { clearLog, logEvent } from './log.js';
 import { learnerSeed, predictionOrder, quizOrder } from './order.js';
+import { paletteUsed } from './palette.js';
 import { gradePrediction } from './predict.js';
 import * as P from './progress.js';
 import { getModule, getModules, stepIndexById } from './registry.js';
@@ -27,8 +28,10 @@ const PHASES = ['warmup', 'steps', 'quiz', 'recap'];
 const PERSISTED = ['mode', 'moduleId', 'phase', 'stepIndex', 'quizIndex', 'warmupIndex', 'collapsed'];
 const freshRuntime = (overrides = {}) => ({
     enteredAtSeq: 0, visitedTabs: [], revealShown: false, busy: false, error: null, showMe: null, skippedAhead: 0, passedHere: false,
-    entryNodeIds: null, ...overrides,
+    entryNodeIds: null, entryMisconception: null, ...overrides,
 });
+/** Checks about the model's structure: their message cannot name a block that is in the wrong place. */
+const STRUCTURE_PREDICATES = new Set(['chain', 'edge', 'has', 'component']);
 /** Show me actions that train: they wait until the model is right, so a wrong attempt is never trained. */
 const TRAINING_ACTIONS = new Set(['train', 'evaluateInit']);
 
@@ -124,7 +127,7 @@ export const useLessonSession = create((set, get) => {
         updateProgress((progress) => P.enterStep(progress, current.id, target.id));
         updateRuntime({
             enteredAtSeq: trainerSeq(), visitedTabs: [useEduUiStore.getState().activeTab], revealShown: false, busy: false,
-            entryNodeIds: Object.keys(entry?.graph?.nodes ?? {}),
+            entryNodeIds: Object.keys(entry?.graph?.nodes ?? {}), entryMisconception: diagnoseSnapshot(current, target, entry),
         });
         log('step-enter', { step: target.id });
         return true;
@@ -140,6 +143,17 @@ export const useLessonSession = create((set, get) => {
         }
         if (current.quiz?.length) set({ phase: 'quiz', quizIndex: 0, runtime: freshRuntime() });
         else get().finishModule();
+    }
+
+    /** The misconception a step diagnoses in a snapshot (its entry): one it starts with is no mistake of the learner's. */
+    function diagnoseSnapshot(current, target, snapshot) {
+        if (!snapshot?.graph || !(target.diagnose?.length || target.kind === 'task')) return null;
+        const ctx = createCheckContext({
+            graph: snapshot.graph, templates: snapshot.templates, training: snapshot.training, ui: readUiState(), data: readSource('data'),
+            trainer: readSource('trainer'), step: get().stepInfo(), facts: factValues(current), module: current,
+        });
+        const result = evaluateStep(target, ctx);
+        return result.pass ? null : result.misconception ?? null;
     }
 
     /** Whether the workspace part of a step's check holds now (engine/checks.js workspaceCheck). */
@@ -246,7 +260,23 @@ export const useLessonSession = create((set, get) => {
             const current = module();
             const target = step();
             if (!current || !target) return { pass: false, detail: { key: 'panel.empty', params: {} } };
-            return evaluateStep(target, buildCheckContext({ module: current, step: get().stepInfo(), facts: factValues(current) }));
+            const ctx = buildCheckContext({ module: current, step: get().stepInfo(), facts: factValues(current) });
+            const result = evaluateStep(target, ctx);
+            if (result.pass) return result;
+            // `firm`: a finished wrong model, which the panel names at once (review r2: the Sigmoid trap read "After
+            // Linear, connect an Output" for 6 s while Sigmoid was the problem). Finished: valid, nothing left without
+            // wires, the palette's blocks all placed, and a misconception the step did not start with; and the check
+            // fails on the model's structure, which its own message cannot explain. A half-done model (M1 s5 with
+            // only Input set) keeps the check's message and the 6 s wait.
+            const firm = !!result.misconception && result.misconception !== get().runtime.entryMisconception
+                && STRUCTURE_PREDICATES.has(result.predicate) && !!ctx.report?.ok && !ctx.issues.length && !ctx.hints.length
+                && (!target.palette?.length || paletteUsed(target.palette, ctx.graph, ctx.templates, get().runtime.entryNodeIds));
+            // `drift`: a step passed (or skipped) earlier whose model no longer holds: the panel keeps the pass but
+            // says what changed (review r2: M1 s5 still said "15 parameters" after Output went back to 1).
+            const kept = ['passed', 'skipped'].includes(record()?.steps?.[target.id]?.status);
+            const part = kept ? workspaceCheck(target.check) : null;
+            const drift = !!part && !evaluateCheck(part, ctx).pass;
+            return firm || drift ? { ...result, ...(firm ? { firm } : {}), ...(drift ? { drift } : {}) } : result;
         },
         trainLocked: () => {
             const target = step();

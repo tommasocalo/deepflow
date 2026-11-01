@@ -83,6 +83,11 @@ p.edu-muted { margin: 4px 0 0; }
 .edu-status-icon { font-weight: 800; line-height: 1.45; }
 .edu-status.is-done { background: #ecfdf5; color: #065f46; }
 .edu-status.is-done .edu-status-icon { color: #047857; }
+/* A pass kept from earlier whose model has changed since (review r2): kept, but not as plain "Done". */
+.edu-status.is-done.is-drift { background: #fffbeb; color: #78350f; }
+.edu-status.is-done.is-drift .edu-status-icon { color: #b45309; }
+/* A finished wrong model, named at once (review r2: the M2 s7 Sigmoid trap). */
+.edu-status.is-misconception { background: #fffbeb; color: #78350f; }
 .edu-done { margin-top: 6px; color: #065f46; }
 
 .edu-callout { margin: 8px 0 0; padding: 8px 10px; border-left: 3px solid #111; border-radius: 0 6px 6px 0; background: #fafafa; line-height: 1.45; font-size: 12.5px; }
