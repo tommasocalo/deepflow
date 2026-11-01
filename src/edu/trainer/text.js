@@ -54,7 +54,7 @@ export const TRAINER_TEXT = {
         'loss.val': 'val',
         'loss.chance': 'chance ln {classes} = {value}',
         'loss.chanceBce': 'chance ln 2 = {value}',
-        'loss.best': 'best val loss: ep {epoch}',
+        'loss.best': 'best val loss {loss} at ep {epoch}',
         'loss.previous': 'Earlier runs (dimmed): {labels}',
         'loss.summary': 'Epoch {epoch}: training loss {train}, validation loss {val}.',
         'loss.summaryBest': 'Lowest validation loss {loss} at epoch {epoch}.',

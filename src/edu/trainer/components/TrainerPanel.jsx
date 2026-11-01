@@ -76,7 +76,7 @@ export default function TrainerPanel() {
                             {last && Number.isFinite(last.valLoss) && (
                                 <span className="edu-tr-head-value">
                                     {tr('loss.val')} {formatLoss(last.valLoss)}
-                                    {record.best && record.history.length > 1 ? <> · <span aria-hidden="true">▲</span> {tr('loss.best', { epoch: record.best.epoch })}</> : null}
+                                    {record.best && record.history.length > 1 ? <> · <span aria-hidden="true">▲</span> {tr('loss.best', { loss: formatLoss(record.best.valLoss), epoch: record.best.epoch })}</> : null}
                                 </span>
                             )}
                         </div>

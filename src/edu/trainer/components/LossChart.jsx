@@ -68,7 +68,7 @@ export default function LossChart({ record, runs = [], height = 170, compact = f
                 width={width} height={height} xMax={xMax} yMax={yMax} yFormat={formatTick} compact={compact}
                 series={series} ghosts={ghosts}
                 reference={Number.isFinite(record.chance) ? { y: record.chance, label: chanceLabel(record) } : null}
-                marker={best ? { x: best.epoch, y: best.valLoss, title: tr('loss.best', { epoch: best.epoch }) } : null}
+                marker={best ? { x: best.epoch, y: best.valLoss, title: tr('loss.best', { loss: formatLoss(best.valLoss), epoch: best.epoch }) } : null}
                 title={tr('loss.title')} desc={desc}
                 table={<LossTable history={history} />}
             />
