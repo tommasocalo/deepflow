@@ -58,7 +58,8 @@ export default {
         {
             id: 's1', kind: 'predict', subgoal: 'train', tab: 'architecture', target: ['trainer.run'],
             locks: { gate: 'train' }, embeds: ['trainer'], reveal: { run: 'finalValAccuracy' },
-            predict: { id: 'm2.oneNeuron', kind: 'choice', options: ['yes', 'no'], correct: 'no', diagnose: [{ equals: 'yes', misconception: 'neuron-bends' }] },
+            // The reveal waits for the learner's run and reads whether its boundary bends (engine/observe.js).
+            predict: { id: 'm2.oneNeuron', kind: 'choice', options: ['yes', 'no'], correct: 'no', observe: 'bends', diagnose: [{ equals: 'yes', misconception: 'neuron-bends' }] },
             check: { all: [{ answered: 'm2.oneNeuron' }, { run: { dataset: 'circle', minEpochs: 30 } }] },
             solution: [answer('m2.oneNeuron', 'no'), TRAIN],
         },
@@ -66,7 +67,7 @@ export default {
             id: 's2', kind: 'predict', subgoal: 'model', tab: 'architecture', target: ['trainer.run'],
             setup: [{ do: 'loadFixture', id: 'twoLinear' }],
             locks: { gate: 'train' }, embeds: ['trainer'], reveal: { run: 'finalValAccuracy' },
-            predict: { id: 'm2.stacked', kind: 'choice', options: ['yes', 'no'], correct: 'no', diagnose: [{ equals: 'yes', misconception: 'stacked-linear-bends' }] },
+            predict: { id: 'm2.stacked', kind: 'choice', options: ['yes', 'no'], correct: 'no', observe: 'bends', diagnose: [{ equals: 'yes', misconception: 'stacked-linear-bends' }] },
             check: { all: [
                 { answered: 'm2.stacked' },
                 { run: { dataset: 'circle', minEpochs: 30, model: { all: [{ has: { type: 'Linear' }, count: 2 }, { not: { has: { type: 'Activation' } } }] } } },
@@ -97,7 +98,7 @@ export default {
             id: 's5', kind: 'predict', subgoal: 'model', tab: 'architecture', target: [{ node: { id: 'lin1' } }, 'field:out_features'],
             locks: { gate: 'train' }, embeds: ['trainer'], reveal: { run: 'finalValAccuracy' },
             predict: {
-                id: 'm2.width', kind: 'choice', options: ['one', 'two', 'three', 'eight'], correct: 'three',
+                id: 'm2.width', kind: 'choice', options: ['one', 'two', 'three', 'eight'], correct: 'three', observe: 'hiddenWidth',
                 diagnose: [
                     { equals: 'one', misconception: 'too-few-edges' },
                     { equals: 'two', misconception: 'too-few-edges' },

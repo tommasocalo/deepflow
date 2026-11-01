@@ -119,6 +119,23 @@ export default {
     'predict.notQuite': 'Not quite — here is why',
     'predict.byShowMe': 'Show me filled in {value}.',
     'predict.locked': 'Your answer is locked. Reset step to try again.',
+    'predict.lockedIn': 'Locked: you said {value}',
+    'predict.waiting': 'Now run it. The answer and why come with your result.',
+    'predict.yourRun': 'Your run shows {value}',
+    'observe.accuracy': 'validation accuracy {accuracy}',
+    'observe.initLoss': 'a first loss of {loss}',
+    'observe.bends.yes': 'a boundary that bends (validation accuracy {accuracy})',
+    'observe.bends.no': 'a straight boundary (validation accuracy {accuracy})',
+    'observe.shape.line': 'a straight line (validation accuracy {accuracy})',
+    'observe.shape.closed': 'a closed curve (validation accuracy {accuracy})',
+    'observe.shape.curve': 'a curved boundary (validation accuracy {accuracy})',
+    'observe.shape.none': 'one class everywhere (validation accuracy {accuracy})',
+    'observe.bestClass': '{name} recognised best, {correct} of {total} right',
+    'observe.bestLr': 'the lowest validation loss with lr {lr} ({loss})',
+    'observe.rising.val': 'validation loss rising to {rise}× its lowest value while training loss falls',
+    'observe.rising.train': 'training loss rising while validation loss falls',
+    'observe.rising.neither': 'both losses falling to the end',
+    'observe.width': '{units} hidden units reaching {accuracy}',
 
     // Quiz, warm-up and recap (§3.3)
     'warmup.heading': 'Warm-up',
@@ -193,6 +210,9 @@ export default {
     'check.run.lr': 'The last run used learning rate {actual}; this step needs {expected}.',
     'check.run.model': 'The last run trained a different model. {detail}',
     'check.run.failed': 'The last run failed: {error}',
+    'check.run.modelFirst': 'Change the model first: {detail}',
+    'check.run.retrain': 'You changed the model since the last run: press **Train** again.',
+    'check.run.preflight': 'Fix this before training: {message}',
     'check.runs': 'Still to try: learning rate {missing}.',
     'check.level': 'Open **{type}** with the arrow on the block.',
     'check.ui.showDimensions.on': 'Turn on **Dimensions** in the ribbon (View).',
@@ -209,9 +229,6 @@ export default {
     'check.component.contains': '**{type}** blocks in your component: {count} needed, {actual} now. Select all of them before **Group**.',
     'check.custom': 'Not done yet.',
     'check.not': 'Not done yet.',
-    'check.run.modelFirst': 'Change the model first: {detail}',
-    'check.run.retrain': 'You changed the model since the last run: press **Train** again.',
-    'check.run.preflight': 'Fix this before training: {message}',
     'check.any': 'Not done yet.',
     'check.unknown': 'This check is not available.',
 
@@ -226,6 +243,7 @@ export default {
     'value.oneOf': 'one of {values}',
     'value.or': ' or ',
 
+    'value.and': ' and ',
     // Metric names
     'metric.valAccuracy': 'Validation accuracy',
     'metric.trainAccuracy': 'Training accuracy',
@@ -242,7 +260,6 @@ export default {
     'type.LearnedPositions': 'Learned positions',
     'type.SinusoidalPositions': 'Sinusoidal positions',
 
-    'value.and': ' and ',
     // Loss and optimizer names
     'loss.cross_entropy': 'Cross-Entropy',
     'loss.bce': 'BCE',
@@ -292,13 +309,6 @@ export default {
     'fb.elementwise': 'The inputs of **{label}** have different widths ({widths}).',
     'fb.norm-width': '**{label}** expects {expected} features but receives {actual}.',
     'fb.generic': '**{label}**: {message}',
-    'fb.global': '{message}',
-
-    // Shell
-    'shell.exampleInLesson': 'Open the example in your sandbox? Your lesson is saved.',
-    'shell.resetLesson': 'Reset this lesson\'s workspace to empty graphs? Your lesson progress is kept.',
-    'shell.resetSandbox': 'Reset architecture and training graphs to empty?',
-};
     'fb.extra-wire': '**{label}** has {count} incoming wires but takes one input. The old wire from **{from}** skips **{via}**: click that wire and press Delete.',
     'fb.too-many-inputs': '**{label}** has {count} incoming wires, from {sources}, but takes one input. Click the wire that does not belong and press Delete.',
     'fb.too-many-inputs.ports': '**{label}** has {count} incoming wires, from {sources}, but takes {ports} inputs. Click the extra wire and press Delete.',
@@ -306,3 +316,10 @@ export default {
     'fb.unwired': '**{label}** has no wires yet.',
     'fb.unwired-in': 'Nothing flows into **{label}** yet.',
     'fb.unwired-out': '**{label}** does not feed into another block yet.',
+    'fb.global': '{message}',
+
+    // Shell
+    'shell.exampleInLesson': 'Open the example in your sandbox? Your lesson is saved.',
+    'shell.resetLesson': 'Reset this lesson\'s workspace to empty graphs? Your lesson progress is kept.',
+    'shell.resetSandbox': 'Reset architecture and training graphs to empty?',
+};

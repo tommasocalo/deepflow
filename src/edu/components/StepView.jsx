@@ -5,6 +5,8 @@ import { useArchitectureStore } from '../../stores/architectureStore.js';
 import TrainerCard from '../trainer/components/TrainerCard.jsx';
 import { focusNode, requestFit, requestTrainingFit, selectEdge } from '../lessons/engine/canvasBridge.js';
 import { hasText, t } from '../lessons/engine/i18n.js';
+import { logEvent } from '../lessons/engine/log.js';
+import { isOutcomePrediction, observePrediction } from '../lessons/engine/observe.js';
 import { revealValues } from '../lessons/engine/reveal.js';
 import { isTargetDone, isVisible, resolveNodeTargetId, resolveTarget } from '../lessons/engine/targets.js';
 import { useLessonSession } from '../lessons/engine/session.js';
@@ -122,6 +124,10 @@ export default function StepView({ module, step, index, total, record, answers, 
     // Run tags belong to the module (M5 compares its Dropout run with the run tagged in an earlier step).
     const live = revealValues(step.reveal, { trainer, enteredAtSeq: runtime?.enteredAtSeq ?? 0, runTags });
     const params = { ...facts, ...live.params };
+    // Predict, observe, explain: an outcome prediction is revealed with the run that passed the step, read from it.
+    const outcome = isOutcomePrediction(step);
+    const observed = outcome && (passing || done);
+    const observation = observed && answer ? observePrediction(step, { trainer, enteredAtSeq: runtime?.enteredAtSeq ?? 0, runId: result?.runId }, prefix) : null;
     const showMeAt = runtime?.showMe?.at ?? null;
     // Tabs visited in this step count as used targets, so the ring moves on to what comes next.
     const visitedTabs = runtime?.visitedTabs;
@@ -134,6 +140,15 @@ export default function StepView({ module, step, index, total, record, answers, 
         const hide = setTimeout(() => setToastAt(null), 8000);
         return () => { clearTimeout(show); clearTimeout(hide); };
     }, [showMeAt, runtime?.showMe?.undoable]);
+
+    // The study log records what the learner's run showed next to what they predicted (once per visit).
+    const loggedReveal = useRef(false);
+    const observedOption = observation?.option ?? observation?.value ?? null;
+    useEffect(() => {
+        if (!outcome || !observation || !answer || loggedReveal.current || !passing) return;
+        loggedReveal.current = true;
+        logEvent('predict-observed', { module: module.id, step: step.id, data: { id: step.predict.id, said: answer.value, observed: observedOption, text: observation.text } });
+    }, [outcome, observation, observedOption, answer, passing, module.id, step.id, step.predict?.id]);
 
     const missingTimer = useRef(null);
     useEffect(() => () => clearTimeout(missingTimer.current), []);
@@ -164,7 +179,8 @@ export default function StepView({ module, step, index, total, record, answers, 
             {step.palette?.length > 0 && !passing && <PaletteChips items={step.palette} moduleId={module.id} stepId={step.id} />}
             {step.predict && (
                 <PredictGate key={`${prefix}-${answer ? 'answered' : 'open'}`} predict={step.predict} textPrefix={prefix} answer={answer} params={params}
-                    disabled={busy} focusReveal={!!runtime?.revealShown} onSubmit={(predictId, value) => session.submitPrediction(predictId, value)} />
+                    disabled={busy} focusReveal={!!runtime?.revealShown} onSubmit={(predictId, value) => session.submitPrediction(predictId, value)}
+                    outcome={outcome} observed={observed} observation={observation} />
             )}
             {embeds.includes('trainer') && <div className="edu-embed edu-embed-trainer"><TrainerCard locked={locked} lockedReason={locked ? t('panel.trainLocked') : ''} /></div>}
             {embeds.includes('paramCount') && (!step.predict || answer ? <ParamCountReadout /> : <p className="edu-embed edu-muted">{t('paramCount.hidden')}</p>)}

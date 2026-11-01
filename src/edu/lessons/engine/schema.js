@@ -3,6 +3,7 @@ import { getEntry } from '../../../domain/library/index.js';
 import { ACTIONS } from './actions.js';
 import { PREDICATES } from './checks.js';
 import { KNOWN_MATCH_KEYS } from './nodes.js';
+import { OBSERVERS } from './observe.js';
 import { isValidTargetRef } from './targets.js';
 
 /**
@@ -55,6 +56,7 @@ import { isValidTargetRef } from './targets.js';
  * @property {string} [correct]
  * @property {Array<number|null>} [expectedShape]   null = batch axis; the input accepts "B, 1, 28, 28"
  * @property {{ equals: number|string|Array<number|null>, misconception: string }[]} [diagnose]
+ * @property {string} [observe]            how the step's run shows the answer (engine/observe.js OBSERVERS); inferred when absent
  *
  * @typedef {Object} QuizItem
  * @property {string} id                   'm1.q1' or 'm2.w1'
@@ -273,6 +275,7 @@ export function validateModule(module, text = {}, { datasetIds, limits = true } 
             if (p.kind === 'number' && typeof p.expected !== 'number') errors.push(`${s}.predict: number predictions need expected`);
             if (p.kind === 'shape' && !Array.isArray(p.expectedShape)) errors.push(`${s}.predict: shape predictions need expectedShape`);
             if (p.kind === 'choice' && (!Array.isArray(p.options) || !p.options.includes(p.correct))) errors.push(`${s}.predict: correct must be one of the options`);
+            if (p.observe !== undefined && !OBSERVERS.includes(p.observe)) errors.push(`${s}.predict: unknown observer ${p.observe}`);
         }
         for (const item of step.palette ?? []) {
             if (!isValidBlockRef(item.block)) errors.push(`${s}.palette: unknown block ${item.block}`);
