@@ -36,7 +36,8 @@ export default {
     'm1.s2.predict.reveal': '{neuronParams}: one weight per input feature (2) plus one bias, so z = w₁·x₁ + w₂·x₂ + b. The tool counts them below.',
 
     'm1.s3.title': 'Predict, then train',
-    'm1.s3.body': '**σ(z)** squashes the score z into a probability between 0 and 1. **BCE loss** measures how wrong that probability is for each dot. Each training step moves every parameter against its gradient: w\u00a0←\u00a0w\u00a0−\u00a0lr\u00a0·\u00a0∂loss/∂w. The **learning rate** lr sets the step size; **Adam** adapts it per parameter. Before you train: what will separate the two colours?',
+    'm1.s3.body': '**σ(z)** squashes the score z into a probability between 0 and 1. **BCE loss** measures how wrong that probability is for each dot. Training nudges w₁, w₂ and b to lower it. Before you train: what will separate the two colours?',
+    'm1.s3.why': 'Each training step moves every parameter a little against its gradient: w\u00a0←\u00a0w\u00a0−\u00a0lr\u00a0·\u00a0∂loss/∂w. The **learning rate** lr, the card\'s lr field, sets the step size. The optimizer here, **Adam**, adapts the step for each parameter.',
     'm1.s3.hint1': 'Answer the question, then press **Train** in the card below.',
     'm1.s3.hint2': 'One **epoch** is one pass over the training dots. Thirty epochs take under a second.',
     'm1.s3.predict.prompt': 'What shape will the boundary between blue and orange have?',

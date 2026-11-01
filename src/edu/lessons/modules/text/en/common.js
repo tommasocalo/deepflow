@@ -87,6 +87,7 @@ export default {
     'mis.underfitting-confusion': 'Underfitting means the model cannot even fit its training data. Here training accuracy is near 100%.',
     'mis.training-loss-is-enough': 'A low training loss alone proves little. Judge a model on data it never trained on.',
     'mis.validation-score-final': 'Choosing anything on validation, such as the best epoch, tunes the model to it. A separate test split, used once, gives the final score.',
+    'mis.last-epoch-score': 'After early stopping you keep the ▲ epoch\'s weights, so the last epoch describes a model you dropped. Report the test score instead.',
     'mis.dropout-p-meaning': 'In PyTorch, p is the share of hidden values set to 0, not the share kept: p = 0.9 drops nine in ten.',
     'mis.dropout-at-eval': 'Dropout is random and only active in training mode. model.eval() turns it off.',
     'mis.eval-freezes-weights': 'model.eval() does not stop learning: torch.no_grad() and skipping optimizer.step() do that.',

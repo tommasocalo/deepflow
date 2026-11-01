@@ -10,7 +10,8 @@ const objective = (h, output) => [h.optimizer('Adam', { learning_rate: 0.01 }), 
 
 export default {
     id: 'm5',
-    version: 1,
+    // 2: s5 is the new final-score step; Dropout and the code step moved to s6 and s7.
+    version: 2,
     order: 5,
     minutes: 25,
     datasets: ['spiral3'],
@@ -59,12 +60,16 @@ export default {
         },
         trainPoints: { value: 75, at: 's3', compute: async (h) => (await h.prepared()).train.n },
         testPoints: { value: 30, at: 's3', compute: async (h) => (await h.prepared()).test.n },
+        // What one test point is worth, as the trainer prints accuracies.
+        testPointShare: { value: '3.3%', at: 's3', compute: async (h) => `${(100 / (await h.prepared()).test.n).toFixed(1)}%` },
         bigEpochs: { value: 300, at: 's3', compute: (h) => h.trainer().settings.epochs },
         dropoutSeeds: {
             value: '7 of 8', source: 'simulation',
             note: 'Measured with the in-browser trainer: m5.big (75 training, 45 validation, 30 test points) with Dropout p = 0.5 after '
                 + 'each ReLU vs without, training seeds 1–8, data seed 5, 300 epochs; the final validation-minus-training loss gap shrank '
-                + 'on 7 of 8 seeds (seed 7: 0.155 vs 0.149). With the earlier split (75/75, no test) it was 8 of 8 (SPEC §11.2).',
+                + 'on 7 of 8 seeds (seed 7: 0.155 vs 0.149). With the earlier split (75/75, no test) it was 8 of 8 (SPEC §11.2). '
+                + 'Test accuracy with the best epoch\'s weights was never higher with Dropout: equal on 3 seeds, 1 or 2 points '
+                + 'lower on 5; and the best validation loss was lower without Dropout on 8 of 8, so early stopping already did the job.',
         },
     },
     warmup: [
@@ -121,7 +126,17 @@ export default {
             solution: [answer('m5.diagnosis', 'overfitting')],
         },
         {
-            id: 's5', kind: 'task', subgoal: 'model', tab: 'architecture', target: ['lesson.palette'],
+            // The test split, split off from s4's reveal (round-2 review: about 95 words covered four ideas there).
+            id: 's5', kind: 'predict', subgoal: 'evaluate', tab: 'training', target: ['trainer.curves'],
+            predict: {
+                id: 'm5.finalScore', kind: 'choice', options: ['valBest', 'test', 'last'], correct: 'test',
+                diagnose: [{ equals: 'valBest', misconception: 'validation-score-final' }, { equals: 'last', misconception: 'last-epoch-score' }],
+            },
+            check: { answered: 'm5.finalScore' },
+            solution: [answer('m5.finalScore', 'test')],
+        },
+        {
+            id: 's6', kind: 'task', subgoal: 'model', tab: 'architecture', target: ['lesson.palette'],
             palette: [{ block: 'torch.nn.Dropout', count: 2 }],
             embeds: ['trainer'], reveal: { compare: { tag: 'm5.overfit', metric: 'gap' } },
             check: { all: [
@@ -140,7 +155,7 @@ export default {
             ],
         },
         {
-            id: 's6', kind: 'predict', subgoal: 'export', target: ['toolbar.code', 'code.tab:train'],
+            id: 's7', kind: 'predict', subgoal: 'export', target: ['toolbar.code', 'code.tab:train'],
             codeQuotes: { tab: 'train', text: ['model.eval()', 'torch.no_grad()', 'model.train()'] },
             predict: {
                 id: 'm5.eval', kind: 'choice', options: ['dropoutOff', 'freeze', 'smaller'], correct: 'dropoutOff',
@@ -155,7 +170,7 @@ export default {
         { id: 'm5.q2', objective: 'm5.lo2', options: ['lower', 'epochs', 'layers'], correct: 'lower', misconceptions: { epochs: 'more-epochs-always-better', layers: 'bigger-model-fixes-training' } },
         { id: 'm5.q3', objective: 'm5.lo3', options: ['lowestVal', 'last', 'lowestTrain'], correct: 'lowestVal', misconceptions: { last: 'more-epochs-always-better', lowestTrain: 'training-loss-is-enough' } },
         { id: 'm5.q4', objective: 'm5.lo4', options: ['nothing', 'same', 'inputs'], correct: 'nothing', misconceptions: { same: 'dropout-at-eval', inputs: 'dropout-at-eval' } },
-        // A fifth item, beyond §4.0's 3–4: the test split, which none of the browser datasets uses (SPEC §12).
+        // A fifth item: the test split again, now after choosing between models rather than epochs (SPEC §12).
         { id: 'm5.q5', objective: 'm5.lo3', options: ['val', 'test', 'train'], correct: 'test', misconceptions: { val: 'validation-score-final', train: 'training-loss-is-enough' } },
     ],
 };

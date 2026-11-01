@@ -87,7 +87,7 @@ addresses the authors' warning that novices may over-rely on the visual interfac
 exported code.
 
 **Scope of v1.**
-- 7 modules: 51 tutorial steps, 29 quiz items, 14 warm-up items.
+- 7 modules: 52 tutorial steps, 29 quiz items, 14 warm-up items.
 - 11 datasets: 7 trainable in the browser (5 toy generators, Iris, digits 8×8) and 4 export-only presets, plus an
   optional toy regression set.
 - A trainer for MLP-style graphs and one combined `train.py` export.
@@ -542,9 +542,12 @@ test: 0}. Trainer: epochs 30, batch 32, seed 1.
 
 #### s3 · Predict, then train — `predict` · Train & observe · tab Architecture
 - **Do:** "**σ(z)** squashes the score z into a probability between 0 and 1. **BCE loss** measures how wrong that
-  probability is for each dot. Each training step moves every parameter against its gradient: w ← w − lr · ∂loss/∂w.
-  The **learning rate** lr sets the step size; **Adam** adapts it per parameter. Before you train: what will separate
-  the two colours?"
+  probability is for each dot. Training nudges w₁, w₂ and b to lower it. Before you train: what will separate the two
+  colours?"
+- **Why?** "Each training step moves every parameter a little against its gradient: w ← w − lr · ∂loss/∂w. The
+  **learning rate** lr, the card's lr field, sets the step size. The optimizer here, **Adam**, adapts the step for each
+  parameter." (The update rule and Adam sat in the body; the round-2 reviews found the step too dense for step 3 of a
+  first module.)
 - **Target:** `trainer.run`. **Locks:** `gate: 'train'`. **Embeds:** `trainer`.
 - **Predict** `m1.boundary` (choice): "A straight line" ✓ · "A circle" · "A wiggly curve". **Reveal:** "The neuron
   predicts orange where w₁x₁ + w₂x₂ + b > 0. The boundary is the straight line where that sum is 0."
@@ -1004,9 +1007,10 @@ Learning objectives:
   validation and 30 test points. The trainer scores the test split once, with the weights of the best epoch (§6.10.7),
   and shows "Test accuracy 90% (best epoch 141, used once)" for the fixture's seed. Trainer epochs 300, batch 16.
 
-**Facts:** `initLoss3 = 1.10`, `trainPoints = 75`, `testPoints = 30`, `dropoutSeeds = "7 of 8"` (measured with the
-in-browser trainer, §11.2; not recomputed by tests, marked `source: 'simulation'`), `irisInitLoss = "0.8 to 1.8"`
-(likewise, §11.1).
+**Facts:** `initLoss3 = 1.10`, `trainPoints = 75`, `testPoints = 30`, `testPointShare = 3.3%` (one test point),
+`dropoutSeeds = "7 of 8"` (measured with the in-browser trainer, §11.2; not recomputed by tests, marked
+`source: 'simulation'`), `irisInitLoss = "0.8 to 1.8"` (likewise, §11.1). The module's `version` is 2: s5 is new,
+and Dropout and the code step moved to s6 and s7.
 
 **Warm-up.** `m5.w1` (m4.lo1) "Conv2d(1 → 4, kernel 5, padding 0) on a 28 × 28 image gives height…" **24 ✓** · 28 ·
 23. `m5.w2` (m3.lo4) "What is the initial loss for 10 equally likely classes?" **≈ 2.30 ✓** · 10 · 0.1.
@@ -1058,30 +1062,49 @@ in-browser trainer, §11.2; not recomputed by tests, marked `source: 'simulation
   **overfitting ✓** · underfitting · training well. The prompt no longer states the evidence; the learner reads it
   off the curves. **Reveal:** "Overfitting: training accuracy is near 100% while validation loss rises after the ▲.
   **Underfitting** looks different: both losses stay high, because the model cannot even fit its training data.
-  Keeping the weights of the ▲ epoch is **early stopping**; train.py does it for you. But picking that epoch on
-  validation makes the validation score a little optimistic. So the final score comes from the **test** split, used
-  once with the ▲ epoch's weights. Your run shows it as "Test accuracy … (best epoch …, used once)". train.py does the
-  same for MNIST, Fashion-MNIST and CIFAR-10." **Why?** "Validation accuracy falls only a few points while validation
-  loss climbs. Loss also punishes confident mistakes; accuracy only counts right and wrong."
-- The s3 run held out `m5.big`'s 30 test points, so the card and the Training tab show the line the reveal names. For
-  the fixture's seed the ▲ epoch (141) reaches 100% validation accuracy and the test split 90%: the optimism the
-  reveal describes, in the learner's own run (§11.1).
+  Keeping the weights of the ▲ epoch is **early stopping**; train.py does it for you." **Why?** "Validation accuracy
+  falls only a few points while validation loss climbs. Loss also punishes confident mistakes; accuracy only counts
+  right and wrong." (The test-split part of this reveal, about 95 words in all, moved to s5.)
 - **Check:** `{ answered: 'm5.diagnosis' }`
 
-#### s5 · Add Dropout — `task` · Build the model
+#### s5 · The final score — `predict` · Evaluate · tab Training
+- **Target:** `trainer.curves`.
+- **Do:** "The ▲ epoch was picked on validation: the lowest validation loss of all {bigEpochs}. A score you used to
+  choose something is no longer an honest estimate. That is why this run held out a **test** split, scored once with
+  the ▲ epoch's weights."
+- **Predict** `m5.finalScore` (choice): "Which number should you report as this model's accuracy on new data?" "The
+  validation accuracy at the ▲ epoch" (→ `validation-score-final`) · **"The test accuracy, scored once with the ▲
+  epoch's weights" ✓** · "The validation accuracy after the last epoch" (→ new `last-epoch-score`). **Reveal:** "The
+  test accuracy. Your run shows it as "Test accuracy … (best epoch …, used once)". Its {testPoints} points played no
+  part in training or in choosing the epoch. train.py does the same for MNIST, Fashion-MNIST and CIFAR-10."
+- The s3 run held out `m5.big`'s 30 test points, so the card and the Training tab show the line the reveal names. For
+  the fixture's seed the ▲ epoch (141) reaches 100% validation accuracy and the test split 90%: the optimism the
+  step describes, in the learner's own run (§11.1).
+- **Check:** `{ answered: 'm5.finalScore' }`. **Show me:** `answer('m5.finalScore', 'test')`
+
+#### s6 · Add Dropout — `task` · Build the model
 - **Palette:** `torch.nn.Dropout` ×2. **Embeds:** trainer.
 - **Do:** "Insert **Dropout** with p = 0.5 after each ReLU and train again. During training, Dropout sets a random
   half of the hidden values to 0 at every step, so the network cannot rely on any single unit."
 - **Check:** `{ all: [{ chain: [{ type: 'Activation' }, { type: 'Dropout' }] }, { param: { node: { type: 'Dropout' }, name: 'p', min: 0.2, max: 0.6, every: true } }, { run: { dataset: 'spiral3', minEpochs: 300, model: { has: { type: 'Dropout' } } } }] }`
 - **Reveal (live comparison with tag `m5.overfit`, metric `gap` = final validation loss − final training loss):**
   if smaller: "Your gap between validation and training loss went from {before} to {after}: Dropout reduced
-  overfitting." Otherwise: "Your gap went from {before} to {after}. On a tiny dataset one run can mislead. Change
-  the training seed and compare again: in our tests p = 0.5 shrank the gap on {dropoutSeeds} seeds."
+  overfitting at the end of training. Do not expect a higher test score, though: early stopping had already kept the
+  best epoch. With {testPoints} test points, one point is {testPointShare}. Choose between models on validation, then
+  report the chosen one's test score once." Otherwise: "Your gap went from {before} to {after}. On a tiny dataset one
+  run can mislead. Change the training seed and compare again: in our tests p = 0.5 shrank the gap on {dropoutSeeds}
+  seeds. Either way, do not expect a higher test score: early stopping had already kept the best epoch. Choose
+  between models on validation, then report the chosen one's test score once."
+- The comparison is the final-epoch gap, but the card under it now shows the Dropout run's test accuracy: 86.7% for
+  the fixture's seed against 90% without Dropout. Over training seeds 1–8 the test accuracy with Dropout is never
+  higher (equal on 3, 1–2 points lower on 5), and the best validation loss is lower without Dropout on 8 of 8:
+  early stopping already does the job on this tiny set (§11.2). The reveal says so instead of letting "reduced
+  overfitting" stand next to a lower test score.
 - **Show me:** `insertAfter(Dropout{p 0.5}, after relu1)`, `insertAfter(Dropout{p 0.5}, after relu2)`, `train`
 - Note: this step passes on any completed Dropout run. The research says to regularise only after diagnosing
   overfitting, and to measure the effect rather than assume it. A per-seed improvement is not guaranteed (§11).
 
-#### s6 · Training mode and evaluation mode — `predict` · Export & read the code
+#### s7 · Training mode and evaluation mode — `predict` · Export & read the code
 - **Do:** "Open **Code → train.py** and find the validation loop."
 - **Predict** `m5.eval` (choice): "The validation loop calls `model.eval()`. Why?" **"It turns Dropout off, so
   validation uses the whole network" ✓** · "It stops the weights from changing" ("`torch.no_grad()` and not calling
@@ -1100,11 +1123,11 @@ in-browser trainer, §11.2; not recomputed by tests, marked `source: 'simulation
 - `m5.q4` (lo4) "What does Dropout do in evaluation mode (`model.eval()`)?" **"Nothing: every unit is used" ✓** ·
   "It drops the same units as in training" · "It drops half of the inputs". (PyTorch scales kept values by
   1/(1−p) during training, so no rescaling is needed at evaluation.)
-- `m5.q5` (lo3) "You kept the epoch with the lowest validation loss. Which split should report the model's final
-  score?" "The validation split" (→ `validation-score-final`: "Validation chose the epoch, so its score is a little
-  optimistic.") · **"A test split, used once at the end" ✓** ("It played no part in training or in choosing the
-  epoch, so its score is an honest estimate. train.py reports it for MNIST, Fashion-MNIST and CIFAR-10.") · "The
-  training split" (→ `training-loss-is-enough`).
+- `m5.q5` (lo3) "You trained 5 models and kept the one with the lowest validation loss. Which split should report its
+  final score?" "The validation split" (→ `validation-score-final`: "Validation chose the model, so its score is a
+  little optimistic.") · **"A test split, used once at the end" ✓** ("It played no part in training or in choosing the
+  model, so its score is an honest estimate.") · "The training split" (→ `training-loss-is-enough`). It transfers s5's
+  rule from choosing an epoch to choosing a model.
 
 **Recap.** (1) Check the loss before training: with small initial weights it is about −ln(1/C) for C balanced classes. (2) Too small a learning rate
 is slow; too large is unstable. (3) Overfitting shows as validation loss rising while training loss falls. Stop
@@ -1350,10 +1373,10 @@ the same recipe at a larger scale: more blocks, wider vectors, more heads.
 | M2 | 8 | 2 | 4 | circle, xor | — |
 | M3 | 7 | 2 | 4 | digits | mnist |
 | M4 | 7 | 2 | 4 | — | fashion-mnist |
-| M5 | 6 | 2 | 5 | spiral3 | — |
+| M5 | 7 | 2 | 5 | spiral3 | — |
 | M6 | 8 | 2 | 4 | — | cifar10 |
 | M7 | 7 | 2 | 4 | — | tiny-shakespeare |
-| **Total** | **51** | **14** | **29** | | |
+| **Total** | **52** | **14** | **29** | | |
 
 ### 4.9 Misconception catalogue
 
@@ -1393,6 +1416,7 @@ draft text.
 | `ids-not-scores` | The output holds a score for every token in the vocabulary at each position. |
 | `unscaled-validation` | The model learned from scaled features, so every split is scaled the same way, with the training mean and std. (M1 s8) |
 | `edit-one-copy` | The copies share one definition, so an edit inside it reaches every copy. Each copy then has its own new weights. (M6 s6) |
+| `last-epoch-score` | After early stopping you keep the ▲ epoch's weights, so the last epoch describes a model you dropped. Report the test score instead. (M5 s5) |
 | `validation-score-final` | Choosing anything on validation, such as the best epoch, tunes the model to it. A separate test split, used once, gives the final score. (`m5.q5`) |
 
 ---
@@ -2920,7 +2944,7 @@ built. The pilot runs on
 the study build, not on v1.
 
 **Technical evaluation** (reported with the system paper):
-- Solvability (all 51 steps by Show me, §8.4).
+- Solvability (all 52 steps by Show me, §8.4).
 - Browser–PyTorch dataset parity (§8.2).
 - Trainer timings (§6.10.7).
 - Python validity of every dataset's export.
@@ -3053,8 +3077,11 @@ evaluation mode. With the fixture's split since the review fixes, {val 0.3, test
 | Dropout p = 0.5 | 0.104 | 0.158 | 0.925 | 0.908 |
 
 The gap shrank on **7 of 8** seeds (seed 7: 0.155 against 0.149) and the final validation loss fell on 6 of 8;
-validation accuracy barely moved. M5 s5 quotes "7 of 8" (`dropoutSeeds`), the number of the trainer the learner
-uses. With the earlier split {val 0.5, test 0} (75 / 75 points; Stage D probe, re-measured in Stage E with
+validation accuracy barely moved. M5 s6 quotes "7 of 8" (`dropoutSeeds`), the number of the trainer the learner
+uses. Early stopping changes the picture: the best validation loss (at each run's ▲) was lower without Dropout on 8
+of 8 seeds (0.025–0.065 against 0.090–0.111), and the test accuracy with the best epoch's weights was never higher
+with Dropout (equal on 3, 1 or 2 of 30 points lower on 5). So M5 s6 reports the smaller gap but says not to expect a
+higher test score, and to choose between models on validation. With the earlier split {val 0.5, test 0} (75 / 75 points; Stage D probe, re-measured in Stage E with
 `stageE/dropout-seeds.mjs`) the means were 0.359 → 0.160 (gap), 0.378 → 0.214 (val loss) and 0.913 → 0.910 (val
 accuracy), and the gap shrank on 8 of 8. The NumPy simulation above, with its own dropout masks and batch order,
 gave 7 of 8.
@@ -3156,3 +3183,4 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-11-01 | Review fixes (engine and UI; recorded with the content) | **Checks, actions, feedback and the log** (§6.3.1, §6.4, §6.5, §6.6, §6.8). `validateModule` allows 3–5 quiz items. `setParam` and the `param` check take `in`, a path of components whose shared definition holds the block (M6 s6). Palette items take `into` (the chip splices its block into that wire, M2 s3) and `params` (starting parameters; a Linear chip starts at the open end's width, M2 s7). Wiring mistakes get friendly rules and a "Show the wire" link, and a second wire into a ReLU or the Output fails `valid`. A failing `run` check first asks to change the model, names the trainer's reason, or says "press Train again". "Where is it?" works on the first unused target without leaving a block the step opened, and treats a covered target as hidden. The log records `misconception-shown`, `status-shown`, `predict-observed`, `palette-insert` and the option orders, and the download carries the learner seed, so §9's prerequisite 4 is built. |
 | 2026-11-01 | Review fixes (engine and UI; recorded with the content) | **Trainer and editor** (§3.5, §6.10.7). A shown run whose model or dataset differs from the live workspace is dimmed, labelled "last run", and the card and the Training tab say "This run used a different model: press Train to see results for this one". With a test split, a run keeps its best epoch's weights and scores the test split once with them ("Test accuracy … (best epoch …, used once)"; record field `test`). "Recent runs" names the block types two runs differ in ("no ReLU · 33 params"). The loss block's default name follows its type and its select reads "Cross-Entropy (cross_entropy)"; in a lesson a component's Delete × sits away from its › arrow. M2 follows (§4.2): s2 is Train & observe, s3's chip splices ReLU into the wire, s5 checks the widths before the run, s7's Linear chips take the open end's width as their Input (2, then 8) and output 8, and s1, s2 and s5 hold outcome predictions. |
 | 2026-11-01 | Review fixes (round 2, content) | **M2 s6 matches M2 s5, and fewer answer cues.** M2 s6's setup sets Linear 1 to 3 hidden units (Linear 2's Input to 3) and its body says so, because s5 passes with any width up to 3 while s6 asks about a (3, 2) table; Show me and deep links reach the same state. M2 s5's reveal gives the measured range for 2 units, "about 63–82%, depending on the seed" (it said "about 75%"). The yes/no and true/false items had No or False as every correct answer: `m1.w1` (True), `m6.addShapes` ("Must the two inputs of Add have the same shape?" Yes), `m6.sharedWeights` ("Does each of the three copies have its own weights?" Yes) and `m7.w1` (Yes) now have the opposite, 4 of the 8. `m1.q1` asks about 5 → 2 (12) instead of the lesson's own 4 → 3 (15); `m2.q3`'s correct option no longer repeats s5's sentence. M1 s8 asks for the answer before the code panel (body, check order and Show me), since train.py's header states it. M1 s5's done line explains why the 4 → 3 block is still labelled neuron, which model.py shows as `# neuron = nn.Linear(4, 3)`. |
+| 2026-11-01 | Review fixes (round 2, content) | **Less load per step, and a Dropout reveal that agrees with the test score.** M1 s3's body keeps σ(z), BCE and the prediction; the update rule w ← w − lr · ∂loss/∂w, the learning rate and Adam moved to its Why?. M5 s4's reveal (about 95 words) keeps overfitting, underfitting and early stopping; the test split is a new short step, M5 s5 "The final score" (`m5.finalScore`: the test accuracy ✓; the validation accuracy at the ▲ → `validation-score-final`; after the last epoch → new `last-epoch-score`), whose reveal points at the run's test line. Dropout and the code step are now s6 and s7, M5's `version` is 2, and the course has 52 steps. `m5.q5` now asks about choosing between 5 models, so it transfers s5 rather than repeating it. M5 s6 said "Dropout reduced overfitting" next to a lower test score (86.7% against 90% for the fixture's seed); its reveal now adds that a higher test score is not to be expected, because early stopping had already kept the best epoch and one of 30 test points is 3.3% (fact `testPointShare`), and to choose between models on validation and report the chosen one's test score once. Re-measured (§11.2): the gap shrinks on 7 of 8 seeds, but the best validation loss is lower without Dropout on 8 of 8 and the test accuracy is never higher with it. |
