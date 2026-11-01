@@ -941,11 +941,13 @@ Learning objectives:
   cross-entropy. Data `spiral3` {perClass: 100, noise: 0.2, seed: 5}, split {val: 0.2}. Trainer epochs 60, batch 32,
   seed 5.
 - `m5.big`: `in` → `lin1` (2→128) → `relu1` → `lin2` (128→128) → `relu2` → `lin3` (128→3) → `out`. Adam lr 0.01,
-  cross-entropy. Data `spiral3` {perClass: 50, noise: 0.3, seed: 5}, split {val: 0.5}, so 75 training points.
-  Trainer epochs 300, batch 16.
+  cross-entropy. Data `spiral3` {perClass: 50, noise: 0.3, seed: 5}, split {val: 0.3, test: 0.2}: 75 training, 45
+  validation and 30 test points. The trainer scores the test split once, with the weights of the best epoch (§6.10.7),
+  and shows "Test accuracy 90% (best epoch 141, used once)" for the fixture's seed. Trainer epochs 300, batch 16.
 
-**Facts:** `initLoss3 = 1.10`, `trainPoints = 75`, `dropoutSeeds = "8 of 8"` (measured with the in-browser trainer,
-§11.2; not recomputed by tests, marked `source: 'simulation'`), `irisInitLoss = "0.8 to 1.8"` (likewise, §11.1).
+**Facts:** `initLoss3 = 1.10`, `trainPoints = 75`, `testPoints = 30`, `dropoutSeeds = "7 of 8"` (measured with the
+in-browser trainer, §11.2; not recomputed by tests, marked `source: 'simulation'`), `irisInitLoss = "0.8 to 1.8"`
+(likewise, §11.1).
 
 **Warm-up.** `m5.w1` (m4.lo1) "Conv2d(1 → 4, kernel 5, padding 0) on a 28 × 28 image gives height…" **24 ✓** · 28 ·
 23. `m5.w2` (m3.lo4) "What is the initial loss for 10 equally likely classes?" **≈ 2.30 ✓** · 10 · 0.1.
@@ -980,7 +982,8 @@ Learning objectives:
 - **Setup:** `loadFixture('m5.big')`. **Locks:** gate train. **Embeds:** trainer. **Tag run:** `m5.overfit` (the
   run that satisfies the check).
 - **Do:** "Now the network is much bigger (two hidden layers of 128) and sees only {trainPoints} noisy training
-  points for 300 epochs. Karpathy's recipe first makes a model big enough to overfit, and only then regularises it."
+  points for 300 epochs. A further {testPoints} points form a **test** split, scored once at the end. Karpathy's
+  recipe first makes a model big enough to overfit, and only then regularises it."
 - **Predict** `m5.whichRises` (choice): "Which curve will turn upward while the other keeps falling?" **Validation
   loss ✓** · Training loss · Neither. **Reveal:** "Validation loss. The network memorises the training points,
   noise included, and becomes over-confident on the validation points it gets wrong."
@@ -997,13 +1000,13 @@ Learning objectives:
   off the curves. **Reveal:** "Overfitting: training accuracy is near 100% while validation loss rises after the ▲.
   **Underfitting** looks different: both losses stay high, because the model cannot even fit its training data.
   Keeping the weights of the ▲ epoch is **early stopping**; train.py does it for you. But picking that epoch on
-  validation makes the validation score a little optimistic. So the final score comes from a **test** split, used
-  once at the end. train.py does this for MNIST, Fashion-MNIST and CIFAR-10." **Why?** "Validation accuracy falls
-  only a few points while validation loss climbs. Loss also punishes confident mistakes; accuracy only counts right
-  and wrong."
-- The browser datasets keep test 0, so the browser never shows a test score: the trainer evaluates only the training
-  and validation splits, and it keeps the last epoch's weights (the ▲ only marks the best one). Showing a test score
-  in the browser, measured once with the best epoch's weights, needs trainer and Training-tab work (§10).
+  validation makes the validation score a little optimistic. So the final score comes from the **test** split, used
+  once with the ▲ epoch's weights. Your run shows it as "Test accuracy … (best epoch …, used once)". train.py does the
+  same for MNIST, Fashion-MNIST and CIFAR-10." **Why?** "Validation accuracy falls only a few points while validation
+  loss climbs. Loss also punishes confident mistakes; accuracy only counts right and wrong."
+- The s3 run held out `m5.big`'s 30 test points, so the card and the Training tab show the line the reveal names. For
+  the fixture's seed the ▲ epoch (141) reaches 100% validation accuracy and the test split 90%: the optimism the
+  reveal describes, in the learner's own run (§11.1).
 - **Check:** `{ answered: 'm5.diagnosis' }`
 
 #### s5 · Add Dropout — `task` · Build the model
@@ -2800,7 +2803,7 @@ the study build, not on v1.
 | Risk or limit | Mitigation |
 |---|---|
 | The browser trainer and PyTorch are not bit-identical (float64 vs float32, different weight-init RNG, batch order, GELU erf approximation) | Data and split are identical and tested. Init follows the same distributions. The text says "the same data and split; curves will be similar, not identical". Agreement is measured as part of §9 |
-| The browser never shows a test score: browser datasets keep test 0, and the trainer evaluates only the training and validation splits and keeps the last epoch's weights | M5 s4 and `m5.q5` teach why the final score comes from a test split used once, and train.py reports one for MNIST, Fashion-MNIST and CIFAR-10. A browser test score, measured once with the best epoch's weights after training, needs trainer and Training-tab work; then one browser fixture (M5 `big` or Iris) can get a test split |
+| Only one lesson fixture has a test split | When the bound dataset has a test split, a run keeps the weights of its best epoch and scores the test split once with them when it ends ("Test accuracy … (best epoch …, used once)", card and Training tab); the run's final weights stay. M5's overfitting fixture holds out 30 test points and M5 s4 points at the line; the other fixtures keep test 0, so their validation scores are the ones shown, and M5 s4 and `m5.q5` explain why a final score needs a test split |
 | Dropout's benefit on tiny toy data varies by seed (§11.2) | M5 s5 passes on any Dropout run and shows the learner's own comparison honestly, with a seed-retry suggestion. No step claims a guaranteed improvement |
 | Learners lean on Show me | The hint ladder puts two text hints first, Show me is logged, and copy says "try first". The pilot threshold is in §9 |
 | Some editor gestures need a pointer (drag to connect) | Show me and palette chips offer keyboard-reachable paths. DeepFlow's own keyboard support is unchanged |
@@ -2875,8 +2878,15 @@ seeds 1–8: training accuracy 1.000 on 7 of 8 seeds (0.947 on seed 3, which the
 training loss ≤ 0.004 on those 7, final/min validation loss 2.4–8.3; validation accuracy falls from 0.947–0.987 at the
 best epoch to 0.81–0.95 at the end (seed 5: 0.960 → 0.920), the "few points" of s4.
 
-Overfitting (M5 s3; spiral3 50/class, noise 0.3, val 0.5 → 75 train points; 2-128-128-3, Adam 0.01, batch 16, 300
-epochs; 8 seeds): train accuracy 0.990 [0.987, 1.000]. Final/min validation-loss ratio
+**M5's overfitting fixture with its test split** (review fixes; the in-browser trainer, `m5.big` with split {val 0.3,
+test 0.2}: 75 training, 45 validation and 30 test points; training seeds 1–8). The s3 check passes on 7 of 8 seeds
+(seed 3 ends at training accuracy 0.947, below the 0.97 bar, as before); training accuracy 1.000 on the other 7,
+final/min validation-loss ratio 3.6–7.8, best epochs 91–163. Validation accuracy at the ▲ epoch is 0.956–1.000 (mean
+0.986), the test split scored once with those weights 0.900–0.967 (mean 0.933), and the final validation accuracy
+0.867–0.956 (mean 0.928). The fixture's seed 5: ▲ at epoch 141 with 100% validation accuracy, test 90%.
+
+Overfitting, the NumPy simulation before the test split (M5 s3; spiral3 50/class, noise 0.3, val 0.5 → 75 train
+points; 2-128-128-3, Adam 0.01, batch 16, 300 epochs; 8 seeds): train accuracy 0.990 [0.987, 1.000]. Final/min validation-loss ratio
 [2.51, 3.09, 6.56, 2.00, 1.39, 4.01, 2.29, 2.68] (threshold 1.25). Best epochs 11–106. Validation accuracy stays
 0.937 [0.907, 0.960]. That is why M5 s4 says that validation accuracy "barely changed".
 
@@ -2900,18 +2910,21 @@ experiment used NumPy's RNG; only the statistics matter here.
 Validation accuracy changed little in every variant (0.93–0.94). Conclusion for content: regularisation helps on
 average but not on every seed. M5 s5 therefore reports the learner's own comparison.
 
-**The in-browser trainer** (Stage D probe, re-measured in Stage E with `stageE/dropout-seeds.mjs`): the `m5.big`
-fixture itself (spiral3 50/class, noise 0.3, data seed 5, val 0.5, 2-128-128-3, Adam lr 0.01, batch 16, 300 epochs),
-with and without Dropout p = 0.5 after each ReLU, training seeds 1–8, all metrics in evaluation mode:
+**The in-browser trainer** on the `m5.big` fixture itself (spiral3 50/class, noise 0.3, data seed 5, 2-128-128-3, Adam
+lr 0.01, batch 16, 300 epochs), with and without Dropout p = 0.5 after each ReLU, training seeds 1–8, all metrics in
+evaluation mode. With the fixture's split since the review fixes, {val 0.3, test 0.2} (75 / 45 / 30 points):
 
-| | Mean final gap (val − train loss) | Mean final val loss | Mean final val accuracy |
-|---|---|---|---|
-| baseline | 0.359 | 0.378 | 0.913 |
-| Dropout p = 0.5 | 0.160 | 0.214 | 0.910 |
+| | Mean final gap (val − train loss) | Mean final val loss | Mean final val accuracy | Mean test accuracy (best epoch) |
+|---|---|---|---|---|
+| baseline | 0.198 | 0.217 | 0.928 | 0.933 |
+| Dropout p = 0.5 | 0.104 | 0.158 | 0.925 | 0.908 |
 
-The gap shrank on **8 of 8** seeds and the final validation loss fell on 8 of 8; validation accuracy barely moved.
-M5 s5 quotes "8 of 8" (`dropoutSeeds`), the number of the trainer the learner uses. The NumPy simulation above, with
-its own dropout masks and batch order, gave 7 of 8.
+The gap shrank on **7 of 8** seeds (seed 7: 0.155 against 0.149) and the final validation loss fell on 6 of 8;
+validation accuracy barely moved. M5 s5 quotes "7 of 8" (`dropoutSeeds`), the number of the trainer the learner
+uses. With the earlier split {val 0.5, test 0} (75 / 75 points; Stage D probe, re-measured in Stage E with
+`stageE/dropout-seeds.mjs`) the means were 0.359 → 0.160 (gap), 0.378 → 0.214 (val loss) and 0.913 → 0.910 (val
+accuracy), and the gap shrank on 8 of 8. The NumPy simulation above, with its own dropout masks and batch order,
+gave 7 of 8.
 
 ### 11.3 Parameter counts (DeepFlow's own `countArchitectureParameters` on `15c7c25`, with the Conv fix applied by hand where noted)
 
@@ -3004,3 +3017,4 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-11-01 | Review fixes (content) | **More independent practice.** M4 s4 is faded: block 1 keeps its recipe, block 2 gives only its goal (16 filters of 3 × 3, a ReLU and a pool, ending at (B, 16, 7, 7)) and the check, with a new diagnosis for a conv2 without padding (`padding-no-effect`). M6's objective `m6.lo1` no longer claims "edit its shared definition", which no step exercises: the lesson actions cannot edit inside a component (§6.5), so a step that edits the ResBlock definition and watches all three copies follow waits for an engine action. M7's goal says "Explore" (above). |
 | 2026-11-01 | Review fixes (content) | **Two new numbers are ledger facts** (§6.3.6): `chanceBce` (0.693, M1 s3's dotted chance line, recomputed) and `irisInitLoss` ("0.8 to 1.8", M5 s1, `source: 'simulation'`, measured with Check initial loss over training seeds 1–10, §11.1). |
 | 2026-11-01 | Review fixes (follow-up) | **M2 copy and tests after the engine changes.** M2 s3's hint 1 says the chip now puts ReLU into the Linear 1 → Linear 2 wire, and that from the ribbon the learner places and wires the block; hint 2 starts "From the ribbon". M2 s5 says "(3 or fewer)", since its check now asks for the widths before the run. M2 s8 quotes `= nn.Linear(2, 8)` itself, so the content test's extra quote for it is gone, and the test calls `validateModule` with its size rules again (3–5 quiz items, §6.3). `scripts/edu-data-browser-check.mjs` saves its screenshots under the system's temporary folder by default, and §7.1 and §11.1 no longer name a session's scratch folder. |
+| 2026-11-01 | Review fixes (follow-up) | **M5's overfitting run holds out a test split** (§4.5). Now that the trainer scores a test split once with the best epoch's weights, `m5.big` splits {val 0.3, test 0.2}: still 75 training points, 45 for validation and 30 for the test (new fact `testPoints`). M5 s3 says so, and M5 s4's reveal points at the run's line "Test accuracy … (best epoch …, used once)"; `m5.q5`'s explanation refers to it. Re-measured over training seeds 1–8 (§11.1, §11.2): the s3 check still passes on 7 of 8 seeds and on the fixture's, and Dropout shrinks the gap on 7 of 8 instead of 8 of 8, so `dropoutSeeds` is "7 of 8". §10's limit now says that only this fixture has a test split. |

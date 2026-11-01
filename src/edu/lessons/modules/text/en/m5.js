@@ -45,7 +45,7 @@ export default {
     'm5.s2.done': 'Compare the final validation losses in **Recent runs**: the middle learning rate wins.',
 
     'm5.s3.title': 'Make overfitting happen',
-    'm5.s3.body': 'Now the network is much bigger, with two hidden layers of 128 units. It sees only {trainPoints} noisy training points, for {bigEpochs} epochs. Karpathy\'s recipe first makes a model big enough to overfit, and only then regularises it.',
+    'm5.s3.body': 'Now the network is much bigger, with two hidden layers of 128 units. It sees only {trainPoints} noisy training points, for {bigEpochs} epochs. A further {testPoints} points form a **test** split, scored once at the end. Karpathy\'s recipe first makes a model big enough to overfit, and only then regularises it.',
     'm5.s3.hint1': 'Answer, then press **Train**: {bigEpochs} epochs take a few seconds.',
     'm5.s3.hint2': 'Watch the two loss curves separate after the best epoch.',
     'm5.s3.predict.prompt': 'Which curve will turn upward while the other keeps falling?',
@@ -63,7 +63,7 @@ export default {
     'm5.s4.predict.opt.overfitting': 'Overfitting',
     'm5.s4.predict.opt.underfitting': 'Underfitting',
     'm5.s4.predict.opt.fine': 'Training well',
-    'm5.s4.predict.reveal': 'Overfitting: training accuracy is near 100% while validation loss rises after the ▲. **Underfitting** looks different: both losses stay high, because the model cannot even fit its training data. Keeping the weights of the ▲ epoch is **early stopping**; train.py does it for you. But picking that epoch on validation makes the validation score a little optimistic. So the final score comes from a **test** split, used once at the end. train.py does this for MNIST, Fashion-MNIST and CIFAR-10.',
+    'm5.s4.predict.reveal': 'Overfitting: training accuracy is near 100% while validation loss rises after the ▲. **Underfitting** looks different: both losses stay high, because the model cannot even fit its training data. Keeping the weights of the ▲ epoch is **early stopping**; train.py does it for you. But picking that epoch on validation makes the validation score a little optimistic. So the final score comes from the **test** split, used once with the ▲ epoch\'s weights. Your run shows it as "Test accuracy … (best epoch …, used once)". train.py does the same for MNIST, Fashion-MNIST and CIFAR-10.',
     'm5.s4.why': 'Validation accuracy falls only a few points while validation loss climbs. Loss also punishes confident mistakes; accuracy only counts right and wrong.',
 
     'm5.s5.title': 'Add Dropout',
@@ -115,7 +115,7 @@ export default {
     'm5.q5.opt.test': 'A test split, used once at the end',
     'm5.q5.opt.val': 'The validation split',
     'm5.q5.opt.train': 'The training split',
-    'm5.q5.why.test': 'It played no part in training or in choosing the epoch, so its score is an honest estimate. train.py reports it for MNIST, Fashion-MNIST and CIFAR-10.',
+    'm5.q5.why.test': 'It played no part in training or in choosing the epoch, so its score is an honest estimate. Your overfitting run reported one, and so does train.py for MNIST, Fashion-MNIST and CIFAR-10.',
     'm5.q5.why.val': 'Validation chose the epoch, so its score is a little optimistic.',
     'm5.q5.why.train': 'The model trained on those examples, so their score says little about new data.',
 };

@@ -41,7 +41,9 @@ export default {
                 ];
                 return h.snapshot({
                     nodes, edges: h.chain(...nodes), training: objective(h, nodes[6]),
-                    data: h.data('spiral3', { perClass: 50, noise: 0.3, seed: 5 }, { val: 0.5, test: 0 }),
+                    // 75 training, 45 validation and 30 test points: the trainer scores the test split once, with the
+                    // weights of the best epoch, and M5 s4 points at that line.
+                    data: h.data('spiral3', { perClass: 50, noise: 0.3, seed: 5 }, { val: 0.3, test: 0.2 }),
                     trainer: h.trainer({ epochs: 300, batchSize: 16, seed: 5 }),
                 });
             },
@@ -56,12 +58,13 @@ export default {
                 + 'validation loss 0.76–1.80 (seed 1, the fixture: 0.76). spiral3 2-64-3 gives 1.06–1.17 and digits 64-128-10 2.28–2.34 (SPEC §11.1).',
         },
         trainPoints: { value: 75, at: 's3', compute: async (h) => (await h.prepared()).train.n },
+        testPoints: { value: 30, at: 's3', compute: async (h) => (await h.prepared()).test.n },
         bigEpochs: { value: 300, at: 's3', compute: (h) => h.trainer().settings.epochs },
         dropoutSeeds: {
-            value: '8 of 8', source: 'simulation',
-            note: 'Measured with the in-browser trainer (scratch probe, Stage D): m5.big with Dropout p = 0.5 after each ReLU vs without, '
-                + 'training seeds 1–8, data seed 5, 300 epochs; the final validation-minus-training loss gap shrank on 8 of 8 seeds '
-                + '(the NumPy simulation of SPEC §11.2 gave 7 of 8).',
+            value: '7 of 8', source: 'simulation',
+            note: 'Measured with the in-browser trainer: m5.big (75 training, 45 validation, 30 test points) with Dropout p = 0.5 after '
+                + 'each ReLU vs without, training seeds 1–8, data seed 5, 300 epochs; the final validation-minus-training loss gap shrank '
+                + 'on 7 of 8 seeds (seed 7: 0.155 vs 0.149). With the earlier split (75/75, no test) it was 8 of 8 (SPEC §11.2).',
         },
     },
     warmup: [
