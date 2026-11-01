@@ -212,3 +212,25 @@ test('Show me passes every build step after its entry state is perturbed (an ext
     }
     assert.ok(perturbed >= buildSteps.length, `${perturbed} perturbed attempts`);
 });
+
+test('after a reload the step entry comes from storage: the chip still adopts, the trap is still firm', async () => {
+    await open('m2', 's3');
+    const entry = session().runtime.entryNodeIds;
+    const ribbon = store().addLayerByLibraryKey('torch.nn.ReLU', { x: 600, y: 300 });
+    // A reload: the session hydrates with a fresh runtime, on the same step.
+    session().hydrate();
+    session().setHeadless(true);
+    assert.equal(session().currentStep().id, 's3');
+    assert.equal(session().runtime.entryNodeIds, null);
+    assert.deepEqual(session().entryInfo().nodeIds, entry);
+    const inserted = await insertPaletteItem(stepOf(m2, 's3').palette[0], { entryNodeIds: session().entryInfo().nodeIds });
+    assert.deepEqual([inserted.id, inserted.adopted], [ribbon, true]);
+    assert.equal(nodesOf('torch.nn.ReLU').length, 1);
+
+    await open('m2', 's7');
+    const trap = stepOf(m2, 's7').diagnose.find((rule) => rule.misconception === 'sigmoid-before-bce').example;
+    assert.equal((await runActions(trap, { module: m2, headless: true, label: 'learner' })).ok, true);
+    session().hydrate();
+    session().setHeadless(true);
+    assert.equal(session().evaluate().firm, true);
+});

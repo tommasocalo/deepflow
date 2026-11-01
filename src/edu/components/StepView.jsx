@@ -255,7 +255,8 @@ export default function StepView({ module, step, index, total, record, answers, 
     // Tabs visited in this step count as used targets, so the ring moves on to what comes next; so does the palette
     // once its blocks are on the canvas.
     const visitedTabs = runtime?.visitedTabs;
-    const entryNodeIds = runtime?.entryNodeIds ?? null;
+    // From the runtime, or after a reload from the stored step entry.
+    const entryNodeIds = runtime?.entryNodeIds ?? session.entryInfo().nodeIds ?? null;
     const targetOptions = useMemo(() => ({ visitedTabs: visitedTabs ?? [], palette: step.palette ?? null, entryNodeIds }), [visitedTabs, step.palette, entryNodeIds]);
 
     useEffect(() => { headingRef.current?.focus({ preventScroll: false }); }, [module.id, step.id]);

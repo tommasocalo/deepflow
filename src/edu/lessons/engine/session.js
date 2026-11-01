@@ -81,7 +81,11 @@ function loadSession() {
  * (P.migrate): its saved workspace and step entry belong to its old steps and are dropped, and a lesson left inside it
  * reopens at its first step and reloads its start (`restart`, which the lesson panel or a deep link acts on).
  */
+/** The stored entry of the step on screen, read once after a reload (see entryInfo). */
+let storedEntry = { key: null, value: null };
+
 function initialState() {
+    storedEntry = { key: null, value: null };
     const session = loadSession();
     const stored = readJSON(PROGRESS_KEY, null);
     const updated = P.updatedModules(stored, getModules());
@@ -174,6 +178,22 @@ export const useLessonSession = create((set, get) => {
         });
         const result = evaluateStep(target, ctx);
         return result.pass ? null : result.misconception ?? null;
+    }
+
+    /**
+     * The step's entry: the root node ids and the misconception it started with. Entering a step records them in the
+     * runtime; after a reload the runtime is fresh, so they come from the stored step entry instead (read once).
+     */
+    function entryOf(current, target) {
+        const runtime = get().runtime;
+        if (runtime.entryNodeIds) return { nodeIds: runtime.entryNodeIds, misconception: runtime.entryMisconception };
+        const key = `${current.id}:${target.id}`;
+        if (storedEntry.key !== key) {
+            const snapshot = loadStepEntry(current.id, target.id);
+            const value = snapshot ? { nodeIds: Object.keys(snapshot.graph?.nodes ?? {}), misconception: diagnoseSnapshot(current, target, snapshot) } : null;
+            storedEntry = { key, value: value ?? { nodeIds: null, misconception: null } };
+        }
+        return storedEntry.value;
     }
 
     /** Whether the workspace part of a step's check holds now (engine/checks.js workspaceCheck). */
@@ -275,6 +295,12 @@ export const useLessonSession = create((set, get) => {
             const runtime = get().runtime;
             return { answers, enteredAtSeq: runtime.enteredAtSeq, visitedTabs: runtime.visitedTabs, tags };
         },
+        /** The current step's entry (root node ids, starting misconception), also right after a reload. */
+        entryInfo: () => {
+            const current = module();
+            const target = step();
+            return current && target && get().phase === 'steps' ? entryOf(current, target) : { nodeIds: null, misconception: null };
+        },
         /** Evaluate the current step against the live stores. */
         evaluate: () => {
             const current = module();
@@ -288,9 +314,10 @@ export const useLessonSession = create((set, get) => {
             // wires, the palette's blocks all placed, and a misconception the step did not start with; and the check
             // fails on the model's structure, which its own message cannot explain. A half-done model (M1 s5 with
             // only Input set) keeps the check's message and the 6 s wait.
-            const firm = !!result.misconception && result.misconception !== get().runtime.entryMisconception
+            const entry = result.misconception ? entryOf(current, target) : null;
+            const firm = !!result.misconception && result.misconception !== entry.misconception
                 && STRUCTURE_PREDICATES.has(result.predicate) && !!ctx.report?.ok && !ctx.issues.length && !ctx.hints.length
-                && (!target.palette?.length || paletteUsed(target.palette, ctx.graph, ctx.templates, get().runtime.entryNodeIds));
+                && (!target.palette?.length || paletteUsed(target.palette, ctx.graph, ctx.templates, entry.nodeIds));
             // `drift`: a step passed (or skipped) earlier whose model no longer holds: the panel keeps the pass but
             // says what changed (review r2: M1 s5 still said "15 parameters" after Output went back to 1).
             const kept = ['passed', 'skipped'].includes(record()?.steps?.[target.id]?.status);
