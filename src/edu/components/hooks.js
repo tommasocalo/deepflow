@@ -23,7 +23,12 @@ export function useStepEvaluation(key, { enabled = true, delay = CHECK_DELAY } =
     useEffect(() => {
         if (!enabled) return undefined;
         let timer = null;
-        const run = () => setState({ key, result: useLessonSession.getState().evaluate() });
+        const run = () => {
+            const result = useLessonSession.getState().evaluate();
+            setState({ key, result });
+            // A pass is kept while the learner explores further (it is saved at once, not only on Next).
+            if (result?.pass) useLessonSession.getState().notePass(result);
+        };
         const schedule = () => {
             clearTimeout(timer);
             timer = setTimeout(run, delay);

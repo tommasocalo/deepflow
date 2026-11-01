@@ -174,7 +174,7 @@ export default function StepView({ module, step, index, total, record, answers, 
                     <Crosshair size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.showOnCanvas')}
                 </button>
             )}
-            {done && !passing && <p className="edu-muted">{t('panel.reviewing')}</p>}
+            {done && !passing && !runtime?.passedHere && <p className="edu-muted">{t('panel.reviewing')}</p>}
             {(passing || done) && hasText(`${prefix}.done`) && <RichText className="edu-done" text={t(`${prefix}.done`)} params={params} />}
             {(passing || answer) && live.variant && hasText(`${prefix}.reveal.${live.variant}`) && (
                 <RichText className="edu-callout edu-callout-info" text={t(`${prefix}.reveal.${live.variant}`)} params={params} />
@@ -183,6 +183,7 @@ export default function StepView({ module, step, index, total, record, answers, 
                 <p className="edu-callout edu-callout-misconception"><strong>{t('panel.misconception')}: </strong><RichText inline text={t(`mis.${misconception}`)} /></p>
             )}
             {runtime?.error && <p className="edu-callout edu-callout-error" role="alert">{t('panel.actionFailed', { error: runtime.error })}</p>}
+            {runtime?.skippedAhead > 0 && !done && <p className="edu-callout edu-callout-info">{t('panel.skippedAhead')}</p>}
             {targetMissing && !passing && (step.target ?? []).some((ref) => !isTargetDone(ref, globalThis.document, targetOptions)) && (
                 <button type="button" className="edu-link-button" onClick={() => revealTarget(step, targetOptions)}>
                     <MapPin size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.whereIsIt')}
@@ -191,7 +192,7 @@ export default function StepView({ module, step, index, total, record, answers, 
             {toastAt && toastAt === showMeAt && (
                 <div className="edu-toast" role="status">
                     <span>{t('panel.showMeDone')}</span>
-                    <button type="button" className="edu-link-button" disabled={!canUndo} onClick={() => { useArchitectureHistory.getState().undo(); setToastAt(null); }}>
+                    <button type="button" className="edu-link-button" disabled={!canUndo} onClick={() => { session.undoShowMe(); setToastAt(null); }}>
                         <Undo2 size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.undo')}
                     </button>
                     <button type="button" className="df-icon-button" aria-label={t('panel.dismiss')} onClick={() => setToastAt(null)}><X size={12} /></button>

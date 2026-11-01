@@ -24,7 +24,27 @@ export const SESSION_KEY = eduKey('session:v1');
 export const PROGRESS_KEY = eduKey('progress:v1');
 const PHASES = ['warmup', 'steps', 'quiz', 'recap'];
 const PERSISTED = ['mode', 'moduleId', 'phase', 'stepIndex', 'quizIndex', 'warmupIndex', 'collapsed'];
-const freshRuntime = (overrides = {}) => ({ enteredAtSeq: 0, visitedTabs: [], revealShown: false, busy: false, error: null, showMe: null, ...overrides });
+const freshRuntime = (overrides = {}) => ({
+    enteredAtSeq: 0, visitedTabs: [], revealShown: false, busy: false, error: null, showMe: null, skippedAhead: 0, passedHere: false, ...overrides,
+});
+
+/** Show me actions that change the workspace. Answers, training runs and navigation are never replayed for a learner. */
+const WORKSPACE_ACTIONS = new Set([
+    'loadFixture', 'loadStoryboard', 'useDataset', 'setDatasetOptions', 'setParam', 'setGlobal', 'insertBetween', 'insertAfter',
+    'buildChain', 'connect', 'disconnect', 'remove', 'group', 'repeat', 'setOptimizer', 'setLoss', 'setTrainer',
+]);
+const VIEW_FLAGS = ['showDimensions', 'showGradientFlow'];
+
+/** The workspace edits of a step's Show me: what a step leaves behind for the steps after it (docs/edu/SPEC.md §3.3). */
+export function workspaceEdits(actions = []) {
+    return actions.flatMap((action) => {
+        if (WORKSPACE_ACTIONS.has(action?.do)) return [action];
+        if (action?.do !== 'setUi') return [];
+        // The view flags belong to the workspace snapshot; the tab and the code panel are navigation.
+        const flags = Object.fromEntries(VIEW_FLAGS.filter((flag) => action[flag] !== undefined).map((flag) => [flag, action[flag]]));
+        return Object.keys(flags).length ? [{ do: 'setUi', ...flags }] : [];
+    });
+}
 
 function trainerSeq() {
     return readSource('trainer')?.seq ?? 0;
@@ -84,7 +104,9 @@ export const useLessonSession = create((set, get) => {
         const current = module();
         const target = current?.steps?.[index];
         if (!target) return false;
-        const firstEntry = !record()?.steps?.[target.id];
+        // A step filled in by a jump already ran its setup; one only marked visited by an older deep link did not.
+        const previous = record()?.steps?.[target.id];
+        const firstEntry = !previous?.enteredAt && !previous?.filledIn;
         set({ phase: 'steps', stepIndex: index, runtime: freshRuntime({ busy: firstEntry && runSetup && !!target.setup?.length }) });
         if (firstEntry && runSetup && target.setup?.length) {
             const result = await runActions(target.setup, actionContext('step setup'));
@@ -110,6 +132,61 @@ export const useLessonSession = create((set, get) => {
         if (current.quiz?.length) set({ phase: 'quiz', quizIndex: 0, runtime: freshRuntime() });
         else get().finishModule();
     }
+
+    /**
+     * Leave the steps `from … to − 1` behind as if the learner had done them (Skip, a progress segment, a deep link):
+     * each step that was never passed or skipped runs its setup (when it was never entered) and the workspace edits of
+     * its Show me, so the next step opens on the model the earlier ones build. The step the learner is on completes
+     * their own attempt, as its Show me does. Answers and training runs are not replayed.
+     * @returns {Promise<{ ok: boolean, error?: string, changed: number }>} `changed`: steps that changed the workspace
+     */
+    async function fastForward(from, to) {
+        const current = module();
+        const filled = [];
+        let changed = 0;
+        const done = (extra = {}) => {
+            if (filled.length) updateProgress((progress) => P.fillSteps(progress, current.id, filled));
+            return { ok: true, changed, ...extra };
+        };
+        for (let index = Math.max(0, from); index < Math.min(to, current?.steps?.length ?? 0); index++) {
+            const item = current.steps[index];
+            const stepRecord = record()?.steps?.[item.id];
+            // Passed, skipped and filled-in steps already left their changes in the workspace.
+            if (['passed', 'skipped'].includes(stepRecord?.status) || stepRecord?.filledIn) continue;
+            const entered = !!stepRecord?.enteredAt;
+            const setup = entered ? [] : item.setup ?? [];
+            const edits = workspaceEdits(item.solution);
+            if (setup.length) {
+                const result = await runActions(setup, actionContext('step setup'));
+                if (!result.ok) return done({ ok: false, error: result.error });
+            }
+            if (edits.length) {
+                const entryNodes = entered ? loadStepEntry(current.id, item.id)?.graph?.nodes : null;
+                const result = await runActions(edits, { ...actionContext(`skip ${item.id}`), entryNodeIds: entryNodes ? Object.keys(entryNodes) : null });
+                if (!result.ok) return done({ ok: false, error: result.error });
+            }
+            filled.push(item.id);
+            if (setup.length || edits.length) changed += 1;
+        }
+        return done();
+    }
+
+    /** Move forward from step `from` to step `to` > `from`, filling in the steps in between (see fastForward). */
+    async function jumpForward(from, to, { resume = false } = {}) {
+        const current = module();
+        updateRuntime({ busy: true, error: null });
+        const result = await fastForward(from, to);
+        const passedOver = current.steps.slice(Math.max(0, from), to).map((item) => item.id);
+        updateProgress((progress) => P.visitSteps(progress, current.id, passedOver));
+        if (to > from) log('skip-ahead', { step: current.steps[to].id, data: { from: current.steps[Math.max(0, from)]?.id ?? null, changed: result.changed, ok: result.ok } });
+        await enterStep(to, { resume });
+        updateRuntime({ error: result.ok ? null : result.error, skippedAhead: result.changed });
+        fitSoon();
+        return true;
+    }
+
+    /** Where a jump starts: the step the learner is on (or about to start after the warm-up); past the end otherwise. */
+    const jumpOrigin = () => (['steps', 'warmup'].includes(get().phase) ? get().stepIndex : module()?.steps?.length ?? 0);
 
     return {
         ...initialState(),
@@ -151,6 +228,8 @@ export const useLessonSession = create((set, get) => {
             const completed = state.progress.modules?.[id]?.status === 'completed';
             const resumePhase = !stepId && state.moduleId === id
                 && (state.phase === 'quiz' || (state.phase === 'recap' && !completed)) ? state.phase : null;
+            // The step the workspace belongs to, where a deep link further on starts filling in (see fastForward).
+            let origin = sameModule ? jumpOrigin() : 0;
             if (!sameModule) {
                 saveSlot(state.mode === 'lesson' && state.moduleId ? state.moduleId : 'sandbox', captureWorkspace());
                 // The code panel shows the outgoing workspace's code: close it with that workspace.
@@ -158,11 +237,16 @@ export const useLessonSession = create((set, get) => {
                 set({ mode: 'lesson', moduleId: id, runtime: freshRuntime({ busy: true }) });
                 const slot = loadSlot(id);
                 try {
-                    if (slot) restoreWorkspace(slot);
-                    else await loadFixtureIntoWorkspace(target, target.start, { runAfter: async (after) => {
-                        const result = await runActions(after, actionContext('fixture'));
-                        if (!result.ok) throw new Error(result.error);
-                    } });
+                    if (slot) {
+                        restoreWorkspace(slot);
+                        const left = P.moduleStatus(state.progress, target);
+                        origin = left.currentStepId ? Math.max(0, stepIndexById(target, left.currentStepId)) : Math.max(0, left.firstOpenIndex);
+                    } else {
+                        await loadFixtureIntoWorkspace(target, target.start, { runAfter: async (after) => {
+                            const result = await runActions(after, actionContext('fixture'));
+                            if (!result.ok) throw new Error(result.error);
+                        } });
+                    }
                 } catch (error) {
                     console.warn('[edu session] could not load the module workspace', error);
                     updateRuntime({ error: error.message });
@@ -179,6 +263,11 @@ export const useLessonSession = create((set, get) => {
             const summary = P.moduleStatus(get().progress, target);
             let index = stepId ? stepIndexById(target, stepId) : -1;
             if (index >= 0) {
+                // A deep link further on fills in the steps it passes over; one back, or to this step, only opens it.
+                if (index > origin) {
+                    set({ phase: 'steps', stepIndex: origin, quizIndex: 0, warmupIndex: 0 });
+                    return jumpForward(origin, index);
+                }
                 const skipped = target.steps.slice(0, index).map((item) => item.id);
                 updateProgress((progress) => P.visitSteps(progress, id, skipped));
             } else if (summary.status === 'completed') {
@@ -203,9 +292,29 @@ export const useLessonSession = create((set, get) => {
             return true;
         },
 
+        /**
+         * A progress segment: a later step fills in the steps before it (see fastForward); an earlier one opens
+         * read-only, as Back does; the current step stays as it is.
+         */
         goToStep: async (index) => {
             if (get().runtime.busy || !module()?.steps?.[index]) return false;
-            return enterStep(index);
+            const origin = jumpOrigin();
+            if (index > origin || (index === origin && get().phase !== 'steps')) return jumpForward(origin, index);
+            if (index === origin) return true;
+            return enterStep(index, { runSetup: false });
+        },
+
+        /** Latch a passing check: the step stays done while the learner explores (it is saved as passed at once). */
+        notePass: (result = get().evaluate()) => {
+            const current = module();
+            const target = step();
+            if (!current || !target || !result?.pass || get().mode !== 'lesson' || get().phase !== 'steps') return false;
+            if (record()?.steps?.[target.id]?.status === 'passed') return false;
+            updateProgress((progress) => P.passStep(progress, current.id, target.id));
+            updateRuntime({ passedHere: true });
+            log('step-pass', { step: target.id });
+            if (target.tagRun && result.runId) get().tagRun(target.tagRun, result.runId);
+            return true;
         },
 
         next: async () => {
@@ -215,22 +324,24 @@ export const useLessonSession = create((set, get) => {
             const status = record()?.steps?.[target.id]?.status;
             const result = get().evaluate();
             if (!result.pass && !['passed', 'skipped'].includes(status)) return false;
-            if (result.pass && status !== 'passed') {
-                updateProgress((progress) => P.passStep(progress, current.id, target.id));
-                log('step-pass', { step: target.id });
-                if (target.tagRun && result.runId) get().tagRun(target.tagRun, result.runId);
-            }
+            get().notePass(result);
             await advance();
             return true;
         },
 
+        /** Skip fills the step in (its Show me edits, without the answer or a run) so the next step can be done. */
         skip: async () => {
             const current = module();
             const target = step();
             if (!current || !target || get().runtime.busy) return false;
+            const index = get().stepIndex;
+            updateRuntime({ busy: true, error: null });
+            const filled = await fastForward(index, index + 1);
             updateProgress((progress) => P.skipStep(progress, current.id, target.id));
-            log('step-skip', { step: target.id });
+            log('step-skip', { step: target.id, data: { filled: filled.changed > 0, ok: filled.ok } });
             await advance();
+            if (!filled.ok) updateRuntime({ error: filled.error });
+            fitSoon();
             return true;
         },
 
@@ -251,7 +362,9 @@ export const useLessonSession = create((set, get) => {
             const snapshot = loadStepEntry(current.id, target.id);
             if (snapshot) restoreWorkspace(snapshot);
             if (target.predict) updateProgress((progress) => P.clearAnswer(progress, current.id, target.predict.id));
-            updateRuntime({ enteredAtSeq: trainerSeq(), visitedTabs: [useEduUiStore.getState().activeTab], revealShown: false, error: null, showMe: null });
+            // Reset starts the step over: a pass it reached is open again.
+            updateProgress((progress) => P.reopenStep(progress, current.id, target.id));
+            updateRuntime({ enteredAtSeq: trainerSeq(), visitedTabs: [useEduUiStore.getState().activeTab], revealShown: false, error: null, showMe: null, passedHere: false });
             log('reset-step', { step: target.id });
             fitSoon();
             return !!snapshot;
@@ -286,6 +399,19 @@ export const useLessonSession = create((set, get) => {
             updateRuntime({ busy: false, error: result.ok ? null : result.error, showMe: { at: Date.now(), undoable } });
             fitSoon();
             return result;
+        },
+
+        /** The Show me toast's Undo: revert the change and, when Show me passed the step just now, open it again. */
+        undoShowMe: () => {
+            const current = module();
+            const target = step();
+            const history = useArchitectureHistory.getState();
+            if (!history.canUndo) return false;
+            history.undo();
+            if (current && target && get().runtime.passedHere) updateProgress((progress) => P.reopenStep(progress, current.id, target.id));
+            updateRuntime({ passedHere: false, showMe: null });
+            log('undo-show-me', { step: target?.id });
+            return true;
         },
 
         /** A step's extra action button, e.g. M7 s7 "Load GPT-2 small". */

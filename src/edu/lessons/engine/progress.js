@@ -57,10 +57,32 @@ export function visitSteps(progress, moduleId, stepIds) {
     });
 }
 
+/**
+ * Steps a jump or Skip filled in: the lesson applied their Show me edits so later steps open on the right model. They
+ * keep their status (visited, not passed) and are never filled in twice.
+ */
+export function fillSteps(progress, moduleId, stepIds, now = Date.now()) {
+    return withModule(progress, moduleId, (record) => {
+        let next = record;
+        for (const stepId of stepIds) next = withStep(next, stepId, (step) => ({ ...step, filledIn: step.filledIn ?? now }));
+        return next;
+    });
+}
+
 export function passStep(progress, moduleId, stepId, now = Date.now()) {
     return withModule(progress, moduleId, (record) => withStep(record, stepId, (step) => (
         step.status === 'passed' ? step : { ...step, status: 'passed', passedAt: now }
     )));
+}
+
+/** Reset step: a passed or skipped step is open again (its entry time and hint level stay). */
+export function reopenStep(progress, moduleId, stepId) {
+    return withModule(progress, moduleId, (record) => {
+        const step = record.steps?.[stepId];
+        if (!step || !['passed', 'skipped'].includes(step.status)) return record;
+        const { passedAt: _passed, skippedAt: _skipped, ...rest } = step;
+        return { ...record, steps: { ...record.steps, [stepId]: { ...rest, status: 'visited' } } };
+    });
 }
 
 export function skipStep(progress, moduleId, stepId, now = Date.now()) {
