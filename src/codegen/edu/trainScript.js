@@ -55,6 +55,35 @@ function dims(shape) {
 }
 const shapeText = (values) => `(${values.join(', ')}${values.length === 1 ? ',' : ''})`;
 
+/**
+ * What differs from the browser (§6.11.2), as header lines: PyTorch's own initial weights and batch order, the
+ * meaning of train_loss, and, for export datasets, their Colab presets for epochs and batch size.
+ */
+function comparisonNotes(spec, data, settings) {
+    const preset = spec.training === 'export' ? exportSettingsNote(spec, data, settings) : null;
+    return [
+        spec.training === 'browser'
+            ? 'Same data, split, loss and optimizer as in the browser, but PyTorch draws its own initial weights and batch order (from SEED), so the curves come out close to the browser\'s, not identical.'
+            : 'PyTorch draws the initial weights and the batch order from SEED.',
+        'train_loss is the running mean of each epoch\'s batch losses, measured in training mode (Dropout on) while the weights still change. val_loss is one pass after the epoch in evaluation mode, which is how the browser measures both losses.',
+        ...(preset ? [preset] : []),
+    ];
+}
+
+/** The Training tab's epochs and batch size, when train.py replaces them with an export dataset's presets. */
+function tabSettings(data, settings) {
+    const tab = data.settings ?? {};
+    const differs = (name, value) => Number.isFinite(Number(tab[name])) && Math.round(Number(tab[name])) !== value;
+    return { epochs: differs('epochs', settings.epochs) ? Math.round(Number(tab.epochs)) : null, batchSize: differs('batchSize', settings.batchSize) ? Math.round(Number(tab.batchSize)) : null };
+}
+
+function exportSettingsNote(spec, data, settings) {
+    const tab = tabSettings(data, settings);
+    const theirs = tab.epochs !== null || tab.batchSize !== null
+        ? `, not the Training tab's (${tab.epochs ?? settings.epochs} and ${tab.batchSize ?? settings.batchSize})` : '';
+    return `EPOCHS and BATCH_SIZE are ${spec.name}'s presets for Colab (${settings.epochs} and ${settings.batchSize})${theirs}.`;
+}
+
 /** Epochs, batch size and seed: export datasets use their Colab defaults (§6.11.2), the others the trainer's. */
 export function scriptSettings(data) {
     const settings = { ...DEFAULT_SETTINGS, ...(data.settings ?? {}) };
@@ -355,6 +384,9 @@ export function generateEduTrainingScript(archGraph, trainGraph, { templates = {
         comment(`Dataset: ${loader.comment}`, { hang: '  ' }),
         ...(String(loader.comment).includes(spec.attribution) ? [] : [comment(`Attribution: ${spec.attribution}`, { hang: '  ' })]),
         comment(`Licence: ${licence.name ?? 'see the source'}${licence.verified === false ? ' (not verified)' : ''}${licence.url ? `. ${licence.url}` : ''}`, { hang: '  ' }),
+        '#',
+        spec.training === 'browser' ? '# Compared with the browser:' : '# Notes:',
+        ...comparisonNotes(spec, data, settings).map((line) => comment(`- ${line}`, { hang: '  ' })),
         ...(checks.length ? ['#', '# Check before running:', ...checks.map((line) => comment(`- ${line}`, { hang: '  ' }))] : []),
         RULE,
     ].join('\n');
@@ -367,12 +399,16 @@ export function generateEduTrainingScript(archGraph, trainGraph, { templates = {
         : spec.training === 'browser'
             ? "the dataset's seed: which examples go to training and which to validation, as in the browser"
             : "the seed of the train/validation split";
-    const epochsNote = spec.training === 'export' ? `  # ${spec.name}'s default for Colab; change it freely` : '';
+    // Browser datasets take EPOCHS and BATCH_SIZE from the Training tab as they are; export datasets use presets.
+    const tab = tabSettings(data, settings);
+    const preset = (value) => `${spec.name}'s preset for Colab${value === null ? '' : ` (the Training tab says ${value})`}`;
+    const epochsNote = spec.training === 'export' ? `  # ${preset(tab.epochs)}; change it freely` : '';
+    const batchNote = spec.training === 'export' ? `  # ${preset(tab.batchSize)}` : '';
     const constants = [
-        `SEED = ${settings.seed}  # the trainer's seed: initial weights, Dropout and the order of the training batches`,
+        `SEED = ${settings.seed}  # seeds PyTorch's initial weights, Dropout and batch order (its own draws, not the browser's)`,
         `DATA_SEED = ${Math.round(Number(data.dataSeed ?? 1)) || 0}  # ${seedNote}`,
         `EPOCHS = ${settings.epochs}${epochsNote}`,
-        `BATCH_SIZE = ${settings.batchSize}`,
+        `BATCH_SIZE = ${settings.batchSize}${batchNote}`,
         'DEVICE = "cuda" if torch.cuda.is_available() else "cpu"  # the GPU if there is one',
     ].join('\n');
 
@@ -447,6 +483,8 @@ ${indent(step, 3)}
             total += loss.item()${weight}
             count += len(y)${counter}
         ${unpack} = evaluate(model, val_loader)
+        # train_loss: the running mean of this epoch's batch losses, in training mode (Dropout on).
+        # val_loss: one pass after the epoch in evaluation mode, as the browser measures both losses.
         print(f"epoch {epoch:3d}  train_loss {total / count:.4f}  val_loss {val_loss:.4f}${accText}")
         if val_loss < best_loss:  # keep a copy of the best weights so far
             best_loss, best_epoch = val_loss, epoch

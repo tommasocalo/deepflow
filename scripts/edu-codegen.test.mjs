@@ -259,12 +259,37 @@ test('export datasets train with their Colab defaults, browser datasets with the
     assert.match(toy, /^SEED = 3 /m);
     for (const [id, epochs, batch] of [['mnist', 5, 64], ['fashion-mnist', 5, 64], ['cifar10', 10, 128], ['tiny-shakespeare', 10, 32]]) {
         const script = eduScript(getDataset(id), { settings });
-        assert.match(script, new RegExp(`^EPOCHS = ${epochs}  #`, 'm'), id);
-        assert.match(script, new RegExp(`^BATCH_SIZE = ${batch}$`, 'm'), id);
+        const name = getDataset(id).name;
+        assert.ok(script.includes(`\nEPOCHS = ${epochs}  # ${name}'s preset for Colab (the Training tab says 7); change it freely\n`), id);
+        assert.ok(script.includes(`\nBATCH_SIZE = ${batch}  # ${name}'s preset for Colab (the Training tab says 16)\n`), id);
         assert.match(script, /^SEED = 3 /m, 'the trainer seed still applies');
     }
+    const same = eduScript(getDataset('mnist'), { settings: { epochs: 5, batchSize: 64, seed: 3 } });
+    assert.ok(same.includes("\nEPOCHS = 5  # MNIST's preset for Colab; change it freely\n"), 'no Training tab value when it matches');
+    assert.ok(same.includes("\nBATCH_SIZE = 64  # MNIST's preset for Colab\n"));
     assert.deepEqual(scriptSettings({ spec: getDataset('blobs') }), { epochs: 50, batchSize: 32, seed: 1 });
     assert.match(eduScript(getDataset('spiral3'), { dataSeed: 42, options: { perClass: 100, noise: 0.2, seed: 42 } }), /^DATA_SEED = 42 /m);
+});
+
+test('the header and the loop say what differs from the browser: weights, batch order, train_loss and export presets', () => {
+    const unwrap = (script) => script.slice(0, script.indexOf('import torch')).replace(/\n#\s+/g, ' ');
+    const loop = '        # train_loss: the running mean of this epoch\'s batch losses, in training mode (Dropout on).\n'
+        + '        # val_loss: one pass after the epoch in evaluation mode, as the browser measures both losses.\n'
+        + '        print(f"epoch {epoch:3d}  train_loss';
+    for (const spec of DATASETS) {
+        const script = eduScript(spec, { settings: { epochs: 7, batchSize: 16, seed: 3 } });
+        const header = unwrap(script);
+        assert.ok(header.includes('train_loss is the running mean of each epoch\'s batch losses, measured in training mode (Dropout on) while the weights still change.'), spec.id);
+        assert.match(script, /^SEED = 3 {2}# seeds PyTorch's initial weights, Dropout and batch order \(its own draws, not the browser's\)$/m, spec.id);
+        assert.ok(script.includes(loop), `${spec.id}: the epoch line explains train_loss`);
+        if (spec.training === 'browser') {
+            assert.ok(header.includes('# Compared with the browser: - Same data, split, loss and optimizer as in the browser, but PyTorch draws its own initial weights and batch order (from SEED), so the curves come out close to the browser\'s, not identical.'), spec.id);
+            assert.ok(!header.includes('presets for Colab'), spec.id);
+        } else {
+            const { epochs, batchSize } = spec.exportDefaults;
+            assert.ok(header.includes(`EPOCHS and BATCH_SIZE are ${spec.name}'s presets for Colab (${epochs} and ${batchSize}), not the Training tab's (7 and 16).`), spec.id);
+        }
+    }
 });
 
 test('loss choices: BCE, two-output cross-entropy, MSE on 0/1 labels, and the trainer defaults when the Training tab is empty', () => {

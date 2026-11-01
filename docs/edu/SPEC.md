@@ -2361,10 +2361,19 @@ number of epochs:
 
 - `data` absent → today's output, byte-identical (a regression test pins it).
 - `data` present, in this order:
-  1. header comment (dataset, licence, attribution, "Runs in Colab")
+  1. header comment (dataset, licence, attribution, "Runs in Colab"), then what differs from the browser
+     ("Compared with the browser:" for browser datasets, "Notes:" for export ones): PyTorch draws its own initial
+     weights and batch order from `SEED`, so the curves come out close to the browser's, not identical; `train_loss`
+     is the running mean of each epoch's batch losses in training mode (Dropout on) while the weights still change,
+     whereas `val_loss`, like both browser losses, is one pass after the epoch in evaluation mode; for export
+     datasets, `EPOCHS` and `BATCH_SIZE` are the dataset's Colab presets, "not the Training tab's (15 and 32)" when
+     they differ
   2. the model source (`generateArchitectureModule`)
   3. imports
-  4. constants `SEED`, `DATA_SEED`, `EPOCHS`, `BATCH_SIZE`, `DEVICE`
+  4. constants `SEED` ("seeds PyTorch's initial weights, Dropout and batch order (its own draws, not the
+     browser's)"), `DATA_SEED`, `EPOCHS`, `BATCH_SIZE`, `DEVICE`. For export datasets `EPOCHS` and `BATCH_SIZE`
+     carry "MNIST's preset for Colab (the Training tab says 15)"; for browser datasets they are the Training tab's
+     values, without a comment
   5. the loader source
   6. `make_optimizer(model)` from the effective optimizer (§6.10.5; `parameterGroup` as today's codegen); `loss_fn`
      from the effective loss
@@ -2375,8 +2384,8 @@ number of epochs:
   9. `evaluate(model, loader)` under `model.eval()` and `torch.no_grad()`
   10. `train()`: `torch.manual_seed(SEED)`. Before the loop it prints the initial validation loss and the expected
       `ln C` for classification. Each epoch runs `model.train()` batches, then prints
-      `epoch {e:3d}  train_loss {..:.4f}  val_loss {..:.4f}  val_acc {..:.3f}`. It reports the best-validation epoch,
-      then evaluates the test split once if present.
+      `epoch {e:3d}  train_loss {..:.4f}  val_loss {..:.4f}  val_acc {..:.3f}`, under a two-line comment on how the
+      two losses are measured. It reports the best-validation epoch, then evaluates the test split once if present.
   11. For next-token, `generate(model, start='\n', length=300, temperature=0.8)` prints a sample. Its context is
       cropped to the model's T.
   12. `if __name__ == "__main__": train()`
@@ -2939,3 +2948,4 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-10-30 | Stage E | **QA fixes from the browser walk.** Show me keeps the column compact (lower blocks move only as far as the new rows need), so M3 and M4 stay readable after a fit. Check messages use articles ("connect an activation (such as ReLU)") and no "block(s)"; M6 s3's entry status asks to group the blocks (a standard Linear component is no grouping attempt). The code panel closes with Esc and explains an invalid model in plain words ("No code yet: …") instead of a stack trace. Below 900 px the TrainingPalette starts folded to its header. The Training tab's 10-class confusion matrix uses compact cells, and its result toggle wraps. M2 s7's done line no longer says "You built that network yourself", which was untrue after Show me. Dead exports and duplicate CSS in `src/edu` were removed. |
 | 2026-11-01 | Review fixes (content) | **Lesson copy after the ML-educator and UIST reviews.** Imprecise lines corrected: temperature divides the scores (logits) before softmax and a higher T makes samples more random and varied (M7 s6, `m7.q2`, `mis.temperature-creativity`; no longer "not a creativity setting"); each hidden ReLU unit adds "one line where the output can bend", not "one straight edge" (M2 s5, `m2.q3`, recap, `mis.too-few-edges`, `mis.unit-draws-circle`); M6 s6 names the ReLU after Add, relu(x + F(x)), which passes the identity gradient wherever x + F(x) is positive; BCE scores each output as its own yes/no question (M1 s6, `m1.q3`, `mis.bce-for-multiclass`); "2 × 2 pooling halves height and width" (M4 recap); M3 s6 says "dotted" ln 10 line, as on the card. The initial-loss rule is qualified: about ln C when the last layer starts with small weights (M5 s1 reveal, `m5.q1` prompt and explanations, recap, `mis.initial-loss-arbitrary`, `m3.q4`); a linear model on informative features can start well away from it, Iris at about 0.8–1.8 over seeds. Answer leaks removed: M1 s2's body no longer lists w₁, w₂ and b (the formula moved to the reveal); M2 s5's body no longer says "set the hidden width to 3" (hint 2 does), and its done line no longer claims 3 units; M5 s4's prompt no longer states the evidence ("Compare the training and validation curves of your run"); M1 s8 asks which mean and std scale the validation flowers (training split ✓, their own → `scaling-leak`, none → new `unscaled-validation`) instead of a question the Data tab and the train.py header answered, and says the PyTorch curves will be close, not identical. Explanations no longer begin with "Right", which the panel's "Correct." already says; the content test asserts it. One-line explanations added: σ(z), the update w ← w − lr · ∂loss/∂w and lr (M1 s3), the dotted chance line (M1 s3 done), the Data tab before "each dot" (M1 s1, M2 s1), underfitting (M5 s4 reveal), BatchNorm2d and AdaptiveAvgPool2d (M6 s1 done). M3 s7's reveal says the Normalize constants come from all 60,000 official training images, the 5,000 validation images included (facts `mnistTrain`, `mnistVal`). M7's goal is "Explore a character-level GPT, then open GPT-2." |
 | 2026-11-01 | Review fixes (content) | **The test split is taught** (M5). M5 s4's reveal says that picking the ▲ epoch on validation makes the validation score a little optimistic, so the final score comes from a test split used once, as train.py does for MNIST, Fashion-MNIST and CIFAR-10. A fifth M5 quiz item, `m5.q5` (lo3), asks which split reports the final score (validation → new `validation-score-final`, training → `training-loss-is-enough`); `m5.lo3` and recap 3 mention the test split. This goes beyond §4.0's 3–4 quiz items: the engine's `validateModule` still enforces 3–4, so the content test calls it with `limits: false` and asserts the per-module sizes of §4.8 (29 quiz items in all). No browser fixture gets a test split: the in-browser trainer does not evaluate one (§4.5). |
+| 2026-11-01 | Review fixes (content) | **train.py says what differs from the browser** (§6.11.2). Its header lists, under "Compared with the browser:" (or "Notes:" for export datasets), that PyTorch draws its own initial weights and batch order, so the curves are close, not identical; that `train_loss` is a training-mode running mean over the epoch (Dropout on) while the browser, like `val_loss`, measures after the epoch in evaluation mode; and that export datasets use their Colab presets for `EPOCHS` and `BATCH_SIZE` (MNIST 5 and 64, not the Training tab's 15 and 32). The `SEED` comment and, for export datasets, the `EPOCHS` and `BATCH_SIZE` comments say the same, and the epoch line carries a two-line comment. M1 s8 quotes the `SEED` line. |

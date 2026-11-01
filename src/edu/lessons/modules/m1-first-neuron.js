@@ -121,7 +121,14 @@ export default {
         },
         {
             id: 's8', kind: 'predict', subgoal: 'export', target: ['toolbar.code', 'code.tab:train'],
-            codeQuotes: { tab: 'train', text: ['from sklearn.datasets import load_iris', 'mean = X[train_idx].mean(axis=0)', 'X = (X - mean) / std'] },
+            codeQuotes: {
+                tab: 'train',
+                text: [
+                    'from sklearn.datasets import load_iris', 'mean = X[train_idx].mean(axis=0)', 'X = (X - mean) / std',
+                    // The body says PyTorch's curves will be close to the browser's, not identical.
+                    "SEED = 1  # seeds PyTorch's initial weights, Dropout and batch order (its own draws, not the browser's)",
+                ],
+            },
             predict: {
                 id: 'm1.leak', kind: 'choice', options: ['train', 'own', 'none'], correct: 'train',
                 diagnose: [{ equals: 'own', misconception: 'scaling-leak' }, { equals: 'none', misconception: 'unscaled-validation' }],
