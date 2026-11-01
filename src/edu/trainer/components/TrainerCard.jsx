@@ -5,6 +5,7 @@ import { useTrainerStore } from '../store.js';
 import { tr } from '../text.js';
 import BoundaryView from './BoundaryView.jsx';
 import ConfusionMatrix from './ConfusionMatrix.jsx';
+import { useStaleReason } from './hooks.js';
 import LossChart from './LossChart.jsx';
 import { LrField, RunButtons } from './RunSettings.jsx';
 import { useRunAnnouncement } from './useAnnouncement.js';
@@ -34,6 +35,8 @@ export default function TrainerCard({ locked = false, lockedReason = '' }) {
     const firstError = groupIssues(preflightErrors)[0] ?? null;
     const record = shownRecord(current, runs);
     const running = status === 'running' || status === 'stopping';
+    // A run of another model or dataset stays visible for comparison, dimmed, and never reads as this model's result.
+    const stale = useStaleReason(running ? null : record);
     const announcement = useRunAnnouncement(current);
     const ghosts = record && !record.initOnly ? previousRuns(runs, record, 3) : [];
     const failure = current?.status === 'failed' ? current.error?.message : null;
@@ -44,12 +47,13 @@ export default function TrainerCard({ locked = false, lockedReason = '' }) {
             <RunButtons locked={locked} lockedReason={lockedReason} compact />
             <div className="edu-tr-card-meta">
                 <LrField compact disabled={running} />
-                {record && !record.initOnly && (
+                {record && !record.initOnly && !stale && (
                     <span className="edu-tr-card-epoch">{tr('card.epoch', { epoch: record.epoch, epochs: record.settings.epochs })}</span>
                 )}
             </div>
             {problem && <p className="edu-tr-card-problem">{problem}</p>}
-            <div className="edu-tr-card-body">
+            {stale && record?.history?.length > 0 && <p className="edu-tr-stale" data-edu-stale={stale}>{tr(`stale.${stale}`)}</p>}
+            <div className={`edu-tr-card-body${stale ? ' is-stale' : ''}`}>
                 <div className="edu-tr-card-curve" data-edu-target="trainer-curves">
                     <LossChart record={record} runs={runs} compact height={64} ghostCount={3} />
                     {record?.history?.length > 0 && <p className="edu-tr-card-final">{finalLine(record)}</p>}
@@ -59,14 +63,16 @@ export default function TrainerCard({ locked = false, lockedReason = '' }) {
                 </div>
                 {record?.boundary && <BoundaryView record={record} size={120} thumbnail />}
             </div>
-            {record?.history?.length > 0 && !record.boundary && record.confusion && !running && <ConfusionMatrix record={record} compact />}
+            {record?.history?.length > 0 && !record.boundary && record.confusion && !running && (
+                <div className={stale ? 'is-stale' : undefined}><ConfusionMatrix record={record} compact /></div>
+            )}
             {ghosts.length > 0 && (
                 <div className="edu-tr-card-runs">
                     <p className="edu-tr-card-runs-title">{tr('card.recent')}</p>
                     <ul>
                         {[record, ...ghosts].map((run) => {
                             const final = run.history.at(-1);
-                            const label = run === record ? tr('label.current') : runDifference(run, record);
+                            const label = run === record ? tr(stale ? 'label.last' : 'label.current') : runDifference(run, record);
                             return (
                                 <li key={run.id}>
                                     {Number.isFinite(final?.valAccuracy)

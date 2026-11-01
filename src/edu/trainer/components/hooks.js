@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { effectiveObjective } from '../../objective.js';
 import { OPTIMIZER_DEFAULTS } from '../../../domain/training/index.js';
 import { useArchitectureStore } from '../../../stores/architectureStore.js';
+import { useTemplatesStore } from '../../../stores/templatesStore.js';
 import { useTrainingStore } from '../../../stores/trainingStore.js';
+import { dataSeedOf, getDataset, resolveOptions } from '../../data/registry.js';
+import { useEduDataStore } from '../../data/store.js';
+import { staleReason } from '../describe.js';
 
 /** The width of an element in CSS pixels (ResizeObserver), or `fallback` before it is measured. */
 export function useMeasuredWidth(fallback = 280) {
@@ -55,4 +59,21 @@ export function patchOptimizer({ type, learningRate }) {
         return;
     }
     if (learningRate !== undefined) store.patchHyperparameters(optimizer.id, { learning_rate: learningRate });
+}
+
+/**
+ * Why the shown run no longer matches the live model or dataset ('model', 'dataset', 'both' or null; see staleReason),
+ * kept up to date with the architecture, the templates and the Data tab's binding.
+ */
+export function useStaleReason(record) {
+    const graph = useArchitectureStore((state) => state.graph);
+    const templates = useTemplatesStore((state) => state.templates);
+    const datasetId = useEduDataStore((state) => state.datasetId);
+    const optionMap = useEduDataStore((state) => state.options);
+    const split = useEduDataStore((state) => state.split);
+    return useMemo(() => {
+        const spec = getDataset(datasetId);
+        const options = spec ? resolveOptions(spec, optionMap?.[datasetId] ?? {}) : {};
+        return staleReason(record, { graph, templates, binding: { spec, options, split, dataSeed: dataSeedOf(options) } });
+    }, [record, graph, templates, datasetId, optionMap, split]);
 }

@@ -2,6 +2,7 @@
  * Pure helpers for the trainer charts and run labels: number formats, axis domains and ticks, SVG paths, and the
  * "what differed" label of an earlier run (docs/edu/SPEC.md §3.5). No DOM; Node tests import this module.
  */
+import { getEntry } from '../../domain/library/index.js';
 import { tr } from './text.js';
 
 /** Loss values: 3 significant digits below 10 (0.693, 1.10, 0.0123), whole numbers above. */
@@ -112,6 +113,31 @@ export function sampleRows(history, count = 8) {
 const lrOf = (run) => Number(run?.optimizer?.hyperparameters?.learning_rate);
 const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
+/** The blocks of a captured model by name, counted, without Input and Output: { Linear: 2, ReLU: 1 }. */
+export function blockCounts(graph, templates = {}) {
+    const counts = new Map();
+    for (const node of Object.values(graph?.nodes ?? {})) {
+        const name = node.kind === 'layer' ? getEntry(node.libraryKey)?.name ?? node.libraryKey : templates?.[node.templateId]?.name ?? node.label;
+        if (!name || name === 'Input' || name === 'Output') continue;
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return counts;
+}
+
+/**
+ * Block types one model has and the other lacks ("no ReLU", "with Sigmoid"), so two runs with the same number of
+ * parameters still read differently (review r1: M2's ReLU and no-ReLU 2-8-1 runs were both "33 params").
+ */
+function blockDifference(run, reference) {
+    if (!run?.graph || !reference?.graph) return [];
+    const mine = blockCounts(run.graph, run.templates);
+    const theirs = blockCounts(reference.graph, reference.templates);
+    return [
+        ...[...theirs.keys()].filter((name) => !mine.has(name)).map((name) => tr('label.without', { value: name })),
+        ...[...mine.keys()].filter((name) => !theirs.has(name)).map((name) => tr('label.with', { value: name })),
+    ];
+}
+
 /**
  * What differs between `run` and `reference` (the newest run), for the dimmed curves: "lr 0.0001", "seed 2",
  * "33 params", at most two parts. Identical settings fall back to "run 4".
@@ -125,9 +151,11 @@ export function runDifference(run, reference) {
         parts.push(tr('label.lr', { value: formatLr(lrOf(run)) }));
     }
     if (run.loss?.type && run.loss.type !== reference.loss?.type) parts.push(tr('label.loss', { value: run.loss.type }));
+    const blocks = blockDifference(run, reference);
+    if (blocks.length) parts.push(blocks[0]);
     if (Number.isFinite(run.paramCount) && run.paramCount !== reference.paramCount) {
         parts.push(tr('label.params', { value: run.paramCount.toLocaleString('en-US') }));
-    } else if (run.graph && reference.graph && run.graph !== reference.graph && !sameJson(stripPositions(run.graph), stripPositions(reference.graph))) {
+    } else if (!blocks.length && run.graph && reference.graph && run.graph !== reference.graph && !sameJson(stripPositions(run.graph), stripPositions(reference.graph))) {
         parts.push(tr('label.model'));
     }
     if (run.settings?.seed !== reference.settings?.seed) parts.push(tr('label.seed', { value: run.settings?.seed }));

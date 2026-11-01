@@ -117,4 +117,9 @@
 .edu-tr-card-runs ul { margin: 0; padding-left: 16px; color: #333; font-size: 11px; line-height: 1.45; }
 .edu-tr-open { justify-self: start; font-size: 11.5px; }
 
+/* A run of another model or dataset: kept for comparison, dimmed, with a note (review r1). */
+.edu-tr-stale { margin: 0; padding: 6px 8px; border: 1px dashed #92400e; border-radius: 6px; background: #fffbeb; color: #78350f; font-size: 11.5px; line-height: 1.4; }
+.edu-tr-col > .edu-tr-stale { margin-bottom: 6px; }
+.is-stale { opacity: .38; filter: grayscale(1); }
+
 @media (prefers-reduced-motion: reduce) { .edu-tr-svg * { transition: none !important; } }
