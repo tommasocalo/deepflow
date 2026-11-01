@@ -135,7 +135,7 @@ The research brief (P1–P20) maps onto concrete features. Every row below is im
 | P3 | Parsons-style construction (Parsons & Haden; Ericson et al.) | A step can list a **palette**: chips for the blocks it needs plus 0–1 distractor. Each distractor is tied to a named misconception (e.g. Sigmoid before BCE). |
 | P4 | Labelled subgoals (Margulieux et al.) | Every step has one of 7 fixed subgoal labels (§6.3): Prepare the data · Build the model · Check shapes & size · Choose loss & optimizer · Train & observe · Evaluate · Export & read the code. |
 | P5 | Read → modify → write (Xie et al.) | Step order inside each module. |
-| P6 | Predict-observe-explain (Mazur; Kim et al.) | **Prediction gates.** Number, choice or shape answers are committed before the tool reveals the value. Gates lock Train (and the module turns Dimensions off) until the learner answers. The reveal shows "you said / the tool says" with an explanation. |
+| P6 | Predict-observe-explain (Mazur; Kim et al.) | **Prediction gates.** Number, choice or shape answers are committed before the tool reveals the value. Gates lock Train (and the module turns Dimensions off) until the learner answers. A prediction about a training outcome is revealed only after the learner's own run: "You said X · Your run shows Y", read from that run; counts and shapes reveal at once ("The tool shows Y"). |
 | P7 | Immediate, specific, non-disruptive feedback (learntools; DeepFlow IUI'25) | Checks re-run on every store change. Validation errors are rewritten into friendly messages inside the panel. Help ladder: nudge → hint → Show me. No modal error dialogs. |
 | P8 | Productive failure, safely (Kapur) | M2 step 1 ("one neuron on a circle") and M2 step 2 ("two stacked Linears"). Never graded, always resettable. |
 | P9 | Diagnose misconceptions (Carpentries ep.02) | `diagnose` rules on predictions and quiz distractors each map to a misconception id with a targeted explanation (§4.9 catalogue). |
@@ -203,8 +203,8 @@ becomes the initial sandbox.
 - **Download learning log** saves `deepflow-edu-log.json` (§6.8). Nothing is ever sent over the network.
 - Modules are never locked. A card for a module whose recommended predecessor is not completed shows "Recommended
   after 2" in secondary text.
-- Deep link: `#/learn/<moduleId>/<stepId>` opens that step (§6.12). The hash is updated with `history.replaceState`
-  as the learner moves between steps.
+- Deep link: `#/learn/<moduleId>/<stepId>` opens that step (§6.12), first filling in the steps before it (§3.3,
+  §6.7). The hash is updated with `history.replaceState` as the learner moves between steps.
 
 ### 3.3 Lesson panel (`src/edu/components/LessonPanel.jsx`)
 
@@ -235,28 +235,59 @@ area shrinks instead, so React Flow pan, zoom, drag and select are untouched.
 Behaviour:
 
 - **Entering a step** runs `step.setup` once, then captures the step-entry snapshot (§6.8). It switches to
-  `step.tab` if one is given and moves focus to the step heading. The spotlight pulses twice on `step.target`, or not
-  at all under `prefers-reduced-motion`.
+  `step.tab` if one is given and moves focus to the step heading. The canvas fits once the setup has run. The
+  spotlight pulses twice on `step.target`, or not at all under `prefers-reduced-motion`.
+- **Jumping ahead** (a progress segment or a deep link `#/learn/<module>/<step>` to a later step, or Skip) first
+  fills in every step passed over that was never passed, skipped or filled in: its setup, when it was never entered,
+  and the workspace edits of its Show me, without its answer, its training runs or its navigation (§6.7). The step
+  then says that the lesson made the changes in between, and the jump is logged (`skip-ahead`). A segment to an
+  earlier step opens it read-only, as Back does.
 - **Checks** re-evaluate on any change to the architecture, templates, training, data, trainer, UI or session state,
   debounced by 150 ms. The status line shows the first failing sub-check's `detail` (§6.4). When the root
-  validation report has errors, it shows the friendly rewrite of the most relevant error instead (§6.4.4). The
-  canvas's own Graph checks badge is unchanged.
+  validation report has errors, or the graph has a wiring mistake (§6.4.4), it shows the friendly rewrite of the
+  most relevant one instead; a block left without wires is named after the check's detail. The canvas's own Graph
+  checks badge is unchanged.
+- **Misconception callouts** wait until the learner is done: a diagnosed misconception shows once the workspace has
+  stayed unchanged for 6 s, or at once when the learner trains or asks for a hint after their last edit, and any
+  edit hides it until the new state settles (in M1 s5 and M2 s5 it used to correct a half-finished edit). Each
+  callout shown (`misconception-shown`, its id) and each status message shown (`status-shown`, its text key) is
+  logged once per visit to a step.
 - **On pass** the status turns to "✓ Done", with an optional `done` sentence such as "A single neuron can only draw a
   straight line." Next becomes the primary button, and the live region announces "Step complete". There is no
-  automatic advance: the learner reads the reveal, then presses Next.
+  automatic advance: the learner reads the reveal, then presses Next. The pass is saved at once, so exploring after
+  it (opening model.py in M3 s7) never un-passes the step; Reset step and the Show me toast's Undo open it again. On a
+  pass the panel scrolls to the reveal of an outcome prediction, else to the done sentence.
+- **Dock and header.** The status line, its "Show on canvas" and "Where is it?" links, the Show me toast and the
+  navigation share a dock that sticks to the bottom of the panel (in the phone drawer only the navigation row
+  sticks), so "✓ Done" and Next stay in view after training. The header carries Undo and Redo (on the Architecture
+  tab), on the same history as the ribbon and ⌘Z. The progress segments are one tab stop; the arrow keys, Home and
+  End move along them.
 - **Hint ladder.** The first press shows `hint1` (a nudge: where to look), the second `hint2` (specific values), the
   third runs **Show me**. Show me performs `step.solution` as one undoable history entry labelled "Lesson: show
   me", and a toast offers Undo. The hint level is logged.
 - **Back** revisits passed steps read-only: the check status shows, setup is not re-run, and the workspace is not
   changed. **Reset step** restores the step-entry snapshot. **Skip** marks the step `skipped` and moves on.
 - **Prediction gates** (`kind: 'predict'` or a task with `predict`). The input is a number field, radio choices or a
-  shape field ("B, 8, 28, 28"). Submit locks the answer, and it cannot be changed (it can be retried after Reset
-  step). The reveal shows "You said X · The tool shows Y" with the explanation. A matching `diagnose` rule shows its
-  misconception text. Predictions are never marked failed: wording is "Close!", "Exactly", or "Not quite — here is
-  why". With `locks.gate = 'train'`, the TrainerCard's Train button stays disabled until the prediction is committed.
-- **Quiz** follows the last step: one item per screen. Choosing an option reveals that option's explanation at once.
-  Retry is unlimited and the first answer is logged. Warm-up items use the same component before the first step and
-  can be skipped.
+  shape field (its help example is "B, 5, 7", a shape no lesson expects; it was "B, 8, 28, 28", M4 s2's answer).
+  Submit locks the answer, and it cannot be changed (it can be retried after Reset step). A count or a shape reveals
+  at once: "You said X · The tool shows Y" with the explanation. An **outcome prediction**, on a step whose check
+  needs a training run (`run` or `runs`), shows only "Locked: you said X" until the step's check passes; then the
+  reveal reads "You said X · Your run shows Y", with the verdict and the explanation, announced in the live region.
+  Y is read from that run by an observer (`engine/observe.js`): the boundary's shape, whether it bends, the
+  best-recognised class, the hidden width, the first loss, the learning rate with the lowest validation loss or
+  which loss curve rose. `predict.observe` names it, otherwise it is inferred from the step (§6.3.1), and the log
+  records what the run showed (`predict-observed`). A matching `diagnose` rule shows its misconception text.
+  Predictions are never marked failed: wording is "Close!", "Exactly", or "Not quite — here is why". With
+  `locks.gate = 'train'`, the TrainerCard's Train button stays disabled until the prediction is committed.
+- **Option order.** Choice predictions, quiz and warm-up items show their options in a shuffle seeded by the
+  learner and the item id (`engine/order.js`): a random seed is drawn once per browser profile and kept
+  (`deepflow-edu:learner:v1`), so the order is stable across reloads and differs between learners. Options that are
+  numbers keep their ascending order (1, 2, 3, 8) and yes/no and true/false their reading order. Every quiz, warm-up
+  and prediction event logs the order shown, `module-start` logs the seed, and the learning-log download carries it.
+- **Quiz** follows the last step: one item per screen. Choosing an option only selects it; **Check** commits it and
+  shows that option's explanation, so arrowing through the options logs nothing. Retry is unlimited, only checked
+  answers count as attempts, and the first is logged. Warm-up items use the same component before the first step
+  and can be skipped.
 - **Recap**: 3 takeaways, "Next module ›" and "Back to Learn".
 - **Collapse (‒)** minimises the panel to a 44 px rail showing the step number and status. **Exit (✕)** saves the
   lesson workspace, switches to sandbox mode and opens Learn.
@@ -337,6 +368,14 @@ The Training tab is split vertically. The top 55 % keeps DeepFlow's training can
   fraction, and counts as text.
 - **Preflight** box: errors block Train, warnings do not (§6.10.6). Example: "Conv2d is not supported in the browser.
   Open Code → train.py to train this model in Colab."
+- **Stale results.** When the shown run's model (its graph and the templates it uses, node positions aside) or its
+  dataset (id, options, split, data seed) differs from the live workspace, the card and the Training tab keep it for
+  comparison but dim it, label it "last run" instead of "this run", drop its epoch count and say "This run used a
+  different model: press Train to see results for this one" (or dataset, or model and dataset). The optimizer and
+  the run settings do not count, so a learning-rate sweep still compares (`describe.js` `staleReason`).
+- **Test split.** When the bound dataset has a test split, a run keeps the weights of its best epoch and scores the
+  test split once with them when it ends (§6.10.7); the card and the Training tab show "Test accuracy 90% (best epoch
+  141, used once)". "Recent runs" also names the block types two runs differ in ("no ReLU · 33 params").
 - **TrainerCard** (`TrainerCard.jsx`) is the compact embed for the lesson panel. It shows Train/Stop, "epoch k/n", a
   mini loss sparkline (train/val), the final validation accuracy, "Open Training ↗", and a 120×120 boundary thumbnail
   for 2D data. Props: `{ locked, lockedReason }`.
@@ -407,8 +446,9 @@ Every module follows the same shape:
    instead.
 2. **Steps** (4–8). The order is read and predict (worked fixture), then modify (faded), then write (a "Your turn"
    build). Each step has exactly one subgoal label (§6.3.2).
-3. **Quiz**: 3–4 items aligned to the module's learning objectives (LO ids); M5 has a fifth, on the test split
-   (§4.5). Every option has an explanation, and each distractor names the misconception it reveals (§4.9).
+3. **Quiz**: 3–5 items aligned to the module's learning objectives (LO ids); M5 has five, the fifth on the test
+   split (§4.5), the others four. Every option has an explanation, and each distractor names the misconception it
+   reveals (§4.9).
 4. **Recap**: 3 takeaways and a link to the next module.
 
 Conventions used in the step blocks below:
@@ -624,9 +664,11 @@ wrong?" **"Validation information leaks into training" ✓** · "Nothing" · "Tr
 - **Check:** `{ all: [{ answered: 'm2.oneNeuron' }, { run: { dataset: 'circle', minEpochs: 30 } }] }`
 - **Show me:** `answer('m2.oneNeuron', 'no')`, `train`
 
-#### s2 · Stack two Linear blocks — `predict` · Build the model
+#### s2 · Stack two Linear blocks — `predict` · Train & observe
 - **Setup:** `{ do: 'loadFixture', id: 'm2.twoLinear' }`. **Locks:** gate train. **Embeds:** trainer.
-- **Do:** "Now the model has two Linear blocks, 2 → 8 → 1: 8 hidden units and {twoLinearParams} parameters."
+- **Do:** "Now the model has two Linear blocks, 2 → 8 → 1: 8 hidden units and {twoLinearParams} parameters." The
+  fixture builds the model and the learner predicts and trains it, so the subgoal is Train & observe (it said Build
+  the model). s1, s2 and s5 hold outcome predictions (`observe: 'bends'`, `'bends'`, `'hiddenWidth'`).
 - **Predict** `m2.stacked` (choice): "Will the boundary bend now?" Yes · **No ✓**. **Reveal:** "Still a straight
   line. Two linear maps make one: W₂(W₁x + b₁) + b₂ = (W₂W₁)x + (W₂b₁ + b₂). More Linear blocks add parameters, not
   new shapes."
@@ -634,13 +676,15 @@ wrong?" **"Validation information leaks into training" ✓** · "Nothing" · "Tr
 - **Show me:** `answer('m2.stacked', 'no')`, `train`
 
 #### s3 · Add a non-linearity — `task` · Build the model
-- **Palette:** `torch.nn.ReLU` ×1. **Target:** `ribbon.components`.
+- **Palette:** `torch.nn.ReLU` ×1 with `into: { from: { id: 'lin1' }, to: { id: 'lin2' } }`: the chip splices ReLU
+  into that wire (wiring it by hand first was the UIST review's dead end). **Target:** `ribbon.components`.
 - **Do:** "Insert a **ReLU** between the two Linear blocks. ReLU keeps positive values and turns negative ones into
-  0: relu(z) = max(0, z). It is in **Components ▾ → Activation**."
+  0: relu(z) = max(0, z). Use the chip below, or **Components ▾ → Activation** in the ribbon."
 - **Check:** `{ all: [{ chain: [{ type: 'Input' }, { type: 'Linear' }, { type: 'Activation' }, { type: 'Linear' }, { type: 'Output' }] }, { valid: true }] }`
 - **Misconceptions:** an activation directly before Output → `activation-at-output`.
-- **Hints:** (1) "Use the ReLU chip above or **Components ▾ → Activation**." (2) "Select the wire between the two
-  Linear blocks and press Delete, then wire Linear → ReLU → Linear."
+- **Hints:** (1) "The chip puts ReLU into the wire from **Linear 1** to **Linear 2** for you. From the ribbon, you
+  place the block and wire it yourself." (2) "From the ribbon: select the wire from **Linear 1** to **Linear 2** and
+  press Delete. Then wire Linear 1 → ReLU → Linear 2."
 - **Show me:** `{ do: 'insertBetween', block: 'torch.nn.ReLU', from: { id: 'lin1' }, to: { id: 'lin2' } }`
 
 #### s4 · Train the network — `task` · Train & observe
@@ -660,7 +704,8 @@ wrong?" **"Validation information leaks into training" ✓** · "Nothing" · "Tr
   **3 ✓** · 8. **Reveal:** "3. Each unit gives one line where the output can bend. Enclosing the disk takes at least
   3, like the sides of a triangle. With 2 units the region stays open and accuracy drops to about 75%. With 3,
   training sometimes gets stuck: change the training seed and train again."
-- **Check:** `{ all: [{ answered: 'm2.width' }, { run: { dataset: 'circle', minEpochs: 50, model: { all: [{ param: { node: { type: 'Linear', nth: 0 }, name: 'out_features', max: 3 } }, { valid: true }] } } }] }`
+- **Check:** `{ all: [{ answered: 'm2.width' }, { param: { node: { type: 'Linear', nth: 0 }, name: 'out_features', max: 3 } }, { valid: true }, { run: { dataset: 'circle', minEpochs: 50, model: { all: [{ param: { node: { type: 'Linear', nth: 0 }, name: 'out_features', max: 3 } }, { valid: true }] } } }] }`.
+  The widths come before the run, so the status asks for them instead of "Press Train"; the body says "(3 or fewer)".
 - **Misconceptions:** a width mismatch between the two Linear blocks → `mismatched-widths` (via the feedback
   rewrite, §6.4.4).
 - **Show me:** `setParam(lin1.out_features = 3)`, `setParam(lin2.in_features = 3)`, `train`
@@ -676,8 +721,10 @@ wrong?" **"Validation information leaks into training" ✓** · "Nothing" · "Tr
 - **Show me:** `{ do: 'openLevel', path: [{ id: 'lin1' }] }`, `answer('m2.matmul', 'B3')`
 
 #### s7 · Your turn: XOR — `task` · Build the model
-- **Setup:** `{ do: 'loadFixture', id: 'm2.xor' }`. **Palette:** `component:linear` ×2, `torch.nn.ReLU` ×1,
-  `torch.nn.Sigmoid` ×1 (distractor → `sigmoid-before-bce`). **Embeds:** trainer.
+- **Setup:** `{ do: 'loadFixture', id: 'm2.xor' }`. **Palette:** `component:linear` ×2 with `params: { out_features: 8 }`
+  (a Linear chip starts at the open end's width, 2 and then 8, instead of DeepFlow's 768), `torch.nn.ReLU` ×1,
+  `torch.nn.Sigmoid` ×1 (distractor → `sigmoid-before-bce`). **Embeds:** trainer. The canvas fits after the setup, so
+  the Output block is in view.
 - **Do:** "In **XOR** a point is orange when x₁ and x₂ have the same sign. Build a network from Input to Output that
   solves it, then train it. Aim for 90% validation accuracy."
 - **Check:** `{ all: [{ chain: [{ type: 'Input' }, { type: 'Linear' }, { type: 'Activation' }, { type: 'Linear' }, { type: 'Output' }], allow: ['Dropout'] }, { valid: true }, { run: { dataset: 'xor', minEpochs: 50, final: { valAccuracy: { gte: 0.9 } } } }] }`
@@ -1493,6 +1540,7 @@ src/edu/
     engine/                         [A]
       schema.js  nodes.js  checks.js  feedback.js  actions.js  context.js  session.js  storage.js
       progress.js  workspace.js  fixtures.js  i18n.js  log.js  targets.js  canvasBridge.js
+      observe.js  order.js  palette.js  [review fixes] outcome observers, option order, palette splices
       text/en/ui.js                 [A] UI chrome strings (buttons, labels, subgoal names)
     modules/                        [D]
       index.js                      [D] module registry and text bundles (A may create the placeholder, §6.2)
@@ -1516,6 +1564,7 @@ src/edu/
     components/TrainerPanel.jsx     [B] mount point (A may create the placeholder)
     components/TrainerCard.jsx      [B] mount point (A may create the placeholder)
     components/LossChart.jsx  AccuracyChart.jsx  BoundaryView.jsx  ConfusionMatrix.jsx  RunSettings.jsx  trainer.css
+src/codegen/architecture.js         [review fixes] `annotate`: `# Linear 1 = nn.Linear(2, 8)` comments (§3.6)
 src/codegen/training.js             [C] adds the `data` option; legacy output unchanged
 src/codegen/edu/trainScript.js      [C]
 src/codegen/edu/notebook.js         [C]
@@ -1697,7 +1746,7 @@ and `validateModule(module, text) → string[]` (an empty array means valid).
  * @property {Object<string, (ctx: CheckContext) => CheckResult>} [checks]   custom checks used by { custom: name }
  * @property {QuizItem[]} warmup           0–3 items
  * @property {LessonStep[]} steps          4–8 items
- * @property {QuizItem[]} quiz             3–4 items
+ * @property {QuizItem[]} quiz             3–5 items
  * @property {string[]} objectives         LO ids, e.g. ['m1.lo1', …]; text key `<lo>` holds the sentence
  *
  * @typedef {Object} LessonStep
@@ -1725,6 +1774,8 @@ and `validateModule(module, text) → string[]` (an empty array means valid).
  * @property {string[]} [options] @property {string} [correct]      option ids; text `<m>.<s>.predict.opt.<id>`
  * @property {Array<number|null>} [expectedShape]                    null = batch axis; the input accepts "B, 1, 28, 28"
  * @property {{ equals: number|string|Array<number|null>, misconception: string }[]} [diagnose]
+ * @property {'initLoss'|'bestClass'|'boundaryShape'|'bends'|'hiddenWidth'|'bestLr'|'risingCurve'|'tool'} [observe]
+ *                                         how the step's run shows the answer (§3.3); inferred when absent
  *
  * @typedef {Object} QuizItem
  * @property {string} id                   'm1.q1' or 'm2.w1'
@@ -1733,7 +1784,10 @@ and `validateModule(module, text) → string[]` (an empty array means valid).
  * @property {string} correct
  * @property {Object<string, string>} [misconceptions]   option id → misconception id
  *
- * @typedef {{ block: BlockRef, count?: number, distractor?: string }} PaletteItem   distractor = misconception id
+ * @typedef {{ block: BlockRef, count?: number, distractor?: string, into?: { from: NodeMatch, to: NodeMatch },
+ *             params?: object }} PaletteItem   distractor = misconception id; `into` splices the block into the
+ *             wire from → to while that wire exists (one undo step), else places it beside it; `params` are the new
+ *             block's starting parameters (a Linear chip also starts at the width of the model's open end)
  * @typedef {string} BlockRef        'component:linear' | a library key such as 'torch.nn.ReLU' | 'deepflow.op.Add'
  * @typedef {'trainer'|'paramCount'|'softmaxTemperature'} EmbedId
  * @typedef {{ id: string, actions: ActionSpec[] }} StepButton        label text `<m>.<s>.button.<id>`
@@ -1882,9 +1936,9 @@ A `CheckSpec` is an object with exactly one key. All graph predicates look at th
 | `{ split: { val?, test? } }` | the split fractions match |
 | `{ inputShape: Shape }` | the inferred shape of the first root Input (`report.shapes`) equals Shape |
 | `{ outputShape: Shape }` | the shape reaching the first root Output equals Shape |
-| `{ valid: true }` | `report.ok` (nested template errors included) |
+| `{ valid: true }` | `report.ok` (nested template errors included) and no wiring mistake that DeepFlow accepts: a second wire into a one-input block such as a ReLU or the Output (§6.4.4) |
 | `{ has: NodeMatch, count?: n \| { min?, max? }, deep?: bool }` | the number of matching nodes satisfies `count` (default min 1). `deep` also searches templates in use |
-| `{ param: { node: NodeMatch, name, equals? \| oneOf? \| min? \| max?, every?: bool } }` | the first matching node satisfies the condition (all matching nodes when `every`) |
+| `{ param: { node: NodeMatch, name, equals? \| oneOf? \| min? \| max?, every?: bool, in?: NodeMatch[] } }` | the first matching node satisfies the condition (all matching nodes when `every`). With `in`, a path of component matches from the root (`[{ type: 'Component' }]`), the node is looked up inside that shared definition, so the check holds for every instance and repeat copy (M6 s6) |
 | `{ global: { name, equals? \| oneOf? \| min? \| max? } }` | the root global parameter's `default` satisfies it |
 | `{ chain: NodeMatch[], allow?: TypeOrGroup[] }` | a directed root path visits nodes matching each element in order. Consecutive elements are adjacent, except that nodes whose type is in `allow` may sit between them |
 | `{ edge: { from: NodeMatch, to: NodeMatch } }` | a direct root edge exists |
@@ -1910,6 +1964,11 @@ A `CheckSpec` is an object with exactly one key. All graph predicates look at th
  * @property {{ min?: number, max?: number }} [lr]
  */
 ```
+
+When a `run` check fails, its detail says what to do first, about the live model: change the model when the live
+model misses the query's `model` condition (`check.run.modelFirst`, with that condition's own detail), the
+trainer's reason when it cannot start (`check.run.preflight`), and "You changed the model since the last run: press
+Train again" (`check.run.retrain`) before any detail about an older run.
 
 **Global diagnostics** run on every failing task step in addition to `step.diagnose`:
 
@@ -1937,13 +1996,22 @@ messages as they are today):
 The rewritten line carries a "Show on canvas" link. It selects the node, opens its inspector and fits the view
 (canvas bridge, §6.12).
 
+**Wiring mistakes** (review fixes; DeepFlow's own message was 'Template "Linear" has 1 internal error: Too many
+unhandled incoming connections for the available input ports'). A block with one wire too many names the old wire
+that skips the new block ("The old wire from Linear 1 skips ReLU: click that wire and press Delete"), or lists its
+wires; two wires on one named port name the port. A second wire into a ReLU or the Output, which DeepFlow quietly
+accepts, is a lesson error too (`structural`, so `{ valid: true }` fails). "Show the wire" selects that wire on the
+canvas (canvas command `selectEdge`), so Delete removes exactly it, and hint 1 starts with how to draw or delete a
+wire while the learner is in that state.
+
 ### 6.5 Actions API (`engine/actions.js`, Stage A)
 
 `runActions(actions, ctx) → Promise<{ ok: boolean, error?: string }>` runs actions in order and awaits each one. It
 stops at the first error. Graph-changing actions run inside one `recordArchitectureEdit('Lesson: <label>', …)`, so a
 whole Show me is a single Undo step. Actions that replace the workspace (`loadFixture`, `loadStoryboard`) start a
 fresh history, as loading an example does. Graph actions always target the main pane's **root** graph: they call
-`goToLevel(0)` first, except `openLevel`.
+`goToLevel(0)` first, except `openLevel` and `setParam` with `in`, which edits a shared definition from wherever the
+learner is.
 
 | Action | Arguments | Effect |
 |---|---|---|
@@ -1951,7 +2019,7 @@ fresh history, as loading an example does. Graph actions always target the main 
 | `loadStoryboard` | `id`, `configuration?` | run `STORYBOARDS[id].run` on the live stores |
 | `useDataset` | `id`, `setInput = true`, `setOutput = true`, `options?`, `split?` | `callSource('data', 'useDataset', …)` |
 | `setDatasetOptions` | `options?`, `split?` | `callSource('data', 'setOptions' / 'setSplit')` |
-| `setParam` | `node: NodeMatch`, `name`, `value` | layer → `patchLayerParameters`; supernode → `patchNode({ parameterValues })` (merging) |
+| `setParam` | `node: NodeMatch`, `name`, `value`, `in?: NodeMatch[]` | layer → `patchLayerParameters`; supernode → `patchNode({ parameterValues })` (merging). With `in`, a path of component matches from the root (`[{ type: 'Component' }]`), it patches the block inside that shared definition (the template), so every instance and every repeat copy changes, as one undo step; a wrong path fails with "No component matches …" or "No block matches … in ResBlock" |
 | `setGlobal` | `name`, `value` | `patchGlobalParameter(name, { default: value })` |
 | `insertBetween` | `block: BlockRef`, `from`, `to`, `params?` | remove the edge from→to, insert the block between, connect from→new→to |
 | `insertAfter` | `block`, `after`, `params?` | insert the block after `after`; the outgoing edges of `after` now start at the new block |
@@ -2042,9 +2110,17 @@ strings.
   Architecture when the step has none.
 - **Entering a step:** if the step was never entered, run `setup`. Then capture the step-entry snapshot (§6.8.3),
   set `runtime.enteredAtSeq = trainer.seq`, reset `visitedTabs` to the current tab, and log `step-enter`.
-- **next()** is allowed when the check passes. It records `passed`; at the last step it moves to `quiz`, after the
-  quiz to `recap`. **skip()** records `skipped` and moves on. **back()** goes to the previous step without running
-  setup and without touching the workspace.
+- **next()** is allowed when the check passes. A passing check is recorded as `passed` at once (not on Next), so it
+  stays passed while the learner explores; Reset step and the Show me toast's Undo reopen the step. At the last step
+  Next moves to `quiz`, after the quiz to `recap`. **skip()** records `skipped` and moves on. **back()** goes to the
+  previous step without running setup and without touching the workspace.
+- **goToStep(index)** to a later step, deep links and skip() fill in every step passed over that was never passed,
+  skipped or filled in: the step's setup (when it was never entered) and the workspace edits of its solution
+  (`workspaceEdits`: graph, data and UI-flag actions, without `answer`, `train`, `evaluateInit`, `openLevel` or tab
+  and code-panel changes). The step the learner leaves first completes their own attempt, as Show me does. Filled-in
+  steps stay "visited" and are never filled in twice; the jump is logged as `skip-ahead` with what changed.
+  `scripts/edu-step-entry.test.mjs` opens every step from a fresh profile by deep link and by its progress segment
+  and passes it with Show me.
 - **finishModule()** marks the module completed and logs `module-complete`. The module counts as completed when every
   step is `passed` or `skipped` and every quiz item has an answer.
 - **exitLesson()** saves the slot, switches to sandbox (restoring its slot), and sets the tab to `learn`.
@@ -2066,6 +2142,7 @@ progress right now; it is kept until you close this tab." Edu code never calls `
 | `deepflow-edu:slot:<sandbox\|m1…m7>:v1` | workspace snapshot (§6.8.3) | A |
 | `deepflow-edu:step-entry:v1` | `{ moduleId, stepId, snapshot }` for the current step only | A |
 | `deepflow-edu:log:v1` | event log ring buffer (§6.8.4) | A |
+| `deepflow-edu:learner:v1` | the learner's option-order seed, drawn once per profile (§3.3) | review fixes |
 | `deepflow-edu:data:v1` | live data binding of the active workspace | B |
 | `deepflow-edu:trainer:v1` | trainer settings `{ epochs, batchSize, seed }` | B |
 
@@ -2123,8 +2200,11 @@ Nodes are placed at x = 400, y = row × 130.
 Ring buffer of the last 2,000 events: `{ t: epochMs, type, module, step?, data? }`. Types: `module-start`,
 `step-enter`, `step-pass`, `step-skip`, `hint` {level}, `show-me`, `reset-step`, `predict` {id, value, correct},
 `warmup` / `quiz` {id, option, correct, attempt}, `run` {dataset, epochs, finalValAccuracy, finalValLoss},
-`code-open` {tab}, `module-complete`. "Download learning log" exports `{ product: PRODUCT_NAME, curriculumVersion,
-exportedAt, progress, events }`. Nothing leaves the browser otherwise.
+`code-open` {tab}, `module-complete`. Since the review fixes also `skip-ahead` {from, changed, ok}, `palette-insert`
+{block, distractor, inserted, spliced}, `predict-observed` {id, said, observed, text}, `misconception-shown` {id},
+`status-shown` {key}, `undo-show-me` and `step-button`; `module-start` carries {learnerSeed}, and quiz, warm-up and
+prediction events carry the option order shown. "Download learning log" exports `{ product: PRODUCT_NAME,
+curriculumVersion, learnerSeed, exportedAt, progress, events }`. Nothing leaves the browser otherwise.
 
 ### 6.9 Dataset registry (Stage B; image and text presets Stage C)
 
@@ -2316,8 +2396,11 @@ browser. Open Code → train.py and run it in Colab."), `invalid-graph`, `unsupp
   off) over the full train and validation splits: `trainLoss`, `valLoss`, `trainAccuracy`, `valAccuracy`
   (classification), plus `ms`. Loss values include no regularisation term. Weight decay acts in the optimizer, as in
   PyTorch.
-- `best = { epoch, valLoss }` is the epoch with the lowest validation loss. The final `confusion` matrix is
-  computed on the validation split (train split if val is empty). `boundary` probabilities on the 64 × 64 grid are
+- `best = { epoch, valLoss }` is the epoch with the lowest validation loss. **Test split:** when the dataset has
+  one, the run copies the weights whenever an epoch becomes the best, and when the run ends it evaluates the test
+  split once with them, then puts the final weights back; no epoch ever looks at the test split. The record carries
+  `test: { epoch, loss, accuracy, count }`. The final `confusion` matrix is computed on the validation split (train
+  split if val is empty). `boundary` probabilities on the 64 × 64 grid are
   computed at most every 100 ms during a run and at the end.
 - **Determinism:** the same graph, templates, training graph, dataset options, split and settings give bit-identical
   histories in the same JS engine. Streams: init = `deriveSeed(seed, 'init')` with parameters initialised in
@@ -2334,7 +2417,7 @@ browser. Open Code → train.py and run it in Colab."), `invalid-graph`, `unsupp
   datasetId, dataOptions, split, settings: { epochs, batchSize, seed },
   optimizer: { type, hyperparameters }, loss: { type, hyperparameters },
   graph, templates, training,                     // immutable references captured at start
-  paramCount, history: EpochMetrics[], best: { epoch, valLoss } | null,
+  paramCount, history: EpochMetrics[], best: { epoch, valLoss } | null, test: { epoch, loss, accuracy, count } | null,
   confusion: number[][] | null, classNames: string[] | null }
 EpochMetrics = { epoch, trainLoss, valLoss, trainAccuracy, valAccuracy, ms }   // accuracies null for regression
 ```
@@ -2498,8 +2581,8 @@ number of epochs:
 - **`index.html`**: `<title>DeepFlow Edu — Learn to build neural networks</title>`. A test asserts that it equals
   `PRODUCT_NAME + ' — ' + PRODUCT_TAGLINE`, because static HTML cannot import the constant.
 - **Deep links** (`shell/deepLink.js`): `#/learn` opens Learn, `#/learn/m3` starts or resumes module 3, and
-  `#/learn/m3/s4` opens step 4 (marking earlier unseen steps `visited`, not passed). The engine writes the hash with
-  `history.replaceState` on step change.
+  `#/learn/m3/s4` opens step 4 (marking earlier unseen steps `visited`, not passed, after filling in their workspace
+  edits, §6.7). The engine writes the hash with `history.replaceState` on step change.
 
 ---
 
@@ -2740,6 +2823,21 @@ Browser checks (`*-browser-check.mjs`) are run by hand or by Stage E against por
 - **Regression:** `npm test` (baseline 281 + all Edu tests, 0 failures, no Edu skips except the PyTorch-dependent
   ones), `npm run lint`, `npm run build`.
 
+### 8.6 Review fixes
+
+- `edu-step-entry.test.mjs`: every step of every module, opened from a fresh profile by deep link and by its
+  progress segment, fails on entry and passes after Show me; Skip, jumping back and forth, and the kept pass.
+- `edu-observe.test.mjs`: which steps hold outcome predictions, the boundary reading, each step's observation after
+  Show me, and the gate. `edu-choice-order.test.mjs`: the seeded option order. `edu-predict-text.test.mjs`: no
+  example in the prediction help equals an expected or diagnosed shape of any lesson.
+- `edu-wiring-feedback.test.mjs`: the wiring rules, the hints, the M2 s3 splice, the chip widths and the run check's
+  messages. `edu-definition-param.test.mjs`: `setParam` and `param` with `in` on the repeated ResBlock.
+- `edu-trainer-stale.test.mjs`: the stale rule, its labels and both views. `edu-trainer-test-split.test.mjs`: the
+  test score comes from the best epoch's weights, the final weights stay, and nothing is kept without a test split.
+- `edu-walkthrough-browser-check.mjs` now runs at 1440×900, 1280×800, 1024×768 and 390×844 by default (`--sizes`),
+  answers quizzes through Check, opens Linear 1 in M2 s6 to check that the block stays open while "Where is it?"
+  finds Dimensions, and checks that "✓ Done" and Next are on screen after every step.
+
 ---
 
 ## 9. Evaluation plan
@@ -2767,8 +2865,9 @@ piloted:
    hidden.
 3. **The transfer dataset in the app.** Palmer Penguins (numeric columns) is not in the dataset registry; it must
    be added (CC0, with a Python loader and parity test like Iris), or the task must use a dataset the app has.
-4. **A complete log for RQ2.** The event log must record the misconception id of every diagnosis shown and the
-   status messages the panel showed, with the step and time. The engine is adding both.
+4. **A complete log for RQ2: built.** The event log records the misconception id of every callout shown
+   (`misconception-shown`) and the key of every status message shown (`status-shown`), with the step and time, plus
+   the option order each learner saw (§6.8.4).
 
 **Participants and power.** Students with at most one ML course and no neural-network training experience,
 screened with a 5-item prior-knowledge test. The first plan, 26 per arm (power 0.8, α 0.05, two-sided, d = 0.8),
@@ -2803,7 +2902,8 @@ is reported with a 95 % CI against DeepFlow's 79.5.
 **Pilot.** 5 participants, to calibrate timing and wording and to check that no step needs Show me for more than
 30 % of pilot users. Steps above that threshold get rewritten.
 
-**Study build.** Prerequisites 1–4 above are planned for v1.1 and are not part of the v1 stages. The pilot runs on
+**Study build.** Prerequisites 1–3 above are planned for v1.1 and are not part of the v1 stages; prerequisite 4 is
+built. The pilot runs on
 the study build, not on v1.
 
 **Technical evaluation** (reported with the system paper):
@@ -3039,3 +3139,6 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-11-01 | Review fixes (follow-up) | **M2 copy and tests after the engine changes.** M2 s3's hint 1 says the chip now puts ReLU into the Linear 1 → Linear 2 wire, and that from the ribbon the learner places and wires the block; hint 2 starts "From the ribbon". M2 s5 says "(3 or fewer)", since its check now asks for the widths before the run. M2 s8 quotes `= nn.Linear(2, 8)` itself, so the content test's extra quote for it is gone, and the test calls `validateModule` with its size rules again (3–5 quiz items, §6.3). `scripts/edu-data-browser-check.mjs` saves its screenshots under the system's temporary folder by default, and §7.1 and §11.1 no longer name a session's scratch folder. |
 | 2026-11-01 | Review fixes (follow-up) | **M5's overfitting run holds out a test split** (§4.5). Now that the trainer scores a test split once with the best epoch's weights, `m5.big` splits {val 0.3, test 0.2}: still 75 training points, 45 for validation and 30 for the test (new fact `testPoints`). M5 s3 says so, and M5 s4's reveal points at the run's line "Test accuracy … (best epoch …, used once)"; `m5.q5`'s explanation refers to it. Re-measured over training seeds 1–8 (§11.1, §11.2): the s3 check still passes on 7 of 8 seeds and on the fixture's, and Dropout shrinks the gap on 7 of 8 instead of 8 of 8, so `dropoutSeeds` is "7 of 8". §10's limit now says that only this fixture has a test split. |
 | 2026-11-01 | Review fixes (follow-up) | **M6 edits the shared definition** (§4.6). A new s6, "Edit the shared definition", uses the engine's `setParam` with `in` and the `param` check's `in`: inside the repeated ResBlock the learner turns conv1's bias on, predicts the model's gain (96 = 3 × 32, diagnose 32 → new `edit-one-copy`) and sees the parameter count go from 56,970 to 57,066 (facts `sharedEditModel`, `biasGain`). `m6.lo1` again reads "… and edit its shared definition". The gradient and code steps are now s7 and s8, and M6's `version` is 2. The course has 51 steps (§0, §4.8, §9, README), and the content test expects 8 in M6. |
+| 2026-11-01 | Review fixes (engine and UI; recorded with the content) | **Lesson panel** (§3.3, §6.7). The shape field's help example is "B, 5, 7", a shape no lesson expects (it was M4 s2's answer). Jumping ahead by a progress segment, a deep link or Skip fills in the steps passed over: their setup and the workspace edits of their Show me, without answers, runs or navigation (`skip-ahead`). A pass is saved at once. An outcome prediction (its step's check needs a training run) shows "Locked: you said X" and reveals "You said X · Your run shows Y" once the run passes, Y read by an observer (`predict.observe`); counts and shapes still reveal at once. Choice options show in a shuffle seeded per learner (`deepflow-edu:learner:v1`; numbers ascend, yes/no keeps its order), logged with the seed. Quiz and warm-up answers commit with Check. Misconception callouts wait for 6 s without edits, or a Train or a hint. The status line and the navigation stick to the bottom of the panel, Undo and Redo sit in its header, the progress segments are one tab stop, and the canvas fits after a step's setup. |
+| 2026-11-01 | Review fixes (engine and UI; recorded with the content) | **Checks, actions, feedback and the log** (§6.3.1, §6.4, §6.5, §6.6, §6.8). `validateModule` allows 3–5 quiz items. `setParam` and the `param` check take `in`, a path of components whose shared definition holds the block (M6 s6). Palette items take `into` (the chip splices its block into that wire, M2 s3) and `params` (starting parameters; a Linear chip starts at the open end's width, M2 s7). Wiring mistakes get friendly rules and a "Show the wire" link, and a second wire into a ReLU or the Output fails `valid`. A failing `run` check first asks to change the model, names the trainer's reason, or says "press Train again". "Where is it?" works on the first unused target without leaving a block the step opened, and treats a covered target as hidden. The log records `misconception-shown`, `status-shown`, `predict-observed`, `palette-insert` and the option orders, and the download carries the learner seed, so §9's prerequisite 4 is built. |
+| 2026-11-01 | Review fixes (engine and UI; recorded with the content) | **Trainer and editor** (§3.5, §6.10.7). A shown run whose model or dataset differs from the live workspace is dimmed, labelled "last run", and the card and the Training tab say "This run used a different model: press Train to see results for this one". With a test split, a run keeps its best epoch's weights and scores the test split once with them ("Test accuracy … (best epoch …, used once)"; record field `test`). "Recent runs" names the block types two runs differ in ("no ReLU · 33 params"). The loss block's default name follows its type and its select reads "Cross-Entropy (cross_entropy)"; in a lesson a component's Delete × sits away from its › arrow. M2 follows (§4.2): s2 is Train & observe, s3's chip splices ReLU into the wire, s5 checks the widths before the run, s7's Linear chips take the open end's width as their Input (2, then 8) and output 8, and s1, s2 and s5 hold outcome predictions. |
