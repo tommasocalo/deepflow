@@ -74,7 +74,7 @@ addresses the authors' warning that novices may over-rely on the visual interfac
 exported code.
 
 **Scope of v1.**
-- 7 modules: 50 tutorial steps, 28 quiz items, 14 warm-up items.
+- 7 modules: 50 tutorial steps, 29 quiz items, 14 warm-up items.
 - 11 datasets: 7 trainable in the browser (5 toy generators, Iris, digits 8×8) and 4 export-only presets, plus an
   optional toy regression set.
 - A trainer for MLP-style graphs and one combined `train.py` export.
@@ -390,8 +390,8 @@ Every module follows the same shape:
    instead.
 2. **Steps** (4–8). The order is read and predict (worked fixture), then modify (faded), then write (a "Your turn"
    build). Each step has exactly one subgoal label (§6.3.2).
-3. **Quiz**: 3–4 items aligned to the module's learning objectives (LO ids). Every option has an explanation, and
-   each distractor names the misconception it reveals (§4.9).
+3. **Quiz**: 3–4 items aligned to the module's learning objectives (LO ids); M5 has a fifth, on the test split
+   (§4.5). Every option has an explanation, and each distractor names the misconception it reveals (§4.9).
 4. **Recap**: 3 takeaways and a link to the next module.
 
 Conventions used in the step blocks below:
@@ -911,7 +911,7 @@ MLPs.
 Learning objectives:
 - `m5.lo1` Predict the initial loss and use it as a sanity check.
 - `m5.lo2` Recognise learning-rate problems from loss curves.
-- `m5.lo3` Diagnose overfitting from training and validation curves and use early stopping.
+- `m5.lo3` Diagnose overfitting from the curves, use early stopping, and report the final score on a test split.
 - `m5.lo4` Explain what Dropout does in training mode and in evaluation mode.
 
 **Fixtures.**
@@ -974,9 +974,14 @@ Learning objectives:
   **overfitting ✓** · underfitting · training well. The prompt no longer states the evidence; the learner reads it
   off the curves. **Reveal:** "Overfitting: training accuracy is near 100% while validation loss rises after the ▲.
   **Underfitting** looks different: both losses stay high, because the model cannot even fit its training data.
-  Keeping the weights of the ▲ epoch is **early stopping**; train.py does it for you." **Why?** "Validation accuracy
-  falls only a few points while validation loss climbs. Loss also punishes confident mistakes; accuracy only counts
-  right and wrong."
+  Keeping the weights of the ▲ epoch is **early stopping**; train.py does it for you. But picking that epoch on
+  validation makes the validation score a little optimistic. So the final score comes from a **test** split, used
+  once at the end. train.py does this for MNIST, Fashion-MNIST and CIFAR-10." **Why?** "Validation accuracy falls
+  only a few points while validation loss climbs. Loss also punishes confident mistakes; accuracy only counts right
+  and wrong."
+- The browser datasets keep test 0, so the browser never shows a test score: the trainer evaluates only the training
+  and validation splits, and it keeps the last epoch's weights (the ▲ only marks the best one). Showing a test score
+  in the browser, measured once with the best epoch's weights, needs trainer and Training-tab work (§10).
 - **Check:** `{ answered: 'm5.diagnosis' }`
 
 #### s5 · Add Dropout — `task` · Build the model
@@ -1011,10 +1016,15 @@ Learning objectives:
 - `m5.q4` (lo4) "What does Dropout do in evaluation mode (`model.eval()`)?" **"Nothing: every unit is used" ✓** ·
   "It drops the same units as in training" · "It drops half of the inputs". (PyTorch scales kept values by
   1/(1−p) during training, so no rescaling is needed at evaluation.)
+- `m5.q5` (lo3) "You kept the epoch with the lowest validation loss. Which split should report the model's final
+  score?" "The validation split" (→ `validation-score-final`: "Validation chose the epoch, so its score is a little
+  optimistic.") · **"A test split, used once at the end" ✓** ("It played no part in training or in choosing the
+  epoch, so its score is an honest estimate. train.py reports it for MNIST, Fashion-MNIST and CIFAR-10.") · "The
+  training split" (→ `training-loss-is-enough`).
 
 **Recap.** (1) Check the loss before training: with small initial weights it is about −ln(1/C) for C balanced classes. (2) Too small a learning rate
 is slow; too large is unstable. (3) Overfitting shows as validation loss rising while training loss falls. Stop
-early or regularise (Dropout, weight decay), then measure again.
+early or regularise (Dropout, weight decay), then measure again. Report the final score on a test split, used once.
 
 ### 4.6 Module 6 — Reusable blocks and residual connections
 
@@ -1235,10 +1245,10 @@ the same recipe at a larger scale: more blocks, wider vectors, more heads.
 | M2 | 8 | 2 | 4 | circle, xor | — |
 | M3 | 7 | 2 | 4 | digits | mnist |
 | M4 | 7 | 2 | 4 | — | fashion-mnist |
-| M5 | 6 | 2 | 4 | spiral3 | — |
+| M5 | 6 | 2 | 5 | spiral3 | — |
 | M6 | 7 | 2 | 4 | — | cifar10 |
 | M7 | 7 | 2 | 4 | — | tiny-shakespeare |
-| **Total** | **50** | **14** | **28** | | |
+| **Total** | **50** | **14** | **29** | | |
 
 ### 4.9 Misconception catalogue
 
@@ -1277,6 +1287,7 @@ draft text.
 | `one-prediction-per-sequence` | A language model predicts the next token at every position, not once per sequence. |
 | `ids-not-scores` | The output holds a score for every token in the vocabulary at each position. |
 | `unscaled-validation` | The model learned from scaled features, so every split is scaled the same way, with the training mean and std. (M1 s8) |
+| `validation-score-final` | Choosing anything on validation, such as the best epoch, tunes the model to it. A separate test split, used once, gives the final score. (`m5.q5`) |
 
 ---
 
@@ -2644,8 +2655,8 @@ Browser checks (`*-browser-check.mjs`) are run by hand or by Stage E against por
 
 `edu-content.test.mjs`:
 
-1. **Schema:** `validateModule` returns no errors for each module. Sizes: 4–8 steps, 3–4 quiz items, ≤ 3 warm-up
-   items. Every quiz option has an explanation. Every `PredictSpec` has a reveal. Every dataset id, target ref,
+1. **Schema:** `validateModule` returns no errors for each module. Sizes: 4–8 steps, 3–4 quiz items (5 in M5; the
+   test calls `validateModule` with `limits: false` and asserts the sizes of §4.8), ≤ 3 warm-up items. Every quiz option has an explanation. Every `PredictSpec` has a reveal. Every dataset id, target ref,
    BlockRef, embed, LO id and misconception id exists. No step with `{ visited: X }` in its check sets `tab: X`.
 2. **Text:** every required key exists in `en`, no key is unused, and bodies are ≤ 60 words (measured after
    interpolation).
@@ -2735,6 +2746,7 @@ v1.1 (Stage E or later) and is not part of the v1 stages.
 | Risk or limit | Mitigation |
 |---|---|
 | The browser trainer and PyTorch are not bit-identical (float64 vs float32, different weight-init RNG, batch order, GELU erf approximation) | Data and split are identical and tested. Init follows the same distributions. The text says "the same data and split; curves will be similar, not identical". Agreement is measured as part of §9 |
+| The browser never shows a test score: browser datasets keep test 0, and the trainer evaluates only the training and validation splits and keeps the last epoch's weights | M5 s4 and `m5.q5` teach why the final score comes from a test split used once, and train.py reports one for MNIST, Fashion-MNIST and CIFAR-10. A browser test score, measured once with the best epoch's weights after training, needs trainer and Training-tab work; then one browser fixture (M5 `big` or Iris) can get a test split |
 | Dropout's benefit on tiny toy data varies by seed (§11.2) | M5 s5 passes on any Dropout run and shows the learner's own comparison honestly, with a seed-retry suggestion. No step claims a guaranteed improvement |
 | Learners lean on Show me | The hint ladder puts two text hints first, Show me is logged, and copy says "try first". The pilot threshold is in §9 |
 | Some editor gestures need a pointer (drag to connect) | Show me and palette chips offer keyboard-reachable paths. DeepFlow's own keyboard support is unchanged |
@@ -2924,5 +2936,6 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-10-30 | Stage E | **Targets** (§6.6): `code.notebook` and `code.colabNote` added; "Where is it?" is not offered inside a level a `nodeOpen` target opened, opens the code panel for code targets and fits the Training canvas for training targets. §11.1 and §11.2 gained the in-browser trainer's measurements. |
 | 2026-10-30 | Stage E | **Spotlight follows the learner** (§6.6): used targets are skipped (`isTargetDone`), targets off screen count as missing, and "Where is it?" also scrolls lists and panels. M3 s7's targets add the MNIST row and Use this dataset. |
 | 2026-10-30 | Stage E | **QA record.** `scripts/edu-walkthrough-browser-check.mjs` walks every module with Hint, Hint, Show me at 1440×900 and 390×844: each step with an unused target rings it at entry or, below the fold on the phone (the drawer's trainer card, the ribbon's edge), offers "Where is it?", which brings it into view; no console errors, no horizontal scroll; a reload resumes the step and Exit restores the sandbox. By hand in Chromium: first run → Learn → M1 by mouse and keyboard → quiz → recap → M2; sandbox and back; reload mid-step; Reset progress; tab switches mid-lesson; Undo of a Show me; 1440×900, 1024×768 and 390×844. Keyboard: Tab reaches every Edu control, Enter submits answers and runs chips, Space chooses options, Esc closes menus and the code panel (never the lesson), focus rings are 2 px #e91e63, focus moves to the step heading and to the reveal. Text contrast: every Edu text element met WCAG AA in the audited states (disabled controls excepted). Trainer timings in Chromium (§6.10.7 budgets): circle 2-8-1 about 30 ms, spiral3 overfit about 3.5–4 s, digits MLP about 1.1–1.5 s; the UI keeps about 40 frames per second while training. |
-| 2026-10-30 | Review fixes (content) | **Lesson copy after the ML-educator and UIST reviews.** Imprecise lines corrected: temperature divides the scores (logits) before softmax and a higher T makes samples more random and varied (M7 s6, `m7.q2`, `mis.temperature-creativity`; no longer "not a creativity setting"); each hidden ReLU unit adds "one line where the output can bend", not "one straight edge" (M2 s5, `m2.q3`, recap, `mis.too-few-edges`, `mis.unit-draws-circle`); M6 s6 names the ReLU after Add, relu(x + F(x)), which passes the identity gradient wherever x + F(x) is positive; BCE scores each output as its own yes/no question (M1 s6, `m1.q3`, `mis.bce-for-multiclass`); "2 × 2 pooling halves height and width" (M4 recap); M3 s6 says "dotted" ln 10 line, as on the card. The initial-loss rule is qualified: about ln C when the last layer starts with small weights (M5 s1 reveal, `m5.q1` prompt and explanations, recap, `mis.initial-loss-arbitrary`, `m3.q4`); a linear model on informative features can start well away from it, Iris at about 0.8–1.8 over seeds. Answer leaks removed: M1 s2's body no longer lists w₁, w₂ and b (the formula moved to the reveal); M2 s5's body no longer says "set the hidden width to 3" (hint 2 does), and its done line no longer claims 3 units; M5 s4's prompt no longer states the evidence ("Compare the training and validation curves of your run"); M1 s8 asks which mean and std scale the validation flowers (training split ✓, their own → `scaling-leak`, none → new `unscaled-validation`) instead of a question the Data tab and the train.py header answered, and says the PyTorch curves will be close, not identical. Explanations no longer begin with "Right", which the panel's "Correct." already says; the content test asserts it. One-line explanations added: σ(z), the update w ← w − lr · ∂loss/∂w and lr (M1 s3), the dotted chance line (M1 s3 done), the Data tab before "each dot" (M1 s1, M2 s1), underfitting (M5 s4 reveal), BatchNorm2d and AdaptiveAvgPool2d (M6 s1 done). M3 s7's reveal says the Normalize constants come from all 60,000 official training images, the 5,000 validation images included (facts `mnistTrain`, `mnistVal`). M7's goal is "Explore a character-level GPT, then open GPT-2." |
 | 2026-10-30 | Stage E | **QA fixes from the browser walk.** Show me keeps the column compact (lower blocks move only as far as the new rows need), so M3 and M4 stay readable after a fit. Check messages use articles ("connect an activation (such as ReLU)") and no "block(s)"; M6 s3's entry status asks to group the blocks (a standard Linear component is no grouping attempt). The code panel closes with Esc and explains an invalid model in plain words ("No code yet: …") instead of a stack trace. Below 900 px the TrainingPalette starts folded to its header. The Training tab's 10-class confusion matrix uses compact cells, and its result toggle wraps. M2 s7's done line no longer says "You built that network yourself", which was untrue after Show me. Dead exports and duplicate CSS in `src/edu` were removed. |
+| 2026-11-01 | Review fixes (content) | **Lesson copy after the ML-educator and UIST reviews.** Imprecise lines corrected: temperature divides the scores (logits) before softmax and a higher T makes samples more random and varied (M7 s6, `m7.q2`, `mis.temperature-creativity`; no longer "not a creativity setting"); each hidden ReLU unit adds "one line where the output can bend", not "one straight edge" (M2 s5, `m2.q3`, recap, `mis.too-few-edges`, `mis.unit-draws-circle`); M6 s6 names the ReLU after Add, relu(x + F(x)), which passes the identity gradient wherever x + F(x) is positive; BCE scores each output as its own yes/no question (M1 s6, `m1.q3`, `mis.bce-for-multiclass`); "2 × 2 pooling halves height and width" (M4 recap); M3 s6 says "dotted" ln 10 line, as on the card. The initial-loss rule is qualified: about ln C when the last layer starts with small weights (M5 s1 reveal, `m5.q1` prompt and explanations, recap, `mis.initial-loss-arbitrary`, `m3.q4`); a linear model on informative features can start well away from it, Iris at about 0.8–1.8 over seeds. Answer leaks removed: M1 s2's body no longer lists w₁, w₂ and b (the formula moved to the reveal); M2 s5's body no longer says "set the hidden width to 3" (hint 2 does), and its done line no longer claims 3 units; M5 s4's prompt no longer states the evidence ("Compare the training and validation curves of your run"); M1 s8 asks which mean and std scale the validation flowers (training split ✓, their own → `scaling-leak`, none → new `unscaled-validation`) instead of a question the Data tab and the train.py header answered, and says the PyTorch curves will be close, not identical. Explanations no longer begin with "Right", which the panel's "Correct." already says; the content test asserts it. One-line explanations added: σ(z), the update w ← w − lr · ∂loss/∂w and lr (M1 s3), the dotted chance line (M1 s3 done), the Data tab before "each dot" (M1 s1, M2 s1), underfitting (M5 s4 reveal), BatchNorm2d and AdaptiveAvgPool2d (M6 s1 done). M3 s7's reveal says the Normalize constants come from all 60,000 official training images, the 5,000 validation images included (facts `mnistTrain`, `mnistVal`). M7's goal is "Explore a character-level GPT, then open GPT-2." |
+| 2026-11-01 | Review fixes (content) | **The test split is taught** (M5). M5 s4's reveal says that picking the ▲ epoch on validation makes the validation score a little optimistic, so the final score comes from a test split used once, as train.py does for MNIST, Fashion-MNIST and CIFAR-10. A fifth M5 quiz item, `m5.q5` (lo3), asks which split reports the final score (validation → new `validation-score-final`, training → `training-loss-is-enough`); `m5.lo3` and recap 3 mention the test split. This goes beyond §4.0's 3–4 quiz items: the engine's `validateModule` still enforces 3–4, so the content test calls it with `limits: false` and asserts the per-module sizes of §4.8 (29 quiz items in all). No browser fixture gets a test split: the in-browser trainer does not evaluate one (§4.5). |

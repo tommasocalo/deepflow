@@ -147,5 +147,7 @@ export default {
         { id: 'm5.q2', objective: 'm5.lo2', options: ['lower', 'epochs', 'layers'], correct: 'lower', misconceptions: { epochs: 'more-epochs-always-better', layers: 'bigger-model-fixes-training' } },
         { id: 'm5.q3', objective: 'm5.lo3', options: ['lowestVal', 'last', 'lowestTrain'], correct: 'lowestVal', misconceptions: { last: 'more-epochs-always-better', lowestTrain: 'training-loss-is-enough' } },
         { id: 'm5.q4', objective: 'm5.lo4', options: ['nothing', 'same', 'inputs'], correct: 'nothing', misconceptions: { same: 'dropout-at-eval', inputs: 'dropout-at-eval' } },
+        // A fifth item, beyond §4.0's 3–4: the test split, which none of the browser datasets uses (SPEC §12).
+        { id: 'm5.q5', objective: 'm5.lo3', options: ['val', 'test', 'train'], correct: 'test', misconceptions: { val: 'validation-score-final', train: 'training-loss-is-enough' } },
     ],
 };

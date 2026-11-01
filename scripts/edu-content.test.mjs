@@ -125,15 +125,25 @@ test('the registry holds the seven modules in order, and the engine loads it', (
     assert.deepEqual(getModules().map((module) => module.id), MODULE_IDS);
 });
 
+/** Steps and quiz items per module (docs/edu/SPEC.md §4.8). M5 has a fifth quiz item, on the test split (§12). */
+const SIZES = {
+    m1: { steps: 8, quiz: 4 }, m2: { steps: 8, quiz: 4 }, m3: { steps: 7, quiz: 4 }, m4: { steps: 7, quiz: 4 },
+    m5: { steps: 6, quiz: 5 }, m6: { steps: 7, quiz: 4 }, m7: { steps: 7, quiz: 4 },
+};
+
 test('every module passes validateModule with the registry datasets and the spec sizes', () => {
     for (const module of MODULES) {
-        assert.deepEqual(validateModule(module, EN, { datasetIds: DATASET_IDS }), [], module.id);
+        // The engine's size rule allows 3–4 quiz items; the sizes of §4.8 are asserted below instead.
+        assert.deepEqual(validateModule(module, EN, { datasetIds: DATASET_IDS, limits: false }), [], module.id);
         assert.ok(module.steps.length >= 4 && module.steps.length <= 8, `${module.id} steps`);
-        assert.ok(module.quiz.length >= 3 && module.quiz.length <= 4, `${module.id} quiz`);
+        assert.ok(module.quiz.length >= 3 && module.quiz.length <= 5, `${module.id} quiz`);
+        assert.deepEqual({ steps: module.steps.length, quiz: module.quiz.length }, SIZES[module.id], `${module.id} sizes (§4.8)`);
         assert.equal(module.warmup.length, 2, `${module.id} warm-up`);
         assert.ok(module.objectives.every((lo) => lo.startsWith(`${module.id}.lo`)), `${module.id} objectives`);
     }
     assert.equal(MODULES.reduce((sum, module) => sum + module.steps.length, 0), 50, 'the spec counts 50 steps');
+    assert.equal(MODULES.reduce((sum, module) => sum + module.quiz.length, 0), 29, 'the spec counts 29 quiz items');
+    assert.equal(MODULES.reduce((sum, module) => sum + module.warmup.length, 0), 14, 'the spec counts 14 warm-up items');
 });
 
 test('an explanation never repeats the verdict the panel prints before it ("Correct. Right.")', () => {
