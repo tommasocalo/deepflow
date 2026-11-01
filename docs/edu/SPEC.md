@@ -87,7 +87,7 @@ addresses the authors' warning that novices may over-rely on the visual interfac
 exported code.
 
 **Scope of v1.**
-- 7 modules: 50 tutorial steps, 29 quiz items, 14 warm-up items.
+- 7 modules: 51 tutorial steps, 29 quiz items, 14 warm-up items.
 - 11 datasets: 7 trainable in the browser (5 toy generators, Iris, digits 8×8) and 4 export-only presets, plus an
   optional toy regression set.
 - A trainer for MLP-style graphs and one combined `train.py` export.
@@ -1056,8 +1056,7 @@ early or regularise (Dropout, weight decay), then measure again. Report the fina
 **Goal line:** "Group, repeat, and add skip connections." **Dataset:** `cifar10` (export). **Requires:** M4.
 
 Learning objectives:
-- `m6.lo1` Group blocks into a reusable component that you can open, repeat and reuse. (It said "and edit its
-  shared definition", which no step exercises; see §12.)
+- `m6.lo1` Group blocks into a reusable component and edit its shared definition (s6).
 - `m6.lo2` Repeat a component and reason about shared structure and separate weights.
 - `m6.lo3` Build a residual connection with matching shapes.
 - `m6.lo4` Explain why residual paths help gradients flow, and what DeepFlow's Gradients view shows.
@@ -1068,7 +1067,9 @@ Learning objectives:
 AdaptiveAvgPool2d (output 1) → `flat` Flatten → `fc` Linear (32→10) → `out`. Adam lr 0.001, cross-entropy. Data
 `cifar10`. Dimensions on.
 
-**Facts:** `blockParams = 18560`, `stemParams = 896`, `oneBlockModel = 19850`, `threeBlockModel = 56970`.
+**Facts:** `blockParams = 18560`, `stemParams = 896`, `oneBlockModel = 19850`, `threeBlockModel = 56970`,
+`sharedEditModel = 57066`, `biasGain = 96`. The module's `version` is 2: s6 is new, and the gradient and code steps
+moved to s7 and s8 (§6.8.2 keeps records by step id).
 
 **Warm-up.** `m6.w1` (m5.lo3) "Training loss keeps falling but validation loss rises. What is happening?"
 **Overfitting ✓** · Underfitting · Normal training. `m6.w2` (m4.lo1) "Conv2d(32 → 32, kernel 3, padding 1) on (B, 32, 16,
@@ -1127,7 +1128,25 @@ AdaptiveAvgPool2d (output 1) → `flat` Flatten → `fc` Linear (32→10) → `o
   Conv2d_3, …) for each copy."
 - **Check:** `{ all: [{ answered: 'm6.sharedWeights' }, { level: { open: { type: 'Component' } } }] }`
 
-#### s6 · Why skip connections help — `predict` · Evaluate
+#### s6 · Edit the shared definition — `predict` · Build the model
+- **Target:** `nodeOpen` `{ type: 'Component' }`, then `node` `{ label: 'conv1' }` inside it, then `field:bias`.
+  **Embeds:** `paramCount`.
+- **Do:** "ResBlock is one **definition** that the 3 copies share. Inside it, click **conv1** and turn its **bias**
+  on: one bias per output channel. The parameter count below shows what the edit does."
+- **Predict** `m6.sharedEdit` (number): "conv1 has 32 output channels. How many parameters does the whole model gain
+  when you turn its bias on?" expected {biasGain}. Diagnose 32 → `edit-one-copy`. **Reveal:** "{biasGain}: 32 biases
+  in each of the 3 copies. The copies share one definition, so one edit reaches all of them. Each copy still gets its
+  own 32 numbers, trained separately. The model grows from {threeBlockModel} to {sharedEditModel}."
+- **Check:** `{ all: [{ answered: 'm6.sharedEdit' }, { param: { in: [{ type: 'Component' }], node: { label: 'conv1' }, name: 'bias', equals: true } }, { valid: true }] }`
+  (`param` with `in` reads the block inside the shared definition, §6.4.3).
+- **Hints:** (1) "If ResBlock is closed, open it with the › arrow on the block. Then click **conv1** to open its
+  settings." (2) "Turn **bias** on in conv1's settings. Then count what each of the 3 copies gains."
+- **Done:** "One edit changed all 3 copies. The block had bias off because BatchNorm's learned shift does the same
+  job, so you may turn it off again."
+- **Show me:** `answer('m6.sharedEdit', 96)`, `{ do: 'setParam', in: [{ type: 'Component' }], node: { label: 'conv1' }, name: 'bias', value: true }`
+  (one undo step that edits the definition, §6.5).
+
+#### s7 · Why skip connections help — `predict` · Evaluate
 - **Target:** `ribbon.gradients`.
 - **Do:** "Turn on **Gradients** in View. It shows which paths can carry gradients back to each parameter: the
   structure only, not how large the gradients are."
@@ -1138,7 +1157,7 @@ AdaptiveAvgPool2d (output 1) → `flat` Flatten → `fc` Linear (32→10) → `o
   positive. That is why very deep residual networks still train."
 - **Check:** `{ all: [{ answered: 'm6.residualGrad' }, { ui: { showGradientFlow: true } }] }`
 
-#### s7 · Find the skip connection in the code — `predict` · Export & read the code
+#### s8 · Find the skip connection in the code — `predict` · Export & read the code
 - **Do:** "Open **Code → model.py**. Each repeated block is unrolled into its own layers. In Colab, train.py downloads
   CIFAR-10 (about 170 MB); choose a GPU runtime."
 - **Predict** `m6.codeAdd` (choice): "Which kind of line is a skip connection?" **`tN = torch.add(tA, tB)` ✓** ·
@@ -1272,9 +1291,9 @@ the same recipe at a larger scale: more blocks, wider vectors, more heads.
 | M3 | 7 | 2 | 4 | digits | mnist |
 | M4 | 7 | 2 | 4 | — | fashion-mnist |
 | M5 | 6 | 2 | 5 | spiral3 | — |
-| M6 | 7 | 2 | 4 | — | cifar10 |
+| M6 | 8 | 2 | 4 | — | cifar10 |
 | M7 | 7 | 2 | 4 | — | tiny-shakespeare |
-| **Total** | **50** | **14** | **29** | | |
+| **Total** | **51** | **14** | **29** | | |
 
 ### 4.9 Misconception catalogue
 
@@ -1313,6 +1332,7 @@ draft text.
 | `one-prediction-per-sequence` | A language model predicts the next token at every position, not once per sequence. |
 | `ids-not-scores` | The output holds a score for every token in the vocabulary at each position. |
 | `unscaled-validation` | The model learned from scaled features, so every split is scaled the same way, with the training mean and std. (M1 s8) |
+| `edit-one-copy` | The copies share one definition, so an edit inside it reaches every copy. Each copy then has its own new weights. (M6 s6) |
 | `validation-score-final` | Choosing anything on validation, such as the best epoch, tunes the model to it. A separate test split, used once, gives the final score. (`m5.q5`) |
 
 ---
@@ -2787,7 +2807,7 @@ is reported with a 95 % CI against DeepFlow's 79.5.
 the study build, not on v1.
 
 **Technical evaluation** (reported with the system paper):
-- Solvability (all 50 steps by Show me, §8.4).
+- Solvability (all 51 steps by Show me, §8.4).
 - Browser–PyTorch dataset parity (§8.2).
 - Trainer timings (§6.10.7).
 - Python validity of every dataset's export.
@@ -3018,3 +3038,4 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-11-01 | Review fixes (content) | **Two new numbers are ledger facts** (§6.3.6): `chanceBce` (0.693, M1 s3's dotted chance line, recomputed) and `irisInitLoss` ("0.8 to 1.8", M5 s1, `source: 'simulation'`, measured with Check initial loss over training seeds 1–10, §11.1). |
 | 2026-11-01 | Review fixes (follow-up) | **M2 copy and tests after the engine changes.** M2 s3's hint 1 says the chip now puts ReLU into the Linear 1 → Linear 2 wire, and that from the ribbon the learner places and wires the block; hint 2 starts "From the ribbon". M2 s5 says "(3 or fewer)", since its check now asks for the widths before the run. M2 s8 quotes `= nn.Linear(2, 8)` itself, so the content test's extra quote for it is gone, and the test calls `validateModule` with its size rules again (3–5 quiz items, §6.3). `scripts/edu-data-browser-check.mjs` saves its screenshots under the system's temporary folder by default, and §7.1 and §11.1 no longer name a session's scratch folder. |
 | 2026-11-01 | Review fixes (follow-up) | **M5's overfitting run holds out a test split** (§4.5). Now that the trainer scores a test split once with the best epoch's weights, `m5.big` splits {val 0.3, test 0.2}: still 75 training points, 45 for validation and 30 for the test (new fact `testPoints`). M5 s3 says so, and M5 s4's reveal points at the run's line "Test accuracy … (best epoch …, used once)"; `m5.q5`'s explanation refers to it. Re-measured over training seeds 1–8 (§11.1, §11.2): the s3 check still passes on 7 of 8 seeds and on the fixture's, and Dropout shrinks the gap on 7 of 8 instead of 8 of 8, so `dropoutSeeds` is "7 of 8". §10's limit now says that only this fixture has a test split. |
+| 2026-11-01 | Review fixes (follow-up) | **M6 edits the shared definition** (§4.6). A new s6, "Edit the shared definition", uses the engine's `setParam` with `in` and the `param` check's `in`: inside the repeated ResBlock the learner turns conv1's bias on, predicts the model's gain (96 = 3 × 32, diagnose 32 → new `edit-one-copy`) and sees the parameter count go from 56,970 to 57,066 (facts `sharedEditModel`, `biasGain`). `m6.lo1` again reads "… and edit its shared definition". The gradient and code steps are now s7 and s8, and M6's `version` is 2. The course has 51 steps (§0, §4.8, §9, README), and the content test expects 8 in M6. |

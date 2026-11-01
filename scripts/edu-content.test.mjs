@@ -128,7 +128,7 @@ test('the registry holds the seven modules in order, and the engine loads it', (
 /** Steps and quiz items per module (docs/edu/SPEC.md §4.8). M5 has a fifth quiz item, on the test split (§12). */
 const SIZES = {
     m1: { steps: 8, quiz: 4 }, m2: { steps: 8, quiz: 4 }, m3: { steps: 7, quiz: 4 }, m4: { steps: 7, quiz: 4 },
-    m5: { steps: 6, quiz: 5 }, m6: { steps: 7, quiz: 4 }, m7: { steps: 7, quiz: 4 },
+    m5: { steps: 6, quiz: 5 }, m6: { steps: 8, quiz: 4 }, m7: { steps: 7, quiz: 4 },
 };
 
 test('every module passes validateModule with the registry datasets and the spec sizes', () => {
@@ -140,7 +140,7 @@ test('every module passes validateModule with the registry datasets and the spec
         assert.equal(module.warmup.length, 2, `${module.id} warm-up`);
         assert.ok(module.objectives.every((lo) => lo.startsWith(`${module.id}.lo`)), `${module.id} objectives`);
     }
-    assert.equal(MODULES.reduce((sum, module) => sum + module.steps.length, 0), 50, 'the spec counts 50 steps');
+    assert.equal(MODULES.reduce((sum, module) => sum + module.steps.length, 0), 51, 'the spec counts 51 steps');
     assert.equal(MODULES.reduce((sum, module) => sum + module.quiz.length, 0), 29, 'the spec counts 29 quiz items');
     assert.equal(MODULES.reduce((sum, module) => sum + module.warmup.length, 0), 14, 'the spec counts 14 warm-up items');
 });

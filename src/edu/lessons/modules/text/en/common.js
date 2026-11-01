@@ -96,6 +96,7 @@ export default {
     'mis.group-changes-model': 'Group does not change what the model computes or how it trains. It wraps the blocks in a reusable component.',
     'mis.shared-structure-shared-weights': 'Repeat copies the structure, not the numbers: every copy has its own weights, initialised and trained separately.',
     'mis.repeat-splits-params': 'Copies do not split one set of weights between them. Each copy has a full set of its own.',
+    'mis.edit-one-copy': 'The copies share one definition, so an edit inside it reaches every copy. Each copy then has its own new weights.',
     'mis.add-shapes': 'Both inputs of Add must have the same shape.',
     'mis.add-concatenates': 'Add sums element by element. Joining tensors side by side is what Concat does.',
     'mis.skip-doubles-gradient': 'The skip adds an identity term to the block\'s gradient, ∂y/∂x = I + ∂F/∂x. It does not double it.',

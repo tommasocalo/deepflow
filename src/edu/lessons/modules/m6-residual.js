@@ -41,7 +41,8 @@ function addShapesDiffer(ctx) {
 
 export default {
     id: 'm6',
-    version: 1,
+    // 2: s6 edits the shared ResBlock definition; the gradient and code steps moved to s7 and s8.
+    version: 2,
     order: 6,
     minutes: 20,
     datasets: ['cifar10'],
@@ -80,6 +81,8 @@ export default {
         oneBlockModel: { value: 19850, at: 'start', compute: (h) => h.total() },
         blockParams: { value: 18560, at: 's3', compute: (h) => h.params({ type: 'Component' }) },
         threeBlockModel: { value: 56970, at: 's4', compute: (h) => h.total() },
+        sharedEditModel: { value: 57066, at: 's6', compute: (h) => h.total() },
+        biasGain: { value: 96, at: 's6', compute: (h) => h.total() - h.fact('m6', 'threeBlockModel') },
         cifarDownload: { value: '170 MB', source: 'literature', note: 'torchvision\'s cifar-10-python.tar.gz is 170,498,071 bytes; train.py says "about 170 MB".' },
     },
     checks: { residualAdd, addShapesDiffer },
@@ -142,7 +145,21 @@ export default {
             solution: [{ do: 'openLevel', path: [{ type: 'Component' }] }, answer('m6.sharedWeights', 'no')],
         },
         {
-            id: 's6', kind: 'predict', subgoal: 'evaluate', tab: 'architecture', target: ['ribbon.gradients'],
+            // One edit inside the shared definition (setParam `in`) reaches all three repeat copies; each copy gains its
+            // own 32 biases, so the parameter count shows the edit three times.
+            id: 's6', kind: 'predict', subgoal: 'model', tab: 'architecture',
+            target: [{ nodeOpen: { type: 'Component' } }, { node: { label: 'conv1' } }, 'field:bias'],
+            embeds: ['paramCount'],
+            predict: { id: 'm6.sharedEdit', kind: 'number', expected: 96, diagnose: [{ equals: 32, misconception: 'edit-one-copy' }] },
+            check: { all: [
+                { answered: 'm6.sharedEdit' },
+                { param: { in: [{ type: 'Component' }], node: { label: 'conv1' }, name: 'bias', equals: true } },
+                { valid: true },
+            ] },
+            solution: [answer('m6.sharedEdit', 96), { do: 'setParam', in: [{ type: 'Component' }], node: { label: 'conv1' }, name: 'bias', value: true }],
+        },
+        {
+            id: 's7', kind: 'predict', subgoal: 'evaluate', tab: 'architecture', target: ['ribbon.gradients'],
             predict: {
                 id: 'm6.residualGrad', kind: 'choice', options: ['identity', 'twice', 'nothing'], correct: 'identity',
                 diagnose: [{ equals: 'twice', misconception: 'skip-doubles-gradient' }, { equals: 'nothing', misconception: 'skip-blocks-gradient' }],
@@ -151,7 +168,7 @@ export default {
             solution: [{ do: 'setUi', showGradientFlow: true }, answer('m6.residualGrad', 'identity')],
         },
         {
-            id: 's7', kind: 'predict', subgoal: 'export', target: ['toolbar.code', 'code.tab:model'],
+            id: 's8', kind: 'predict', subgoal: 'export', target: ['toolbar.code', 'code.tab:model'],
             codeQuotes: { tab: 'model', text: ['torch.add(', 'self.conv1_2(', 'self.relu1(', 'self.conv1_3 ='] },
             predict: { id: 'm6.codeAdd', kind: 'choice', options: ['add', 'conv', 'relu'], correct: 'add' },
             check: { all: [{ ui: { codeOpen: true, codeTab: 'model' } }, { answered: 'm6.codeAdd' }] },
