@@ -46,8 +46,8 @@ export default {
     'm4.s3.predict.reveal': '(28 + 0 − 3)/1 + 1 = 26. Without padding, a 3 × 3 filter cannot be centred on the border pixels.',
 
     'm4.s4.title': 'Build two convolution blocks',
-    'm4.s4.body': 'Padding is back to 1. Build conv1 → ReLU → **MaxPool2d** (Kernel 2) → Conv2d (8 → 16, Kernel 3, Padding 1) → ReLU → MaxPool2d (Kernel 2). **Pooling** keeps the largest value in each 2 × 2 window, halving height and width.',
-    'm4.s4.hint1': 'The chips below insert the blocks. In the ribbon they are **Components ▾ → Convolution** and **Pooling**.',
+    'm4.s4.body': 'Padding is back to 1. Block 1 is conv1 → ReLU → **MaxPool2d** (Kernel 2): build it. **Pooling** keeps the largest value in each 2 × 2 window, halving height and width. Then build block 2 on your own: 16 filters of 3 × 3, a ReLU and a pool. The last pool must output (B, 16, 7, 7).',
+    'm4.s4.hint1': 'Block 2 repeats block 1\'s pattern: Conv2d → ReLU → MaxPool2d. The chips below insert the blocks.',
     'm4.s4.hint2': 'Second Conv2d: In channels 8, Out channels 16, Kernel 3, Padding 1. Both pools: Kernel 2.',
     'm4.s4.done': 'The last pool outputs (B, 16, 7, 7): 16 feature maps of 7 × 7.',
 

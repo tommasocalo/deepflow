@@ -2,7 +2,7 @@
 export default {
     'm6.title': 'Reusable blocks and residual connections',
     'm6.goal': 'Group, repeat, and add skip connections.',
-    'm6.lo1': 'Group blocks into a reusable component and edit its shared definition.',
+    'm6.lo1': 'Group blocks into a reusable component that you can open, repeat and reuse.',
     'm6.lo2': 'Repeat a component and reason about shared structure and separate weights.',
     'm6.lo3': 'Build a residual connection with matching shapes.',
     'm6.lo4': 'Explain why residual paths help gradients flow, and what DeepFlow\'s Gradients view shows.',

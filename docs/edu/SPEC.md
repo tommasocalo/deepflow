@@ -870,12 +870,15 @@ Learning objectives:
 #### s4 · Build two convolution blocks — `task` · Build the model
 - **Setup:** `setParam(conv1.padding = 1)`, with the notice "Padding is back to 1." **Palette:** `torch.nn.ReLU` ×2,
   `torch.nn.MaxPool2d` ×2, `torch.nn.Conv2d` ×1.
-- **Do:** "Build conv1 → ReLU → **MaxPool2d** (Kernel 2) → Conv2d (8 → 16, Kernel 3, Padding 1) → ReLU → MaxPool2d
-  (Kernel 2). Pooling keeps the largest value in each 2 × 2 window, halving height and width."
+- **Do:** "Padding is back to 1. Block 1 is conv1 → ReLU → **MaxPool2d** (Kernel 2): build it. Pooling keeps the
+  largest value in each 2 × 2 window, halving height and width. Then build block 2 on your own: 16 filters of 3 × 3,
+  a ReLU and a pool. The last pool must output (B, 16, 7, 7)." Faded: block 1 has the recipe, block 2 only its goal
+  and the check; In channels 8 and Padding 1 are left to the learner (hint 2 gives them).
 - **Check:** `{ all: [{ chain: [{ type: 'Input' }, { type: 'Conv2d' }, { type: 'Activation' }, { type: 'MaxPool2d' }, { type: 'Conv2d' }, { type: 'Activation' }, { type: 'MaxPool2d' }] }, { shapeAt: { node: { type: 'MaxPool2d', nth: 1 }, equals: [null, 16, 7, 7] } }] }`
-- **Misconceptions:** conv2 `in_channels` ≠ 8 → `in-channels-mismatch`.
-- **Hints:** (1) "Conv2d and pooling are in **Components ▾ → Convolution / Pooling**." (2) "conv2: In channels 8, Out
-  channels 16, Kernel 3, Padding 1. Both pools: Kernel 2."
+- **Misconceptions:** conv2 `in_channels` ≠ 8 → `in-channels-mismatch`; the last pool at (B, 16, 6, 6), a conv2
+  without padding → `padding-no-effect`.
+- **Hints:** (1) "Block 2 repeats block 1's pattern: Conv2d → ReLU → MaxPool2d. The chips below insert the blocks."
+  (2) "Second Conv2d: In channels 8, Out channels 16, Kernel 3, Padding 1. Both pools: Kernel 2."
 - **Show me:** `buildChain` from `{ id: 'conv1' }` to `{ type: 'Output' }` with [ReLU, MaxPool2d{kernel_size 2},
   Conv2d{in 8, out 16, kernel 3, padding 1}, ReLU, MaxPool2d{kernel_size 2}]
 
@@ -1050,7 +1053,8 @@ early or regularise (Dropout, weight decay), then measure again. Report the fina
 **Goal line:** "Group, repeat, and add skip connections." **Dataset:** `cifar10` (export). **Requires:** M4.
 
 Learning objectives:
-- `m6.lo1` Group blocks into a reusable component and edit its shared definition.
+- `m6.lo1` Group blocks into a reusable component that you can open, repeat and reuse. (It said "and edit its
+  shared definition", which no step exercises; see §12.)
 - `m6.lo2` Repeat a component and reason about shared structure and separate weights.
 - `m6.lo3` Build a residual connection with matching shapes.
 - `m6.lo4` Explain why residual paths help gradients flow, and what DeepFlow's Gradients view shows.
@@ -2991,3 +2995,4 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-11-01 | Review fixes (content) | **train.py says what differs from the browser** (§6.11.2). Its header lists, under "Compared with the browser:" (or "Notes:" for export datasets), that PyTorch draws its own initial weights and batch order, so the curves are close, not identical; that `train_loss` is a training-mode running mean over the epoch (Dropout on) while the browser, like `val_loss`, measures after the epoch in evaluation mode; and that export datasets use their Colab presets for `EPOCHS` and `BATCH_SIZE` (MNIST 5 and 64, not the Training tab's 15 and 32). The `SEED` comment and, for export datasets, the `EPOCHS` and `BATCH_SIZE` comments say the same, and the epoch line carries a two-line comment. M1 s8 quotes the `SEED` line. |
 | 2026-11-01 | Review fixes (content) | **A bridge to everyday PyTorch** (§3.6). model.py, and the model in a dataset's train.py, comment each standard Linear component with the layer it equals, `# Linear 1 = nn.Linear(2, 8)`, because the export writes it out as weight, transpose, matmul and add and no lesson named `nn.Linear`. `generateArchitectureModule` takes `annotate` (default true); the legacy train.py passes false and stays byte-identical. M2 s8's reveal points at the comment. The torchvision loaders' docstring says the Normalize constants come from all official training images, the validation images included, as M3 s7's reveal does. |
 | 2026-11-01 | Review fixes (content) | **Positioning and evaluation plan** (§0, §9). §0 now positions the work against in-application tutorial systems (Stencils-based tutorials, DocWizards, ToolClips, Pause-and-Play, MixT) and visual ML teaching tools (Orange, KNIME), described only at that level, and states the delta: checks on the model, validation and training state of a full NN editor rather than screen state or a click script, misconception-tied diagnosis with graded help, and browser-to-PyTorch parity of data, split, loss and optimizer; the README mirrors it. §9 lists what must be built before the study (the static baseline view, the lesson-hidden transfer mode, the Penguins dataset in the app, a log with misconception ids and shown status messages) and replaces the power analysis: d = 0.8 with 26 per arm was optimistic; the plan assumes d ≈ 0.5, 64 per arm for a two-sample test (α = .05, power .8), with a counterbalanced crossover (about 34 participants at r ≈ .5) as the fallback. |
+| 2026-11-01 | Review fixes (content) | **More independent practice.** M4 s4 is faded: block 1 keeps its recipe, block 2 gives only its goal (16 filters of 3 × 3, a ReLU and a pool, ending at (B, 16, 7, 7)) and the check, with a new diagnosis for a conv2 without padding (`padding-no-effect`). M6's objective `m6.lo1` no longer claims "edit its shared definition", which no step exercises: the lesson actions cannot edit inside a component (§6.5), so a step that edits the ResBlock definition and watches all three copies follow waits for an engine action. M7's goal says "Explore" (above). |

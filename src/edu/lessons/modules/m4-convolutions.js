@@ -99,11 +99,19 @@ export default {
                 { chain: [{ type: 'Input' }, { type: 'Conv2d' }, { type: 'Activation' }, { type: 'MaxPool2d' }, { type: 'Conv2d' }, { type: 'Activation' }, { type: 'MaxPool2d' }] },
                 { shapeAt: { node: { type: 'MaxPool2d', nth: 1 }, equals: [null, 16, 7, 7] } },
             ] },
-            diagnose: [{
-                when: { all: [{ has: { type: 'Conv2d' }, count: { min: 2 } }, { not: { param: { node: { type: 'Conv2d', nth: 1 }, name: 'in_channels', equals: 8 } } }] },
-                misconception: 'in-channels-mismatch',
-                example: [{ do: 'buildChain', from: { id: 'conv1' }, to: { type: 'Output' }, blocks: [RELU, POOL, conv(1, 16), RELU, POOL] }],
-            }],
+            // Block 2 is the learner's own (only its goal is given): diagnose a wrong In channels and a missing padding.
+            diagnose: [
+                {
+                    when: { all: [{ has: { type: 'Conv2d' }, count: { min: 2 } }, { not: { param: { node: { type: 'Conv2d', nth: 1 }, name: 'in_channels', equals: 8 } } }] },
+                    misconception: 'in-channels-mismatch',
+                    example: [{ do: 'buildChain', from: { id: 'conv1' }, to: { type: 'Output' }, blocks: [RELU, POOL, conv(1, 16), RELU, POOL] }],
+                },
+                {
+                    when: { shapeAt: { node: { type: 'MaxPool2d', nth: 1 }, equals: [null, 16, 6, 6] } },
+                    misconception: 'padding-no-effect',
+                    example: [{ do: 'buildChain', from: { id: 'conv1' }, to: { type: 'Output' }, blocks: [RELU, POOL, conv(8, 16, 0), RELU, POOL] }],
+                },
+            ],
             solution: [{ do: 'buildChain', from: { id: 'conv1' }, to: { type: 'Output' }, blocks: [RELU, POOL, conv(8, 16), RELU, POOL] }],
         },
         {
