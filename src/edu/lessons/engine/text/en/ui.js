@@ -108,7 +108,7 @@ export default {
     'hint.label': 'Hint {level}',
     'hint.now': 'Right now:',
     'hint.wireAdd': 'To wire two blocks, drag from the dot at the bottom of one block to the dot at the top of the next.',
-    'hint.wireDelete': 'To delete a wire, click it so it turns dark, then press Delete or Backspace.',
+    'hint.wireDelete': 'To delete a wire, click it so it is highlighted, then press Delete or Backspace.',
     'panel.showWire': 'Show the wire',
     'nav.back': 'Back',
     'nav.reset': 'Reset step',
