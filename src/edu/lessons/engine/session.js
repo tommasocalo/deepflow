@@ -207,8 +207,8 @@ export const useLessonSession = create((set, get) => {
     /**
      * Run a step's Show me edits on the learner's attempt, reusing the blocks they added in it (§6.5). When that does
      * not give the model the step asks for (review r2: a Sigmoid before the Output, a second ReLU beside the first),
-     * the step starts over from its entry snapshot instead: the model and its edits form one undo step, so Undo brings
-     * the attempt back; the training graph, data binding and trainer settings return to the entry's.
+     * the step starts over from its entry snapshot instead: the model (with its training graph) and its edits form one
+     * undo step, so Undo brings the attempt back; the data binding and trainer settings return to the entry's.
      * @returns {Promise<{ ok: boolean, error?: string, restarted: boolean }>}
      */
     async function completeAttempt(item, edits, label) {

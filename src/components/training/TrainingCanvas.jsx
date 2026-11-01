@@ -8,6 +8,7 @@ import {
     useReactFlow,
 } from '@xyflow/react';
 import { Hand, MousePointer2 } from 'lucide-react';
+import { useArchitectureHistoryKeys } from '../../hooks/useArchitectureHistoryKeys.js';
 import { useTrainingStore } from '../../stores/trainingStore.js';
 import OptimizerNodeView from './OptimizerNodeView.jsx';
 import LossNodeView from './LossNodeView.jsx';
@@ -55,6 +56,8 @@ function toFlowEdges(graph, selectedEdgeSet) {
 }
 
 const Inner = ({ fitOnOpen = false }) => {
+    // Ctrl+Z here undoes training edits too: they share the document history with the architecture.
+    useArchitectureHistoryKeys();
     const graph = useTrainingStore((s) => s.graph);
     const selectedNodeIds = useTrainingStore((s) => s.selectedNodeIds);
     const moveNode = useTrainingStore((s) => s.moveNode);

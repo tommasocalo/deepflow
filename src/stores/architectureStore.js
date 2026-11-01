@@ -34,6 +34,7 @@ import { componentBindingsForLayer, ensureStandardTemplate, getStandardComponent
 import { removeGlobalParameter as removeGlobalFromModel } from '../domain/parameterBindings.js';
 import { repeatBindingValue } from '../domain/expressions.js';
 import { useTemplatesStore } from './templatesStore.js';
+import { useTrainingStore } from './trainingStore.js';
 import { architectureDocumentReplaced, configureArchitectureHistory, isRestoringArchitectureHistory, withArchitectureHistory } from './architectureHistory.js';
 
 const STORAGE_KEY = 'deepflow:architecture-graph';
@@ -783,13 +784,25 @@ function subscribeTemplateNavigation(store) {
 // Restore document state before reconciling navigation: a cloned template may
 // disappear together with the instance that refers to it in the same undo.
 const documentPanes = new Set([architectureStore]);
+// Training blocks are moved without undo steps (dragging moves them every frame): a restored training graph keeps
+// its blocks where they are now.
+function keepTrainingPositions(restored, current) {
+    if (!restored?.nodes) return restored;
+    const nodes = Object.fromEntries(Object.entries(restored.nodes).map(([id, node]) => (
+        [id, current?.nodes?.[id] ? { ...node, position: current.nodes[id].position } : node])));
+    return { ...restored, nodes };
+}
+
 configureArchitectureHistory({
-    capture: () => ({ graph: architectureStore.getState().graph, templates: useTemplatesStore.getState().templates }),
-    restore: ({ graph, templates }) => {
+    capture: () => ({
+        graph: architectureStore.getState().graph, templates: useTemplatesStore.getState().templates, training: useTrainingStore.getState().graph,
+    }),
+    restore: ({ graph, templates, training }) => {
         useTemplatesStore.setState({ templates });
         for (const pane of documentPanes) {
             pane.setState({ graph, ...sharedGraphPatch(pane.getState(), graph) });
         }
+        if (training) useTrainingStore.setState({ graph: keepTrainingPositions(training, useTrainingStore.getState().graph) });
     },
 });
 const unsubscribeGraphHistory = architectureStore.subscribe((state, previous) => {

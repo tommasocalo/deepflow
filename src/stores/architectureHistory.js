@@ -16,7 +16,8 @@ function sameValue(left, right) {
     const keys = Object.keys(left);
     return keys.length === Object.keys(right).length && keys.every((key) => Object.hasOwn(right, key) && sameValue(left[key], right[key]));
 }
-const differs = (left, right) => !sameValue(left.graph, right.graph) || !sameValue(left.templates, right.templates);
+const differs = (left, right) => !sameValue(left.graph, right.graph) || !sameValue(left.templates, right.templates)
+    || !sameValue(left.training, right.training);
 const publish = () => useArchitectureHistory.setState({
     canUndo: past.length > 0,
     canRedo: future.length > 0,
@@ -29,6 +30,7 @@ const publish = () => useArchitectureHistory.setState({
 /**
  * One document history for all panes. Snapshots retain immutable graph/template
  * references, not selection, navigation, measured layout, or display settings.
+ * The training graph (loss, optimizer) is part of the same document.
  */
 export const useArchitectureHistory = create(() => ({
     canUndo: false,

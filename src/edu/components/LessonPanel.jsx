@@ -100,7 +100,8 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
     const runtime = useLessonSession((state) => state.runtime);
     const progress = useLessonSession((state) => state.progress);
     const drawerOpen = useEduUiStore((state) => state.drawerOpen);
-    const onArchitecture = useEduUiStore((state) => state.activeTab === 'architecture');
+    // Undo and Redo where the learner edits the document: the architecture and the training graph (review r2).
+    const onDocument = useEduUiStore((state) => state.activeTab === 'architecture' || state.activeTab === 'training');
     const narrow = useMediaQuery(NARROW);
     const panelRef = useRef(null);
     // Below 900 px the drawer's handle toggles it and, dragged (or with the arrow keys), resizes it.
@@ -212,7 +213,7 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
                         </span>
                         <ChevronUp size={14} aria-hidden="true" className="edu-drawer-chevron" />
                     </button>
-                    {onArchitecture && <HistoryButtons />}
+                    {onDocument && <HistoryButtons />}
                     <button type="button" className="df-icon-button" onClick={exit} aria-label={t('panel.exit')} title={t('panel.exit')}>
                         <X size={15} aria-hidden="true" />
                     </button>
@@ -223,7 +224,7 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
                     {!narrow && (
                         <header className="edu-panel-header">
                             <p className="edu-panel-module">{moduleTitle(module)}</p>
-                            {onArchitecture && <HistoryButtons />}
+                            {onDocument && <HistoryButtons />}
                             <button type="button" className="df-icon-button" onClick={toggle} aria-label={t('panel.collapse')} title={t('panel.collapse')}>
                                 <Minus size={15} aria-hidden="true" />
                             </button>

@@ -14,12 +14,20 @@ import {
     removeTrainingEdge,
     removeTrainingNode,
 } from '../domain/training/index.js';
+import { withArchitectureHistory } from './architectureHistory.js';
 
 const STORAGE_KEY = 'deepflow:training-graph';
+// Edits of the training graph are undo steps of the one document history (stores/architectureHistory.js); moving a
+// block is not (the canvas moves it on every frame of a drag).
+const HISTORY_ACTIONS = {
+    addOptimizer: 'Add optimizer', addLoss: 'Add loss', addPhase: 'Add phase', removeNode: 'Delete training block',
+    patchNode: 'Change training block', patchHyperparameters: 'Change hyperparameters', connect: 'Connect training blocks',
+    removeEdge: 'Delete training connection', resetGraph: 'Reset training graph',
+};
 
 export const useTrainingStore = create(
     persist(
-        (set, get) => ({
+        (set, get) => withArchitectureHistory({
             graph: emptyTrainingGraph(),
             /** @type {string[]} */
             selectedNodeIds: [],
@@ -82,7 +90,7 @@ export const useTrainingStore = create(
 
             resetGraph: () =>
                 set({ graph: emptyTrainingGraph(), selectedNodeIds: [] }),
-        }),
+        }, HISTORY_ACTIONS),
         { name: STORAGE_KEY, partialize: (state) => ({ graph: state.graph }) },
     ),
 );

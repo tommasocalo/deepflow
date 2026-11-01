@@ -76,21 +76,22 @@ export function restoreWorkspace(snapshot) {
 }
 
 /**
- * Put a snapshot's model back as an ordinary edit, inside the caller's history transaction: the root graph and the
- * templates, with the navigation reset. Show me starts a step over this way, as one undo step (engine/actions.js).
+ * Put a snapshot's model back as an ordinary edit, inside the caller's history transaction: the root graph, the
+ * templates and the training graph, with the navigation reset. Show me starts a step over this way, as one undo step
+ * (engine/actions.js).
  */
 export function replaceDocument(snapshot) {
     useArchitectureStore.getState().goToLevel(0);
     useTemplatesStore.setState({ templates: snapshot.templates ?? {} });
     useArchitectureStore.setState({ graph: snapshot.graph, ...NAVIGATION_RESET });
+    useTrainingStore.setState({ graph: snapshot.training ?? { nodes: {}, edges: [] }, selectedNodeIds: [], expandedNodeId: null });
 }
 
 /**
- * The rest of a snapshot, which the undo history does not hold: the training graph, the data binding, the trainer
- * settings and the view flags. Unlike restoreWorkspace, the trainer's runs stay for comparison.
+ * The rest of a snapshot, which the undo history does not hold: the data binding, the trainer settings and the view
+ * flags. Unlike restoreWorkspace, the trainer's runs stay for comparison.
  */
 export function restoreSettings(snapshot) {
-    useTrainingStore.setState({ graph: snapshot.training ?? { nodes: {}, edges: [] }, selectedNodeIds: [], expandedNodeId: null });
     const slices = new Map(workspaceSlices());
     if (snapshot.slices?.data !== undefined) slices.get('data')?.restore(snapshot.slices.data);
     if (snapshot.slices?.trainer?.settings && readSource('trainer')) callSource('trainer', 'setSettings', snapshot.slices.trainer.settings);

@@ -73,6 +73,7 @@ try {
                 export { default as LessonPanel } from './src/edu/components/LessonPanel.jsx';
                 export { useArchitectureStore } from './src/stores/architectureStore.js';
                 export { useArchitectureHistory } from './src/stores/architectureHistory.js';
+                export { useTrainingStore } from './src/stores/trainingStore.js';
                 export { readSource, registerSource } from './src/edu/bridge.js';
                 export { useEduUiStore } from './src/edu/shell/uiStore.js';
                 export { applyDeepLink, parseLearnHash, syncHash } from './src/edu/shell/deepLink.js';
@@ -105,7 +106,7 @@ try {
 const {
     LearnHome, LessonPanel, useArchitectureStore, useArchitectureHistory, readSource, registerSource, useEduUiStore, applyDeepLink, parseLearnHash, syncHash,
     useLessonSession, setModuleRegistry, restoreWorkspace, buildFixtureSnapshot, readLog, resetLogForTests, resetStorageForTests, P,
-    TEST_MODULE, TEST_TEXT, runActions,
+    TEST_MODULE, TEST_TEXT, runActions, useTrainingStore,
 } = bundle;
 
 // A second module so Learn shows a not-started card that is recommended after the first.
@@ -570,6 +571,19 @@ test('the progress segments are one tab stop, the arrows move between them, and 
     await click(button('Undo the last edit', panel()));
     assert.ok(!Object.values(arch().graph.nodes).some((node) => node.libraryKey === 'torch.nn.ReLU'), 'the panel Undo reverts the edit');
     assert.ok(panel().querySelector('.edu-step-dock .edu-status[role="status"]') && panel().querySelector('.edu-step-dock footer.edu-nav'), 'the status and the navigation share the dock');
+});
+
+test('on the Training tab the panel Undo reverts a training-graph edit (review r2: the M1 s6 loss type)', async () => {
+    await openStep(5);
+    await act(() => useEduUiStore.getState().setTab('training'));
+    await settle();
+    const lossType = () => Object.values(useTrainingStore.getState().graph.nodes).find((node) => node.kind === 'loss')?.type;
+    assert.equal(lossType(), 'bce');
+    await run(() => runActions([{ do: 'setLoss', type: 'cross_entropy' }], { label: 'test' }));
+    await settle();
+    assert.equal(lossType(), 'cross_entropy');
+    await click(button('Undo the last edit', panel()));
+    assert.equal(lossType(), 'bce', 'the panel Undo reverts the loss type');
 });
 
 test('a misconception callout waits until the learner signals they are done, and the log records it', async () => {
