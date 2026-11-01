@@ -133,8 +133,7 @@ const SIZES = {
 
 test('every module passes validateModule with the registry datasets and the spec sizes', () => {
     for (const module of MODULES) {
-        // The engine's size rule allows 3–4 quiz items; the sizes of §4.8 are asserted below instead.
-        assert.deepEqual(validateModule(module, EN, { datasetIds: DATASET_IDS, limits: false }), [], module.id);
+        assert.deepEqual(validateModule(module, EN, { datasetIds: DATASET_IDS }), [], module.id);
         assert.ok(module.steps.length >= 4 && module.steps.length <= 8, `${module.id} steps`);
         assert.ok(module.quiz.length >= 3 && module.quiz.length <= 5, `${module.id} quiz`);
         assert.deepEqual({ steps: module.steps.length, quiz: module.quiz.length }, SIZES[module.id], `${module.id} sizes (§4.8)`);
@@ -322,8 +321,6 @@ function assertNoSpoiler(step, result, where) {
 
 const computedFacts = {};
 
-/** Code that the copy points at beyond a step's own codeQuotes: M2 s8's reveal names the nn.Linear comment. */
-const EXTRA_CODE_QUOTES = { 'm2.s8': { tab: 'model', text: ['# Linear = nn.Linear(2, 8)', '# Linear = nn.Linear(8, 1)'] } };
 
 async function computeFacts(module, at, record) {
     const helpers = createFactHelpers(buildCheckContext({ module }), { facts: computedFacts });
@@ -390,10 +387,10 @@ test('every step fails on entry and passes after its Show me, module after modul
                 for (const name of LIVE_PARAMS(step)) assert.ok(live.params[name] !== undefined, `${where}: live value {${name}} is available after Show me`);
                 if (step.reveal.compare) assert.ok(live.variant, `${where}: a comparison variant is chosen`);
             }
-            for (const quotes of [step.codeQuotes, EXTRA_CODE_QUOTES[where]].filter(Boolean)) {
+            if (step.codeQuotes) {
                 // Lessons that point at a line of the export quote it verbatim; the generated code must contain it.
-                const code = liveCode()[quotes.tab];
-                for (const quote of quotes.text) assert.ok(code.includes(quote), `${where}: ${quotes.tab === 'train' ? 'train.py' : 'model.py'} contains ${quote}`);
+                const code = liveCode()[step.codeQuotes.tab];
+                for (const quote of step.codeQuotes.text) assert.ok(code.includes(quote), `${where}: ${step.codeQuotes.tab === 'train' ? 'train.py' : 'model.py'} contains ${quote}`);
             }
             await computeFacts(module, step.id, record);
             assert.equal(await session().next(), true, `${where}: Next`);

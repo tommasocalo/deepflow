@@ -47,8 +47,8 @@ export default {
 
     'm2.s3.title': 'Add a non-linearity',
     'm2.s3.body': 'Insert a **ReLU** between the two Linear blocks. ReLU keeps positive values and turns negative ones into 0: relu(z) = max(0, z). Use the chip below, or **Components ▾ → Activation** in the ribbon.',
-    'm2.s3.hint1': 'The chip adds the block; you still have to wire it.',
-    'm2.s3.hint2': 'Select the wire from **Linear 1** to **Linear 2** and press Delete. Then wire Linear 1 → ReLU → Linear 2.',
+    'm2.s3.hint1': 'The chip puts ReLU into the wire from **Linear 1** to **Linear 2** for you. From the ribbon, you place the block and wire it yourself.',
+    'm2.s3.hint2': 'From the ribbon: select the wire from **Linear 1** to **Linear 2** and press Delete. Then wire Linear 1 → ReLU → Linear 2.',
     'm2.s3.done': 'Now the boundary can bend. Train it in the next step.',
 
     'm2.s4.title': 'Train the network',
@@ -58,7 +58,7 @@ export default {
     'm2.s4.done': 'Validation accuracy: {measured}. The boundary now closes around the disk.',
 
     'm2.s5.title': 'How many hidden units are enough?',
-    'm2.s5.body': 'Each hidden ReLU unit adds one line where the output can bend. After you answer, set the hidden width to the number you chose, and train. Change both blocks: the **Output** of Linear 1 and the **Input** of Linear 2.',
+    'm2.s5.body': 'Each hidden ReLU unit adds one line where the output can bend. After you answer, set the hidden width to the number you chose (3 or fewer), and train. Change both blocks: the **Output** of Linear 1 and the **Input** of Linear 2.',
     'm2.s5.hint1': 'Click **Linear 1** and set its **Output**. Then click **Linear 2** and set its **Input** to the same number.',
     'm2.s5.hint2': 'Try 3, the sides of a triangle. If accuracy stays low, open **Training**, change **Seed** and train again.',
     'm2.s5.predict.prompt': 'What is the smallest number of hidden units that can enclose the disk?',

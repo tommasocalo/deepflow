@@ -7,9 +7,11 @@
 // It checks every Stage B spotlight target of §6.6, no console errors and no horizontal page scroll at 1440 × 900
 // and 390 × 844, and measures the trainer budget of §6.10.7 (circle 2-8-1 < 0.5 s, spiral3 overfit < 4 s, digits
 // 64-128-10 < 4 s, on a 2020 laptop): it reports each run against the budget and fails beyond 1.5 × the budget.
-// Screenshots go to --shots (default: the scratch folder named in docs/edu/SPEC.md §7.1).
+// Screenshots go to --shots (default: deepflow-edu-data-shots in the system's temporary folder, os.tmpdir()).
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { chromium } from 'playwright';
 
 const argument = (name, fallback) => {
@@ -17,7 +19,7 @@ const argument = (name, fallback) => {
     return index >= 0 ? process.argv[index + 1] : fallback;
 };
 const URL = argument('--url', 'http://127.0.0.1:5174/');
-const SHOTS = argument('--shots', '/tmp/claude-0/-home-user-deepflow/7a8350aa-ff30-52a8-8452-b7a05647a64e/scratchpad/edu/shots');
+const SHOTS = argument('--shots', join(tmpdir(), 'deepflow-edu-data-shots'));
 const EXECUTABLE = argument('--chromium', '/opt/pw-browsers/chromium');
 mkdirSync(SHOTS, { recursive: true });
 

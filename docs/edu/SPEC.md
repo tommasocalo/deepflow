@@ -2499,8 +2499,8 @@ number of epochs:
    ```
 4. **Browser work** uses this worktree's dev server on port 5174 (`npx vite --host 127.0.0.1 --port 5174
    --strictPort`). Playwright runs with `chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })`. Scratch
-   scripts and screenshots go to `/tmp/claude-0/-home-user-deepflow/7a8350aa-ff30-52a8-8452-b7a05647a64e/scratchpad/edu/`,
-   not the repo. Only real tests go in `scripts/`.
+   scripts and screenshots go to a scratch folder outside the repo; the browser checks default to one in the system's
+   temporary folder (`os.tmpdir()`). Only real tests go in `scripts/`.
 5. **Zero new dependencies** (§6.1).
 6. **Missing dependencies on other stages.** Code against this spec. A test that needs another stage's module checks
    for the file with `existsSync` and uses `test(name, { skip: 'needs Stage X: <file>' }, …)`. Stage E makes sure no
@@ -2687,8 +2687,9 @@ Browser checks (`*-browser-check.mjs`) are run by hand or by Stage E against por
 
 `edu-content.test.mjs`:
 
-1. **Schema:** `validateModule` returns no errors for each module. Sizes: 4–8 steps, 3–4 quiz items (5 in M5; the
-   test calls `validateModule` with `limits: false` and asserts the sizes of §4.8), ≤ 3 warm-up items. Every quiz option has an explanation. Every `PredictSpec` has a reveal. Every dataset id, target ref,
+1. **Schema:** `validateModule` returns no errors for each module. Sizes: 4–8 steps, 3–5 quiz items, ≤ 3 warm-up
+   items, and exactly the per-module sizes of §4.8. Every quiz option has an explanation. Every `PredictSpec` has a
+   reveal. Every dataset id, target ref,
    BlockRef, embed, LO id and misconception id exists. No step with `{ visited: X }` in its check sets `tab: X`.
 2. **Text:** every required key exists in `en`, no key is unused, and bodies are ≤ 60 words (measured after
    interpolation).
@@ -2827,9 +2828,8 @@ the study build, not on v1.
 A NumPy re-implementation of the planned trainer produced these numbers. It used the same mulberry32 PRNG,
 Playground and CS231n generators, Fisher–Yates split, PyTorch-default Linear initialisation (U(±1/√fan_in) for
 weights and biases), Adam with β = (0.9, 0.999), ε = 1e-8, and BCE/CE as in §6.10.4. Mean and [min, max] over
-seeds 1–10 (digits 1–5). Validation fraction 0.2 unless stated. Scripts:
-`/tmp/claude-0/-home-user-deepflow/7a8350aa-ff30-52a8-8452-b7a05647a64e/scratchpad/edu/spec-sim/` (`sim.py`,
-`exp1.py`, `exp2.py`, `exp5.py`).
+seeds 1–10 (digits 1–5). Validation fraction 0.2 unless stated. Scripts (kept in a stage-0 scratch folder outside
+the repository, not preserved): `spec-sim/` (`sim.py`, `exp1.py`, `exp2.py`, `exp5.py`).
 
 | Lesson configuration | Final val accuracy | Initial val loss | Threshold used |
 |---|---|---|---|
@@ -3003,3 +3003,4 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-11-01 | Review fixes (content) | **Positioning and evaluation plan** (§0, §9). §0 now positions the work against in-application tutorial systems (Stencils-based tutorials, DocWizards, ToolClips, Pause-and-Play, MixT) and visual ML teaching tools (Orange, KNIME), described only at that level, and states the delta: checks on the model, validation and training state of a full NN editor rather than screen state or a click script, misconception-tied diagnosis with graded help, and browser-to-PyTorch parity of data, split, loss and optimizer; the README mirrors it. §9 lists what must be built before the study (the static baseline view, the lesson-hidden transfer mode, the Penguins dataset in the app, a log with misconception ids and shown status messages) and replaces the power analysis: d = 0.8 with 26 per arm was optimistic; the plan assumes d ≈ 0.5, 64 per arm for a two-sample test (α = .05, power .8), with a counterbalanced crossover (about 34 participants at r ≈ .5) as the fallback. |
 | 2026-11-01 | Review fixes (content) | **More independent practice.** M4 s4 is faded: block 1 keeps its recipe, block 2 gives only its goal (16 filters of 3 × 3, a ReLU and a pool, ending at (B, 16, 7, 7)) and the check, with a new diagnosis for a conv2 without padding (`padding-no-effect`). M6's objective `m6.lo1` no longer claims "edit its shared definition", which no step exercises: the lesson actions cannot edit inside a component (§6.5), so a step that edits the ResBlock definition and watches all three copies follow waits for an engine action. M7's goal says "Explore" (above). |
 | 2026-11-01 | Review fixes (content) | **Two new numbers are ledger facts** (§6.3.6): `chanceBce` (0.693, M1 s3's dotted chance line, recomputed) and `irisInitLoss` ("0.8 to 1.8", M5 s1, `source: 'simulation'`, measured with Check initial loss over training seeds 1–10, §11.1). |
+| 2026-11-01 | Review fixes (follow-up) | **M2 copy and tests after the engine changes.** M2 s3's hint 1 says the chip now puts ReLU into the Linear 1 → Linear 2 wire, and that from the ribbon the learner places and wires the block; hint 2 starts "From the ribbon". M2 s5 says "(3 or fewer)", since its check now asks for the widths before the run. M2 s8 quotes `= nn.Linear(2, 8)` itself, so the content test's extra quote for it is gone, and the test calls `validateModule` with its size rules again (3–5 quiz items, §6.3). `scripts/edu-data-browser-check.mjs` saves its screenshots under the system's temporary folder by default, and §7.1 and §11.1 no longer name a session's scratch folder. |

@@ -163,7 +163,7 @@ export default {
         },
         {
             id: 's8', kind: 'predict', subgoal: 'export', target: ['toolbar.code', 'code.tab:model'],
-            codeQuotes: { tab: 'model', text: ['def forward', 'torch.matmul(', 'torch.add(', 'self.ReLU('] },
+            codeQuotes: { tab: 'model', text: ['def forward', 'torch.matmul(', 'torch.add(', 'self.ReLU(', '= nn.Linear(2, 8)'] },
             predict: { id: 'm2.forward', kind: 'choice', options: ['relu', 'sigmoid', 'matmul'], correct: 'relu', diagnose: [{ equals: 'matmul', misconception: 'stacked-linear-bends' }] },
             check: { all: [{ ui: { codeOpen: true, codeTab: 'model' } }, { answered: 'm2.forward' }] },
             solution: [{ do: 'setUi', codeOpen: true, codeTab: 'model' }, answer('m2.forward', 'relu')],
