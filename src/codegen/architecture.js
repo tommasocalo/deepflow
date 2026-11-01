@@ -18,14 +18,18 @@ import { indent, kwArgs, toPyIdent, toPyLiteral } from './python.js';
  * @param {Object} opts
  * @param {Object<string, import('../domain/architecture/types.js').ArchitectureTemplate>} [opts.templates]
  * @param {string} [opts.className]
+ * @param {boolean} [opts.annotate]  comment each standard Linear component with the layer it equals,
+ *        `# Linear 1 = nn.Linear(2, 8)`, in __init__ and forward (docs/edu/SPEC.md §6.11). The legacy train.py
+ *        passes false so that it stays byte-identical to DeepFlow's.
  * @returns {string}  Python source
  */
-export function generateArchitectureModule(graph, { templates = {}, className = 'Model' } = {}) {
+export function generateArchitectureModule(graph, { templates = {}, className = 'Model', annotate = true } = {}) {
     const report = validate(graph, { templates });
     if (!report.ok) {
         throw new Error(`Cannot export invalid architecture: ${[...report.globalErrors, ...Object.values(report.errors).flat()].slice(0, 4).join('; ')}`);
     }
     const ctx = makeContext(templates);
+    ctx.annotate = annotate;
     ctx.rootInputs = new Map(Object.values(graph.nodes).filter((node) => node.libraryKey === 'deepflow.io.Input').map((node, index) => [node.id, index ? `x${index + 1}` : 'x']));
     const forwardArgs = [...ctx.rootInputs.values()].join(', ') || 'x';
     const plan = expandGraph(graph, withGlobalParameters(graph), ctx);
@@ -76,6 +80,9 @@ export function generateArchitectureModule(graph, { templates = {}, className = 
             const out = outputName(item.id);
             const [src] = item.inputs;
             forwardLines.push(`${out} = ${item.expr(exprFor(src))}`);
+        } else if (item.kind === 'comment') {
+            initLines.push(`# ${item.text}`);
+            forwardLines.push(`# ${item.text}`);
         }
     }
 
@@ -131,9 +138,29 @@ class CausalSelfAttention(nn.Module):
         return self.proj(y)
 `;
 
+/** The graph of DeepFlow's standard Linear component (domain/components): weight, transpose, MatMul, bias, Add. */
+const PLAIN_LINEAR_KEYS = ['deepflow.op.Add', 'deepflow.op.MatMul', 'deepflow.op.Parameter', 'deepflow.op.Parameter', 'deepflow.op.Transpose',
+    'deepflow.template.Input', 'deepflow.template.Output'];
+
+/**
+ * "Linear 1 = nn.Linear(2, 8)": the everyday PyTorch layer that an instance of the standard Linear component
+ * computes, or null when the template is not one or its definition was edited.
+ */
+function linearComment(node, template, scope, copy) {
+    if ((template?.standardKey ?? template?.componentStyleKey) !== 'linear') return null;
+    const keys = Object.values(template.graph?.nodes ?? {}).map((child) => child.libraryKey).sort();
+    if (keys.length !== PLAIN_LINEAR_KEYS.length || keys.some((key, index) => key !== PLAIN_LINEAR_KEYS[index])) return null;
+    const { in_features: inFeatures, out_features: outFeatures, bias } = scope;
+    if (!Number.isSafeInteger(inFeatures) || !Number.isSafeInteger(outFeatures)) return null;
+    const label = String(node.label || template.name || 'Linear').replace(/\s+/g, ' ').trim();
+    const name = copy && copy.count > 1 ? `${label} (copy ${copy.index + 1} of ${copy.count})` : label;
+    return `${name} = nn.Linear(${inFeatures}, ${outFeatures}${bias === false ? ', bias=False' : ''})`;
+}
+
 function makeContext(templates) {
     return {
         templates,
+        annotate: false,
         fieldCounter: {},
         usesGRL: false,
         usesCausalAttention: false,
@@ -370,6 +397,8 @@ function expandGraph(graph, scope, ctx, { prefix = '', externalInputs = {}, exte
                 const subPlan = expandGraph(instanceTemplate.graph, subScope, ctx, {
                     prefix: `${id}_${index}__`, externalInputs: subInputs, externalShapes: childShapes, depth: depth + 1,
                 });
+                const note = ctx.annotate ? linearComment(node, instanceTemplate, subScope, isRepeat ? { index, count } : null) : null;
+                if (note) items.push({ id: `${id}_${index}__note`, kind: 'comment', text: note });
                 items.push(...subPlan.items);
                 carry = subPlan.finalId ?? carry;
                 carryShape = subPlan.finalShape;

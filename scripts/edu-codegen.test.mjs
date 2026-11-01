@@ -163,6 +163,37 @@ test('without a dataset, train.py is the fork\'s output for ResNet, DANN and GAN
     assert.ok(outputs.resnet.includes('loss_total = Cross_Entropy_loss(logits, y) * 1'));
 });
 
+test('model.py names the nn.Linear each Linear component equals; the legacy train.py keeps DeepFlow\'s output', async () => {
+    const { generateArchitectureModule } = await import('../src/codegen/index.js');
+    const h = createFixtureHelpers();
+    const nodes = [h.input('in', [2]), h.linear('lin1', 2, 8, { label: 'Linear 1' }), h.layer('relu', 'torch.nn.ReLU'), h.linear('lin2', 8, 1, { label: 'Linear 2', bias: false }), h.output('out')];
+    const model = h.snapshot({ nodes, edges: h.chain(...nodes), training: [h.optimizer('Adam'), h.loss('bce', nodes.at(-1))] });
+    const source = generateArchitectureModule(model.graph, { templates: model.templates });
+    for (const line of ['# Linear 1 = nn.Linear(2, 8)', '# Linear 2 = nn.Linear(8, 1, bias=False)']) {
+        assert.equal(source.split(`        ${line}\n`).length, 3, `${line} in __init__ and in forward`);
+    }
+    assert.ok(source.includes('# Linear 1 = nn.Linear(2, 8)\n        t1 = self.weight.transpose(-2, -1)'), 'the comment opens the block it names');
+    assert.ok(!generateArchitectureModule(model.graph, { templates: model.templates, annotate: false }).includes('nn.Linear('));
+    assert.ok(!legacyScript({ graph: model.graph, training: model.training, templates: model.templates }).includes('= nn.Linear('), 'the legacy train.py has no comments');
+    assert.ok(eduScript(getDataset('circle'), { model }).includes('        # Linear 2 = nn.Linear(8, 1, bias=False)\n'), 'the dataset train.py has them');
+
+    // A component that is not DeepFlow's standard Linear, or whose definition was edited, gets no comment.
+    const templateId = model.graph.nodes.lin1.templateId;
+    const { standardKey: _standard, ...custom } = model.templates[templateId];
+    const edited = { ...model.templates[templateId], graph: { ...model.templates[templateId].graph, nodes: { ...model.templates[templateId].graph.nodes } } };
+    const add = Object.values(edited.graph.nodes).find((child) => child.libraryKey === 'deepflow.op.Add');
+    edited.graph.nodes[add.id] = { ...add, libraryKey: 'deepflow.op.Multiply' };
+    for (const template of [custom, edited]) {
+        const text = generateArchitectureModule(model.graph, { templates: { ...model.templates, [templateId]: template } });
+        assert.ok(!text.includes('= nn.Linear('), 'no comment for a component that is not the plain Linear');
+    }
+    const repeated = h.snapshot({ nodes, edges: h.chain(...nodes) });
+    repeated.graph.nodes.lin1 = { ...repeated.graph.nodes.lin1, kind: 'repeat', count: 2, mode: 'sequential', bindings: { in_features: 2, out_features: 2 } };
+    repeated.graph.nodes.lin2 = { ...repeated.graph.nodes.lin2, parameterValues: { in_features: 2, out_features: 1 } };
+    const copies = generateArchitectureModule(repeated.graph, { templates: repeated.templates });
+    assert.ok(copies.includes('# Linear 1 (copy 2 of 2) = nn.Linear(2, 2)'), copies);
+});
+
 test('cross-entropy flattens a language model\'s (B, T, V) scores in the legacy step and in phases', () => {
     gpt2Storyboard({ ...stores, configuration: { vocabSize: 65, context: 64, dModel: 64, nHeads: 4, nLayers: 2, mlpWidth: 256 }, includeTraining: true });
     assert.ok(legacyScript(current()).includes(GPT2_FIXED_LINE));

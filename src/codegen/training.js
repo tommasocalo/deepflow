@@ -26,7 +26,8 @@ import { generateEduTrainingScript } from './edu/trainScript.js';
  */
 export function generateTrainingScript(archGraph, trainGraph, { templates = {}, data } = {}) {
     if (data?.spec) return generateEduTrainingScript(archGraph, trainGraph, { templates, data });
-    const modelSrc = generateArchitectureModule(archGraph, { templates, className: 'Model' });
+    // DeepFlow's own script, byte-identical to the fork point: no nn.Linear comments (architecture.js `annotate`).
+    const modelSrc = generateArchitectureModule(archGraph, { templates, className: 'Model', annotate: false });
     const optimizers = Object.values(trainGraph.nodes ?? {}).filter((n) => n.kind === 'optimizer');
     const losses = Object.values(trainGraph.nodes ?? {}).filter((n) => n.kind === 'loss');
     const phases = Object.values(trainGraph.nodes ?? {}).filter((n) => n.kind === 'phase');

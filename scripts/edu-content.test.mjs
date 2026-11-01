@@ -322,6 +322,9 @@ function assertNoSpoiler(step, result, where) {
 
 const computedFacts = {};
 
+/** Code that the copy points at beyond a step's own codeQuotes: M2 s8's reveal names the nn.Linear comment. */
+const EXTRA_CODE_QUOTES = { 'm2.s8': { tab: 'model', text: ['# Linear = nn.Linear(2, 8)', '# Linear = nn.Linear(8, 1)'] } };
+
 async function computeFacts(module, at, record) {
     const helpers = createFactHelpers(buildCheckContext({ module }), { facts: computedFacts });
     for (const [name, fact] of Object.entries(module.facts)) {
@@ -387,10 +390,10 @@ test('every step fails on entry and passes after its Show me, module after modul
                 for (const name of LIVE_PARAMS(step)) assert.ok(live.params[name] !== undefined, `${where}: live value {${name}} is available after Show me`);
                 if (step.reveal.compare) assert.ok(live.variant, `${where}: a comparison variant is chosen`);
             }
-            if (step.codeQuotes) {
+            for (const quotes of [step.codeQuotes, EXTRA_CODE_QUOTES[where]].filter(Boolean)) {
                 // Lessons that point at a line of the export quote it verbatim; the generated code must contain it.
-                const code = liveCode()[step.codeQuotes.tab];
-                for (const quote of step.codeQuotes.text) assert.ok(code.includes(quote), `${where}: ${step.codeQuotes.tab === 'train' ? 'train.py' : 'model.py'} contains ${quote}`);
+                const code = liveCode()[quotes.tab];
+                for (const quote of quotes.text) assert.ok(code.includes(quote), `${where}: ${quotes.tab === 'train' ? 'train.py' : 'model.py'} contains ${quote}`);
             }
             await computeFacts(module, step.id, record);
             assert.equal(await session().next(), true, `${where}: Next`);

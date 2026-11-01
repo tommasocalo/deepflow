@@ -93,7 +93,7 @@ export default {
     'm2.s8.predict.opt.relu': 'The activation, such as `self.ReLU(…)`',
     'm2.s8.predict.opt.sigmoid': '`torch.sigmoid(…)` on the final score',
     'm2.s8.predict.opt.matmul': 'Nothing: the next line is the second `torch.matmul`',
-    'm2.s8.predict.reveal': 'The activation. `self.ReLU` applies max(0, z) to every hidden value. Delete it, and the two Linear blocks collapse into one again.',
+    'm2.s8.predict.reveal': 'The activation. `self.ReLU` applies max(0, z) to every hidden value. Delete it, and the two Linear blocks collapse into one again. In everyday PyTorch each Linear block is one layer, `nn.Linear(in, out)`, as the comment above it says.',
 
     'm2.q1.prompt': 'Why do two Linear blocks with nothing between them act like one?',
     'm2.q1.opt.compose': 'Composing two linear functions gives another linear function',
