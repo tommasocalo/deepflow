@@ -112,6 +112,8 @@ export const useLessonSession = create((set, get) => {
         if (firstEntry && runSetup && target.setup?.length) {
             const result = await runActions(target.setup, actionContext('step setup'));
             if (!result.ok) updateRuntime({ error: result.error });
+            // A setup can load a new model (M2 s7's XOR start): show all of it, Output included (review r1).
+            fitSoon();
         }
         showStepTab(target);
         const kept = !firstEntry && resume ? loadStepEntry(current.id, target.id) : null;

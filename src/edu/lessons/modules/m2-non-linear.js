@@ -64,7 +64,8 @@ export default {
             solution: [answer('m2.oneNeuron', 'no'), TRAIN],
         },
         {
-            id: 's2', kind: 'predict', subgoal: 'model', tab: 'architecture', target: ['trainer.run'],
+            // The fixture builds the stacked model; the learner predicts and trains it (Train & observe).
+            id: 's2', kind: 'predict', subgoal: 'train', tab: 'architecture', target: ['trainer.run'],
             setup: [{ do: 'loadFixture', id: 'twoLinear' }],
             locks: { gate: 'train' }, embeds: ['trainer'], reveal: { run: 'finalValAccuracy' },
             predict: { id: 'm2.stacked', kind: 'choice', options: ['yes', 'no'], correct: 'no', observe: 'bends', diagnose: [{ equals: 'yes', misconception: 'stacked-linear-bends' }] },
@@ -105,8 +106,11 @@ export default {
                     { equals: 'eight', misconception: 'more-units-needed' },
                 ],
             },
+            // The widths are checked before the run, so the status asks for them instead of "Press Train".
             check: { all: [
                 { answered: 'm2.width' },
+                { param: { node: { type: 'Linear', nth: 0 }, name: 'out_features', max: 3 } },
+                { valid: true },
                 { run: { dataset: 'circle', minEpochs: 50, model: { all: [{ param: { node: { type: 'Linear', nth: 0 }, name: 'out_features', max: 3 } }, { valid: true }] } } },
             ] },
             diagnose: [{

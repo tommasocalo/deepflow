@@ -150,7 +150,7 @@ test('a Linear chip starts at the width of the open end (2 in XOR, then 8), not 
 
 test('the run check says what to do about the live model before "Press Train"', () => {
     const s5 = m2.steps.find((step) => step.id === 's5');
-    const query = s5.check.all[1].run;
+    const query = s5.check.all.find((spec) => spec.run).run;
     const wide = contextOf((h) => m2Model(h), { trainer: { status: 'idle', runs: [], preflight: { ok: true, errors: [] } }, data: { datasetId: 'circle' } });
     const first = evaluateCheck({ run: query }, wide.ctx);
     assert.equal(first.detail.key, 'check.run.modelFirst', 'M2 s5 asks for the widths before a run');
