@@ -138,7 +138,8 @@ export function emptyTrainingGraph() {
     return { nodes: {}, edges: [] };
 }
 
-function formatLossLabel(type) {
+/** The display name of a loss type: 'Cross-Entropy', 'BCE', 'MSE', 'L1'. */
+export function formatLossLabel(type) {
     return type === 'cross_entropy' ? 'Cross-Entropy'
         :  type === 'mse'           ? 'MSE'
         :  type === 'bce'           ? 'BCE'

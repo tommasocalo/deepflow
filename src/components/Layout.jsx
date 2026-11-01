@@ -61,7 +61,7 @@ const Layout = () => {
                 }}
             />
 
-            <div className="df-app-main edu-main">
+            <div className={`df-app-main edu-main${lessonMode ? ' is-lesson' : ''}`}>
                 <div className="edu-stage">
                     <div key={activeTab} className="df-tab-pane">
                         {activeTab === 'learn' && <LearnHome />}

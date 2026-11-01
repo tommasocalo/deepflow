@@ -3,6 +3,7 @@ import { Handle, Position } from '@xyflow/react';
 import { AlertTriangle, ChevronUp, Target, X } from 'lucide-react';
 import { useTrainingStore } from '../../stores/trainingStore.js';
 import { useArchitectureStore } from '../../stores/architectureStore.js';
+import { formatLossLabel, LOSS_DEFAULTS } from '../../domain/training/index.js';
 
 function shouldToggleOnCardClick(target) {
     if (!target || !target.closest) return true;
@@ -10,6 +11,9 @@ function shouldToggleOnCardClick(target) {
 }
 
 const LOSS_TYPES = ['cross_entropy', 'bce', 'mse', 'l1', 'custom'];
+const defaultLabel = (type) => `${formatLossLabel(type)} loss`;
+/** The option text: the readable name with the PyTorch-style id the code and the lessons use. */
+const optionText = (type) => (formatLossLabel(type) === type ? type : `${formatLossLabel(type)} (${type})`);
 
 const LossNodeView = ({ id, data, selected }) => {
     const node = data.node;
@@ -79,10 +83,18 @@ const LossNodeView = ({ id, data, selected }) => {
                         <span className="text-[11px] font-mono text-text-secondary">type</span>
                         <select
                             value={node.type}
-                            onChange={(e) => patchNode(id, { type: e.target.value })}
+                            onChange={(e) => {
+                                const type = e.target.value;
+                                // A default label follows the type ("BCE loss" → "Cross-Entropy loss"); a custom one stays.
+                                patchNode(id, {
+                                    type,
+                                    ...(node.label === defaultLabel(node.type) ? { label: defaultLabel(type) } : {}),
+                                    hyperparameters: { ...(LOSS_DEFAULTS[type] ?? {}) },
+                                });
+                            }}
                             className="border-2 border-black rounded px-1.5 py-0.5 text-[11px] bg-white nodrag"
                         >
-                            {LOSS_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                            {LOSS_TYPES.map((t) => <option key={t} value={t}>{optionText(t)}</option>)}
                         </select>
                     </label>
                     <label className="flex items-center justify-between gap-2 py-0.5">

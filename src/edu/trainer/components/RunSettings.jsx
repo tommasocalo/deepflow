@@ -112,12 +112,15 @@ function showOnCanvas(nodeId) {
 /** Problems the learner fixes in the model or data; "trains in Colab" cases are guidance, not mistakes. */
 const COLAB_CODES = new Set(['dataset-export-only', 'unsupported-op', 'too-large', 'multi-phase', 'custom-loss']);
 
+/** The run settings live in the Training tab: a fix "in the Training tab" is on the canvas just above them. */
+const here = (message) => String(message).replaceAll(' in the Training tab', ' on the Training canvas above');
+
 function IssueList({ issues, limit, colab = false }) {
     return (
         <ul>
             {issues.slice(0, limit).map((issue) => (
                 <li key={`${issue.code}:${issue.message}`}>
-                    {issue.message}
+                    {here(issue.message)}
                     {issue.nodeId && (
                         <> <button type="button" className="edu-tr-link" onClick={() => showOnCanvas(issue.nodeId)}>{tr('preflight.showOnCanvas')}</button></>
                     )}

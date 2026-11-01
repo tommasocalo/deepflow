@@ -1,6 +1,7 @@
 export {
     createOptimizerNode,
     createLossNode,
+    formatLossLabel,
     createPhaseNode,
     createTrainingEdge,
     emptyTrainingGraph,
