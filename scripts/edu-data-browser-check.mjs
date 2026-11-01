@@ -133,6 +133,14 @@ async function checkViewport(browser, width, height) {
     await shot('06-card-locked');
     await page.evaluate(() => window.__deepflow.edu.session.getState().submitPrediction('demo.loss', 'cross_entropy'));
     await page.waitForFunction(() => !document.querySelector('.edu-tr-card [data-edu-target="trainer-run"]').disabled);
+    // Entering s6 directly fills in s1–s5 (ReLU, three outputs), and the demo module never trains, so its 2-class blobs
+    // no longer fit: do the step's task (cross-entropy) and bind a 3-class dataset before Train.
+    await page.evaluate(async () => {
+        const { engine } = window.__deepflow.edu;
+        const actions = [{ do: 'setLoss', type: 'cross_entropy' }, { do: 'useDataset', id: 'spiral3' }];
+        const result = await engine.runActions(actions, { module: engine.getModule('demo'), label: 'data check' });
+        if (!result.ok) throw new Error(result.error);
+    });
     await page.click('.edu-tr-card [data-edu-target="trainer-run"]');
     await waitRuns(1);
     await page.locator('.edu-tr-card').scrollIntoViewIfNeeded();
