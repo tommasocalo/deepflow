@@ -49,13 +49,26 @@ export. On top of the editor, Edu adds four things:
 **Contribution (for a UIST/L@S paper).** Earlier educational NN tools let learners play with a toy library
 (TensorFlow Playground), hide the architecture (Teachable Machine), explain a fixed pretrained model (CNN Explainer,
 Transformer Explainer), or offer building with no pedagogy (ENNUI, Fabrik). Kaggle Learn offers check/hint/solution
-feedback, but only in notebooks. DeepFlow Edu is a guided-practice layer over a full visual NN editor:
+feedback, but only in notebooks.
 
-- Tutorial steps are verified against the editor's own model, validation and training state, not against
-  screenshots or a scripted click path.
-- Help is graded and tied to named misconceptions, and is shown in the panel, not as blocking dialogs.
-- The in-browser trainer uses the same seeded datasets that the exported PyTorch script regenerates, so a learner can
-  carry a browser experiment into real code and compare the curves.
+Two other lines of work are closer in mechanism. **In-application tutorial systems** teach inside the real
+application rather than a separate teaching tool: they show the next step at the interface element that performs
+it, or follow the application's state as the user works. Examples are Stencils-based tutorials (C. Kelleher and
+R. Pausch, CHI 2005), DocWizards (L. Bergman et al., UIST 2005), ToolClips (T. Grossman and G. Fitzmaurice, CHI
+2010), Pause-and-Play (S. Pongnumkul et al., UIST 2011) and MixT (P.-Y. Chi et al., UIST 2012). **Visual ML tools**
+used in teaching, such as Orange and KNIME, let learners build and run machine-learning workflows visually. DeepFlow
+Edu is a guided-practice layer over a full visual NN editor, and differs from both in three ways:
+
+- **What is checked.** A step is verified against the editor's own model, validation and training state: the graph
+  and its inferred shapes, the validation report, the training graph's loss and optimizer, the bound dataset and the
+  learner's training runs. It is not checked against screen state or a scripted click path, so any route through
+  the editor that reaches the result passes.
+- **How help responds.** Help is graded (nudge, hint, Show me as one undoable edit) and diagnosis is tied to named
+  misconceptions: wrong predictions, quiz distractors and recognisable wrong models each map to an entry of the
+  catalogue (§4.9). It is shown in the panel, not as blocking dialogs.
+- **Browser-to-PyTorch parity.** The in-browser trainer and the exported `train.py` share the data, the split, the
+  loss and the optimizer: the script regenerates the same seeded datasets and split (tested, §8.2), so a learner
+  can carry a browser experiment into real code and compare the curves.
 
 | Tool | Builds real architectures | Steps checked against live state | Trains in the browser | Exports runnable training code | Feedback tied to misconceptions |
 |---|---|---|---|---|---|
@@ -2716,10 +2729,31 @@ Browser checks (`*-browser-check.mjs`) are run by hand or by Stage E against por
   me. The in-browser trainer and Data tab stay available.
 
 This isolates the guided-practice layer, which is the paper's contribution. An optional third arm, the same text
-with TensorFlow Playground, adds the field's common reference point if the participant pool allows (26 more).
+with TensorFlow Playground, adds the field's common reference point if the participant pool allows (64 more).
 
-**Participants.** 26 per arm (power 0.8, α 0.05, two-sided, for d = 0.8). Students with at most one ML course and
-no neural-network training experience. Screened with a 5-item prior-knowledge test.
+**Prerequisites: not built yet.** The study cannot run on v1 as it stands. Before it, these must exist and be
+piloted:
+1. **The static baseline view** (`#/learn?view=static`): the same step text, figures and fixtures (loaded by
+   buttons), with no checks, status line, hint ladder, prediction gates or Show me.
+2. **A lesson-hidden mode** for the transfer task, so that both arms work in the same build with the lesson UI
+   hidden.
+3. **The transfer dataset in the app.** Palmer Penguins (numeric columns) is not in the dataset registry; it must
+   be added (CC0, with a Python loader and parity test like Iris), or the task must use a dataset the app has.
+4. **A complete log for RQ2.** The event log must record the misconception id of every diagnosis shown and the
+   status messages the panel showed, with the step and time. The engine is adding both.
+
+**Participants and power.** Students with at most one ML course and no neural-network training experience,
+screened with a 5-item prior-knowledge test. The first plan, 26 per arm (power 0.8, α 0.05, two-sided, d = 0.8),
+assumed a large effect. That is optimistic for an intervention that keeps the same text and differs only in guided
+practice. We plan for d ≈ 0.5: a two-sided two-sample t-test at α = .05 with power .8 needs 64 per arm, 128 in
+total. ANCOVA with the pre-test as covariate needs about 1 − ρ² as many, where ρ is the pre/post correlation (about
+48 per arm for ρ ≈ .5), but ρ is unknown until the pilot measures it, so recruitment targets 64. If 128 participants
+are out of reach, the alternative is a within-subjects crossover: every participant does M1 in the same condition
+(fixed in the pilot), then M2 in one condition and M3 in the other, with order and condition counterbalanced and a
+test for each module. For d ≈ 0.5 and a correlation of
+about .5 between a participant's two scores, a paired test needs about 34 participants. The cost is carry-over (the
+tool is learned in the first module) and modules of unequal difficulty, which the counterbalancing and period and
+module terms in the model must absorb.
 
 **Measures.**
 1. **Pre/post test:** 14 items aligned to the learning objectives of M1–M3, drawn from a bank built from the quiz
@@ -2732,7 +2766,7 @@ no neural-network training experience. Screened with a 5-item prior-knowledge te
 4. **Self-report:** SUS, Paas mental-effort item per module, and perceived understanding. The gap between perceived
    understanding and the post-test probes "illusory understanding" (Transformer Explainer).
 5. **Logs** (Edu arm, local and exported with consent): hint levels, Show me use, time per step, prediction
-   accuracy, number of runs.
+   accuracy, number of runs, and the misconception ids and status messages shown (prerequisite 4).
 
 **Analysis.** ANCOVA on the post-test with the pre-test as covariate. Mann–Whitney on transfer rubric scores. Within
 the Edu arm, mixed-effects logistic models of item correctness by hint level and prediction correctness (RQ2). SUS
@@ -2741,8 +2775,8 @@ is reported with a 95 % CI against DeepFlow's 79.5.
 **Pilot.** 5 participants, to calibrate timing and wording and to check that no step needs Show me for more than
 30 % of pilot users. Steps above that threshold get rewritten.
 
-**Study build.** The baseline arm needs a static lesson view, behind a `#/learn?view=static` flag. It is planned for
-v1.1 (Stage E or later) and is not part of the v1 stages.
+**Study build.** Prerequisites 1–4 above are planned for v1.1 and are not part of the v1 stages. The pilot runs on
+the study build, not on v1.
 
 **Technical evaluation** (reported with the system paper):
 - Solvability (all 50 steps by Show me, §8.4).
@@ -2956,3 +2990,4 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-11-01 | Review fixes (content) | **The test split is taught** (M5). M5 s4's reveal says that picking the ▲ epoch on validation makes the validation score a little optimistic, so the final score comes from a test split used once, as train.py does for MNIST, Fashion-MNIST and CIFAR-10. A fifth M5 quiz item, `m5.q5` (lo3), asks which split reports the final score (validation → new `validation-score-final`, training → `training-loss-is-enough`); `m5.lo3` and recap 3 mention the test split. This goes beyond §4.0's 3–4 quiz items: the engine's `validateModule` still enforces 3–4, so the content test calls it with `limits: false` and asserts the per-module sizes of §4.8 (29 quiz items in all). No browser fixture gets a test split: the in-browser trainer does not evaluate one (§4.5). |
 | 2026-11-01 | Review fixes (content) | **train.py says what differs from the browser** (§6.11.2). Its header lists, under "Compared with the browser:" (or "Notes:" for export datasets), that PyTorch draws its own initial weights and batch order, so the curves are close, not identical; that `train_loss` is a training-mode running mean over the epoch (Dropout on) while the browser, like `val_loss`, measures after the epoch in evaluation mode; and that export datasets use their Colab presets for `EPOCHS` and `BATCH_SIZE` (MNIST 5 and 64, not the Training tab's 15 and 32). The `SEED` comment and, for export datasets, the `EPOCHS` and `BATCH_SIZE` comments say the same, and the epoch line carries a two-line comment. M1 s8 quotes the `SEED` line. |
 | 2026-11-01 | Review fixes (content) | **A bridge to everyday PyTorch** (§3.6). model.py, and the model in a dataset's train.py, comment each standard Linear component with the layer it equals, `# Linear 1 = nn.Linear(2, 8)`, because the export writes it out as weight, transpose, matmul and add and no lesson named `nn.Linear`. `generateArchitectureModule` takes `annotate` (default true); the legacy train.py passes false and stays byte-identical. M2 s8's reveal points at the comment. The torchvision loaders' docstring says the Normalize constants come from all official training images, the validation images included, as M3 s7's reveal does. |
+| 2026-11-01 | Review fixes (content) | **Positioning and evaluation plan** (§0, §9). §0 now positions the work against in-application tutorial systems (Stencils-based tutorials, DocWizards, ToolClips, Pause-and-Play, MixT) and visual ML teaching tools (Orange, KNIME), described only at that level, and states the delta: checks on the model, validation and training state of a full NN editor rather than screen state or a click script, misconception-tied diagnosis with graded help, and browser-to-PyTorch parity of data, split, loss and optimizer; the README mirrors it. §9 lists what must be built before the study (the static baseline view, the lesson-hidden transfer mode, the Penguins dataset in the app, a log with misconception ids and shown status messages) and replaces the power analysis: d = 0.8 with 26 per arm was optimistic; the plan assumes d ≈ 0.5, 64 per arm for a two-sample test (α = .05, power .8), with a counterbalanced crossover (about 34 participants at r ≈ .5) as the fallback. |
