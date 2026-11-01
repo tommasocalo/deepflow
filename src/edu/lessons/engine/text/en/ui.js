@@ -102,9 +102,9 @@ export default {
     // Predictions (§3.3)
     'predict.heading': 'Predict first',
     'predict.submit': 'Submit answer',
-    'predict.shapeHelp': 'Write the axes separated by commas, for example B, 8, 28, 28. B is the batch size.',
+    'predict.shapeHelp': 'Write the axes separated by commas, for example B, 5, 7. B is the batch size.',
     'predict.invalidNumber': 'Enter a number.',
-    'predict.invalidShape': 'Enter axes such as B, 8, 28, 28.',
+    'predict.invalidShape': 'Enter axes such as B, 5, 7.',
     'predict.chooseOne': 'Choose an answer.',
     'predict.you': 'You said {value}',
     'predict.tool': 'The tool shows {value}',
