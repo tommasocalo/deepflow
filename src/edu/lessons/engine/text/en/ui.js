@@ -147,6 +147,7 @@ export default {
     'quiz.correct': 'Correct',
     'quiz.incorrect': 'Not quite',
     'quiz.tryAgain': 'Try another answer if you like.',
+    'quiz.check': 'Check',
     'quiz.next': 'Next question',
     'quiz.finish': 'See the recap',
     'recap.heading': 'Recap',
@@ -209,10 +210,10 @@ export default {
     'check.run.overfitRise': 'Validation loss rose to {actual}× its minimum; this step needs {expected}×.',
     'check.run.lr': 'The last run used learning rate {actual}; this step needs {expected}.',
     'check.run.model': 'The last run trained a different model. {detail}',
-    'check.run.failed': 'The last run failed: {error}',
     'check.run.modelFirst': 'Change the model first: {detail}',
     'check.run.retrain': 'You changed the model since the last run: press **Train** again.',
     'check.run.preflight': 'Fix this before training: {message}',
+    'check.run.failed': 'The last run failed: {error}',
     'check.runs': 'Still to try: learning rate {missing}.',
     'check.level': 'Open **{type}** with the arrow on the block.',
     'check.ui.showDimensions.on': 'Turn on **Dimensions** in the ribbon (View).',
@@ -242,8 +243,8 @@ export default {
     'value.atMost': 'at most {max}',
     'value.oneOf': 'one of {values}',
     'value.or': ' or ',
-
     'value.and': ' and ',
+
     // Metric names
     'metric.valAccuracy': 'Validation accuracy',
     'metric.trainAccuracy': 'Training accuracy',

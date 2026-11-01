@@ -179,6 +179,11 @@ const choose = async (value) => {
     assert.ok(radio, `Expected the option ${value}`);
     await click(radio);
 };
+/** A quiz or warm-up answer: choosing only selects, Check commits it. */
+const answer = async (value) => {
+    await choose(value);
+    await click(button('Check'));
+};
 const renderPanel = () => render(h(LessonPanel, { checkDelay: 0 }));
 async function openStep(index) {
     await run(() => session().startModule('demo'));
@@ -247,11 +252,14 @@ test('Lesson panel: the warm-up explains every option; the step heading takes fo
     await settle();
     assert.ok(document.activeElement === heading(), 'focus moves to the question');
     await choose('true');
+    assert.equal(text(panel().querySelector('.edu-quiz-feedback')), '', 'choosing alone commits nothing');
+    assert.equal(session().progress.modules.demo?.warmup?.['demo.w1'], undefined);
+    await click(button('Check'));
     assert.match(text(panel().querySelector('.edu-quiz-feedback')), /Not quite\. Many people start with arithmetic/);
-    await choose('false');
+    await answer('false');
     assert.match(text(panel().querySelector('.edu-quiz-feedback')), /Correct\. Right: arithmetic/);
     await click(button('Next question'));
-    await choose('small');
+    await answer('small');
     await click(button('Start the steps'));
     assert.equal(session().phase, 'steps');
     assert.equal(text(heading()), 'Find the loss and the optimizer');
@@ -377,20 +385,24 @@ test('the quiz explains each option at once, keeps the first answer and ends in 
     await renderPanel();
     await settle();
     assert.equal(text(heading()), 'How many parameters does a Linear block from 2 to 8 have?');
-    await choose('sixteen');
-    assert.match(text(panel().querySelector('.edu-quiz-feedback')), /Not quite\. Right number of weights, but add the 8 biases\. Each output unit also has one bias/);
+    // Arrowing past options selects them without logging an attempt; only Check counts.
     await choose('seven');
+    await choose('sixteen');
+    assert.equal(session().progress.modules.demo.quiz?.['demo.q1'], undefined, 'no attempt before Check');
+    await click(button('Check'));
+    assert.match(text(panel().querySelector('.edu-quiz-feedback')), /Not quite\. Right number of weights, but add the 8 biases\. Each output unit also has one bias/);
+    await answer('seven');
     assert.match(text(panel().querySelector('.edu-quiz-feedback')), /That counts nothing per weight/);
-    await choose('twenty-four');
+    await answer('twenty-four');
     assert.match(text(panel().querySelector('.edu-quiz-feedback')), /Correct\. Right: 2 × 8 weights \+ 8 biases\./);
     const record = session().progress.modules.demo.quiz['demo.q1'];
     assert.deepEqual([record.first, record.correct, record.attempts, record.solved], ['sixteen', false, 3, true]);
     await click(button('Next question'));
     assert.ok(document.activeElement === heading(), 'each question takes focus');
     assert.equal(button('Next question').disabled, true, 'a quiz question needs an answer');
-    await choose('bend');
+    await answer('bend');
     await click(button('Next question'));
-    await choose('three');
+    await answer('three');
     await click(button('See the recap'));
     assert.equal(session().phase, 'recap');
     assert.equal(text(heading()), 'You finished Tour of the lesson panel.');
@@ -428,9 +440,9 @@ test('end to end: the demo module runs from warm-up to recap with Hint, Hint, Sh
     await run(() => session().startModule('demo'));
     await renderPanel();
     await settle();
-    await choose('false');
+    await answer('false');
     await click(button('Next question'));
-    await choose('small');
+    await answer('small');
     await click(button('Start the steps'));
     for (const step of TEST_MODULE.steps) {
         assert.equal(session().currentStep().id, step.id);
@@ -442,7 +454,7 @@ test('end to end: the demo module runs from warm-up to recap with Hint, Hint, Sh
         await click(button(step === TEST_MODULE.steps.at(-1) ? 'Go to the quiz' : 'Next'));
     }
     for (const item of TEST_MODULE.quiz) {
-        await choose(item.correct);
+        await answer(item.correct);
         await click(button(item === TEST_MODULE.quiz.at(-1) ? 'See the recap' : 'Next question'));
     }
     assert.equal(session().phase, 'recap');

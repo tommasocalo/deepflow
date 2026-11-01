@@ -7,6 +7,7 @@ import { focusNode, requestFit, requestTrainingFit, selectEdge } from '../lesson
 import { hasText, t } from '../lessons/engine/i18n.js';
 import { logEvent } from '../lessons/engine/log.js';
 import { isOutcomePrediction, observePrediction } from '../lessons/engine/observe.js';
+import { predictionOrder } from '../lessons/engine/order.js';
 import { revealValues } from '../lessons/engine/reveal.js';
 import { isTargetDone, isVisible, resolveNodeTargetId, resolveTarget } from '../lessons/engine/targets.js';
 import { useLessonSession } from '../lessons/engine/session.js';
@@ -180,7 +181,8 @@ export default function StepView({ module, step, index, total, record, answers, 
             {step.predict && (
                 <PredictGate key={`${prefix}-${answer ? 'answered' : 'open'}`} predict={step.predict} textPrefix={prefix} answer={answer} params={params}
                     disabled={busy} focusReveal={!!runtime?.revealShown} onSubmit={(predictId, value) => session.submitPrediction(predictId, value)}
-                    outcome={outcome} observed={observed} observation={observation} />
+                    outcome={outcome} observed={observed} observation={observation}
+                    order={step.predict.kind === 'choice' ? predictionOrder(step.predict, prefix) : null} />
             )}
             {embeds.includes('trainer') && <div className="edu-embed edu-embed-trainer"><TrainerCard locked={locked} lockedReason={locked ? t('panel.trainLocked') : ''} /></div>}
             {embeds.includes('paramCount') && (!step.predict || answer ? <ParamCountReadout /> : <p className="edu-embed edu-muted">{t('paramCount.hidden')}</p>)}

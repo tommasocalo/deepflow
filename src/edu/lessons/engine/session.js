@@ -7,6 +7,7 @@ import { requestFit } from './canvasBridge.js';
 import { completedEpochs, evaluateStep, finalMetrics, trainerRuns } from './checks.js';
 import { buildCheckContext, factValues, subscribeCheckContext } from './context.js';
 import { clearLog, logEvent } from './log.js';
+import { learnerSeed, predictionOrder, quizOrder } from './order.js';
 import { gradePrediction } from './predict.js';
 import * as P from './progress.js';
 import { getModule, getModules, stepIndexById } from './registry.js';
@@ -254,7 +255,7 @@ export const useLessonSession = create((set, get) => {
                 fitSoon();
             }
             updateProgress((progress) => P.startModule(progress, id, target.version ?? 1));
-            log('module-start');
+            log('module-start', { data: { learnerSeed: learnerSeed() } });
             if (resumePhase) {
                 set({ phase: resumePhase, quizIndex: Math.min(state.quizIndex, Math.max(0, (target.quiz?.length ?? 1) - 1)), runtime: freshRuntime() });
                 showStepTab(null);
@@ -436,7 +437,9 @@ export const useLessonSession = create((set, get) => {
             if (record()?.answers?.[id]) return record().answers[id];
             const grade = gradePrediction(owner.predict, value);
             updateProgress((progress) => P.recordAnswer(progress, current.id, id, value, grade.correct, { source }));
-            log('predict', { step: owner.id, data: { id, value, correct: grade.correct, source } });
+            // The options as this learner saw them, so position effects can be studied (engine/order.js).
+            const shown = owner.predict.kind === 'choice' ? { shown: predictionOrder(owner.predict, `${current.id}.${owner.id}`) } : {};
+            log('predict', { step: owner.id, data: { id, value, correct: grade.correct, source, ...shown } });
             if (owner === step()) updateRuntime({ revealShown: true });
             return get().progress.modules[current.id].answers[id];
         },
@@ -450,7 +453,7 @@ export const useLessonSession = create((set, get) => {
             const correct = optionId === item.correct;
             const attempt = ((warmup ? record()?.warmup : record()?.quiz)?.[id]?.attempts ?? 0) + 1;
             updateProgress((progress) => (warmup ? P.recordWarmup : P.recordQuiz)(progress, current.id, id, optionId, correct));
-            log(warmup ? 'warmup' : 'quiz', { data: { id, option: optionId, correct, attempt } });
+            log(warmup ? 'warmup' : 'quiz', { data: { id, option: optionId, correct, attempt, shown: quizOrder(item) } });
             return { correct };
         },
 

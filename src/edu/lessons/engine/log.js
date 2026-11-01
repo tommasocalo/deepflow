@@ -1,4 +1,5 @@
 import { CURRICULUM_VERSION, PRODUCT_NAME } from '../../config.js';
+import { learnerSeed } from './order.js';
 import { eduKey, readJSON, removeKey, writeJSON } from './storage.js';
 
 /**
@@ -43,6 +44,8 @@ export function learningLogExport(progress, now = Date.now()) {
         product: PRODUCT_NAME,
         curriculumVersion: CURRICULUM_VERSION,
         exportedAt: new Date(now).toISOString(),
+        // The seed of this learner's option order (engine/order.js): every shown order can be recomputed from it.
+        learnerSeed: learnerSeed(),
         progress,
         events: load(),
     };

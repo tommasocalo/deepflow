@@ -60,7 +60,7 @@ try {
         for (const moduleId of modules) {
             const module = await page.evaluate((id) => {
                 const found = window.__deepflow.edu.engine.getModule(id);
-                return found ? { order: found.order, steps: found.steps.map((step) => ({ id: step.id, targets: (step.target ?? []).length })), quiz: found.quiz.map((item) => item.options.indexOf(item.correct)) } : null;
+                return found ? { order: found.order, steps: found.steps.map((step) => ({ id: step.id, targets: (step.target ?? []).length })), quiz: found.quiz.map((item) => item.correct) } : null;
             }, moduleId);
             if (!check(module, label(`module ${moduleId} exists`))) continue;
             await learnTab();
@@ -112,7 +112,9 @@ try {
                 await settle(600);
             }
             for (const correct of module.quiz) {
-                await panel.locator('label.edu-option').nth(correct).click();
+                // Options are shown in the learner's seeded order; Check commits the choice.
+                await panel.locator(`label.edu-option[data-option="${correct}"]`).click();
+                await panel.getByRole('button', { name: 'Check', exact: true }).click();
                 await settle(200);
                 await panel.locator('footer.edu-nav button').last().click();
                 await settle(300);
