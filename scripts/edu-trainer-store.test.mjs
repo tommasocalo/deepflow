@@ -24,6 +24,21 @@ const slice = (name) => workspaceSlices().find(([key]) => key === name)?.[1];
 const strip = (history) => history.map(({ ms: _ms, ...metrics }) => metrics);
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** Resolve once `predicate(state)` holds for the trainer store, checked on every update (no timing assumptions). */
+function until(predicate, ms = 30000) {
+    return new Promise((resolve, reject) => {
+        if (predicate(trainer())) { resolve(); return; }
+        let unsubscribe = () => {};
+        const timer = setTimeout(() => { unsubscribe(); reject(new Error(`the trainer did not reach the state within ${ms} ms`)); }, ms);
+        unsubscribe = useTrainerStore.subscribe((state) => {
+            if (!predicate(state)) return;
+            clearTimeout(timer);
+            unsubscribe();
+            resolve();
+        });
+    });
+}
+
 /** M1's start fixture: in (2,) → neuron (Linear 2→1) → out, Adam lr 0.03 and BCE bound to out, blobs bound. */
 function loadM1({ hidden = null, loss = 'bce', lr = 0.03, dataset = 'blobs' } = {}) {
     const h = createFixtureHelpers();
@@ -155,8 +170,9 @@ test('Stop ends a sliced run early; the stopped run keeps its epochs, confusion 
     applyDataset('circle', { setOutput: false });
     trainer().setSettings({ epochs: 400 });
     const promise = trainer().start();
-    await tick();
-    await tick();
+    // Stop once the run has recorded an epoch, however slowly it gets there (review r2: two ticks were not always
+    // enough under parallel load, and the stopped run had no history).
+    await until((state) => (state.current?.history?.length ?? 0) >= 1);
     assert.equal(trainer().stop(), true);
     assert.equal(trainer().status, 'stopping');
     const record = await promise;
