@@ -121,10 +121,10 @@ export default {
         },
         {
             id: 's8', kind: 'predict', subgoal: 'export', target: ['toolbar.code', 'code.tab:train'],
-            codeQuotes: { tab: 'train', text: ['from sklearn.datasets import load_iris', 'mean = X[train_idx].mean(axis=0)'] },
+            codeQuotes: { tab: 'train', text: ['from sklearn.datasets import load_iris', 'mean = X[train_idx].mean(axis=0)', 'X = (X - mean) / std'] },
             predict: {
-                id: 'm1.leak', kind: 'choice', options: ['train', 'all', 'val'], correct: 'train',
-                diagnose: [{ equals: 'all', misconception: 'scaling-leak' }, { equals: 'val', misconception: 'scaling-leak' }],
+                id: 'm1.leak', kind: 'choice', options: ['train', 'own', 'none'], correct: 'train',
+                diagnose: [{ equals: 'own', misconception: 'scaling-leak' }, { equals: 'none', misconception: 'unscaled-validation' }],
             },
             check: { all: [{ ui: { codeOpen: true, codeTab: 'train' } }, { answered: 'm1.leak' }] },
             solution: [{ do: 'setUi', codeOpen: true, codeTab: 'train' }, answer('m1.leak', 'train')],

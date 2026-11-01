@@ -22,7 +22,7 @@ export default {
     'mis.classes-as-features': '3 is the number of species, the outputs. The inputs are the 4 measurements.',
     'mis.examples-as-features': '150 is the number of flowers, the examples. The model sees one flower at a time, with 4 features.',
     'mis.one-output-multiclass': 'With K classes the model needs K outputs, one score per class.',
-    'mis.bce-for-multiclass': 'BCE scores one yes/no output. With K classes, use cross-entropy on K scores.',
+    'mis.bce-for-multiclass': 'BCE scores each output as its own yes/no question. For K classes that exclude each other, use cross-entropy on K scores.',
     'mis.mse-for-classes': 'MSE measures distances between numbers. Class labels are categories, not amounts.',
     'mis.softmax-before-ce': 'Cross-entropy already applies softmax. A Softmax block before it squashes the scores twice and slows learning: output raw scores (logits).',
     'mis.sigmoid-before-bce': 'DeepFlow\'s BCE is BCEWithLogitsLoss, which applies the sigmoid itself. Output the raw score.',
@@ -32,6 +32,7 @@ export default {
     'mis.validation-trains': 'Validation examples never update the weights; they only measure the model.',
     'mis.validation-for-speed': 'The split exists for an honest measurement, not for speed.',
     'mis.scaling-leak': 'Statistics fitted on validation data leak information about it into training, so the validation score looks better than it is.',
+    'mis.unscaled-validation': 'The model learned from scaled features, so every split is scaled the same way, with the training mean and std.',
 
     // Linear maps and non-linearities
     'mis.neuron-bends': 'One neuron computes a weighted sum, so its boundary w₁x₁ + w₂x₂ + b = 0 is always a straight line.',
@@ -41,9 +42,9 @@ export default {
     'mis.piecewise-linear-is-linear': 'A function made of straight pieces is non-linear when it bends: ReLU bends at 0.',
     'mis.nonlinear-squash': 'Tanh and sigmoid curve their input: doubling z does not double the output, so they are non-linear.',
     'mis.activation-at-output': 'A ReLU right before the output clips negative scores to 0. Put activations between Linear blocks.',
-    'mis.too-few-edges': 'A closed region needs at least three straight edges, like a triangle. One or two edges leave it open.',
-    'mis.more-units-needed': 'More units also work, but they are not the minimum: a triangle needs only three edges.',
-    'mis.unit-draws-circle': 'A ReLU unit is linear on each side of one line, so it adds a straight edge, not a curve.',
+    'mis.too-few-edges': 'Each unit adds one line where the output can bend. Enclosing a region takes at least three, like the sides of a triangle.',
+    'mis.more-units-needed': 'More units also work, but they are not the minimum: a triangle needs only three sides.',
+    'mis.unit-draws-circle': 'A ReLU unit is linear on each side of one line, so it adds a line where the output bends, not a curve.',
     'mis.unit-memorises-point': 'Hidden units do not store training points. Each one adds a line along which the output can bend.',
     'mis.matmul-keeps-width': 'MatMul replaces the last axis: (B, 2) × (2, 3) gives (B, 3).',
 
@@ -77,7 +78,7 @@ export default {
     'mis.loss-is-probability': 'Loss is −ln of the probability of the right class, not the probability itself.',
     'mis.loss-is-count': 'Loss is −ln(probability of the right answer), here −ln(1/C).',
     'mis.low-initial-loss-good': 'An untrained model cannot know the answers. A first loss far below ln C means it sees something it should not, such as the labels.',
-    'mis.initial-loss-arbitrary': 'The first loss is predictable: about ln C for C balanced classes.',
+    'mis.initial-loss-arbitrary': 'The first loss is predictable: about ln C for C balanced classes, when the last layer starts with small weights.',
     'mis.bigger-lr-faster': 'A larger step is not always faster. Past a point the updates overshoot and the loss jumps around.',
     'mis.smaller-lr-safer': 'A tiny learning rate is stable but slow: in 60 epochs the loss barely moves.',
     'mis.bigger-model-fixes-training': 'A bigger model does not fix unstable updates; a smaller learning rate does.',
@@ -112,6 +113,6 @@ export default {
     'mis.heads-multiply-width': 'The heads share d_model: each one gets d_model / n_heads features.',
     'mis.heads-must-divide': 'n_heads must divide d_model evenly, so every head gets the same whole number of features.',
     'mis.head-width-vs-count': '64 is the width of each head. GPT-2 small splits d_model 768 into 768 / 64 = 12 heads.',
-    'mis.temperature-creativity': 'Temperature only rescales the scores before softmax. Lower values make the likeliest characters even likelier.',
+    'mis.temperature-creativity': 'Temperature divides the scores (logits) before softmax. Lower values make samples more predictable; higher values make them more random and varied.',
     'mis.temperature-changes-weights': 'Sampling settings never change the trained weights.',
 };

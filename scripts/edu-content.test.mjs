@@ -136,6 +136,17 @@ test('every module passes validateModule with the registry datasets and the spec
     assert.equal(MODULES.reduce((sum, module) => sum + module.steps.length, 0), 50, 'the spec counts 50 steps');
 });
 
+test('an explanation never repeats the verdict the panel prints before it ("Correct. Right.")', () => {
+    for (const module of MODULES) {
+        for (const item of [...module.warmup, ...module.quiz]) {
+            assert.doesNotMatch(EN[`${item.id}.why.${item.correct}`], /^(Right|Correct|Exactly)\b/, `${item.id}.why.${item.correct}`);
+        }
+        for (const step of module.steps.filter((entry) => entry.predict)) {
+            assert.doesNotMatch(EN[`${module.id}.${step.id}.predict.reveal`], /^(Right|Correct|Exactly)\b/, `${module.id}.${step.id}.predict.reveal`);
+        }
+    }
+});
+
 test('quizzes and warm-ups are well formed: one correct answer, every option explained, every distractor diagnosed', () => {
     for (const module of MODULES) {
         const earlier = MODULES.filter((other) => other.order < module.order).flatMap((other) => other.objectives);

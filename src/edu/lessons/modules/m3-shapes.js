@@ -56,6 +56,8 @@ export default {
         initLoss10: { value: '2.30', at: 'start', compute: (h) => h.lnText(10) },
         mnistMean: { value: '0.1307', at: 's7', compute: (h) => h.dataset().normalization.mean[0].toFixed(4) },
         mnistStd: { value: '0.3081', at: 's7', compute: (h) => h.dataset().normalization.std[0].toFixed(4) },
+        mnistTrain: { value: 60000, at: 's7', compute: (h) => h.dataset().size.train },
+        mnistVal: { value: 5000, at: 's7', compute: (h) => Number(h.data().options?.valSize ?? h.dataset().options.valSize.default) },
     },
     warmup: [
         { id: 'm3.w1', objective: 'm2.lo1', options: ['line', 'circle', 'curve'], correct: 'line', misconceptions: { circle: 'stacked-linear-bends', curve: 'stacked-linear-bends' } },

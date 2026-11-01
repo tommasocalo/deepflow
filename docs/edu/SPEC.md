@@ -461,9 +461,9 @@ test: 0}. Trainer: epochs 30, batch 32, seed 1.
   learning the ideas does not." True: same explanation.
 
 #### s1 · Meet the data — `read` · Prepare the data
-- **Do:** "Each dot is one **example**: two numbers, x₁ and x₂ (its **features**), and a colour, its **label** (0 or
-  1). We hide 20% of the dots as a **validation set**. The model never trains on them, so they show how well it
-  works on new data."
+- **Do:** "Open the **Data** tab. Each dot in its preview is one **example**: two numbers, x₁ and x₂ (its
+  **features**), and a colour, its **label** (0 or 1). We hide 20% of the dots as a **validation set**. The model
+  never trains on them, so they show how well it works on new data."
 - **Why?** "If we only tested on training examples, a model that memorised them would look perfect."
 - **Target:** `tab.data`, then `data.preview`. **Check:** `{ visited: 'data' }`
 - **Hints:** (1) "Open the **Data** tab in the top bar." (2) "Hollow dots are the validation set; filled dots train
@@ -471,23 +471,28 @@ test: 0}. Trainer: epochs 30, batch 32, seed 1.
 - **Show me:** `{ do: 'setUi', tab: 'data' }`
 
 #### s2 · One neuron — `predict` · Build the model · tab Architecture
-- **Do:** "This model is one **Linear** block: a single neuron. It computes z = w₁·x₁ + w₂·x₂ + b. The weights w₁, w₂
-  and the bias b are its **parameters**. Training changes them."
+- **Do:** "This model is one **Linear** block: a single neuron. It multiplies each input feature by its own
+  **weight**, adds up the results and adds a **bias**. Weights and biases are the **parameters**, the numbers that
+  training changes." (The body does not list w₁, w₂ and b: that would answer the question below.)
 - **Target:** `node` `{ id: 'neuron' }`.
 - **Predict** `m1.params` (number): "How many learnable numbers does this Linear block have?" expected 3. Diagnose 2
-  → `forgot-bias`. **Reveal:** "3: one weight per feature (2) plus one bias." Embed `paramCount`.
+  → `forgot-bias`. **Reveal:** "3: one weight per feature (2) plus one bias, so z = w₁·x₁ + w₂·x₂ + b." Embed
+  `paramCount`.
 - **Check:** `{ answered: 'm1.params' }`
 - **Hints:** (1) "Count one weight for each input feature." (2) "2 features → 2 weights, plus 1 bias."
 - **Show me:** `{ do: 'answer', id: 'm1.params', value: 3 }`
 
 #### s3 · Predict, then train — `predict` · Train & observe · tab Architecture
-- **Do:** "**BCE loss** measures how wrong the predicted probability σ(z) is for each dot. **Adam** nudges w₁, w₂
-  and b to lower it. Before you train: what will separate the two colours?"
+- **Do:** "**σ(z)** squashes the score z into a probability between 0 and 1. **BCE loss** measures how wrong that
+  probability is for each dot. Each training step moves every parameter against its gradient: w ← w − lr · ∂loss/∂w.
+  The **learning rate** lr sets the step size; **Adam** adapts it per parameter. Before you train: what will separate
+  the two colours?"
 - **Target:** `trainer.run`. **Locks:** `gate: 'train'`. **Embeds:** `trainer`.
 - **Predict** `m1.boundary` (choice): "A straight line" ✓ · "A circle" · "A wiggly curve". **Reveal:** "The neuron
   predicts orange where w₁x₁ + w₂x₂ + b > 0. The boundary is the straight line where that sum is 0."
 - **Check:** `{ all: [{ answered: 'm1.boundary' }, { run: { dataset: 'blobs', minEpochs: 20, final: { valAccuracy: { gte: 0.9 } } } }] }`
-- **Done:** "Validation accuracy is the share of held-out dots on the correct side of the line."
+- **Done:** "Validation accuracy is {measured}: the share of held-out dots on the correct side of the line. The
+  dotted chance line, ln 2 ≈ 0.693, is the loss of always answering 50%."
 - **Hints:** (1) "Answer the question, then press **Train**." (2) "Training 30 epochs takes about a second."
 - **Show me:** `answer('m1.boundary', 'line')`, `{ do: 'train' }`
 
@@ -515,9 +520,9 @@ test: 0}. Trainer: epochs 30, batch 32, seed 1.
   `out_features: 3`
 
 #### s6 · Cross-entropy for three classes — `task` · Choose loss & optimizer · tab Training
-- **Do:** "BCE scores one yes/no output. With 3 classes, use **Cross-Entropy**. It turns the 3 scores into
-  probabilities with softmax and penalises a low probability for the true species. Change the loss type in the
-  Training tab."
+- **Do:** "BCE scores each output as its own yes/no question. Each flower has exactly one of 3 species, so use
+  **Cross-Entropy**. It turns the 3 scores into probabilities with softmax and penalises a low probability for the
+  true species. Change the loss type in the Training tab."
 - **Target:** `training.loss`. **Check:** `{ training: { loss: 'cross_entropy', lossBound: true } }`
 - **Misconceptions:** a Softmax block directly before Output → `softmax-before-ce`.
 - **Hints:** (1) "Open **Training** and click the loss block." (2) "Set **type** to cross_entropy."
@@ -536,13 +541,17 @@ test: 0}. Trainer: epochs 30, batch 32, seed 1.
 - **Show me:** `answer('m1.easiest', 'setosa')`, `{ do: 'train' }`
 
 #### s8 · Export and read the code — `predict` · Export & read the code
-- **Do:** "Open **Code → train.py**. It rebuilds your model in PyTorch, loads Iris with scikit-learn, makes the same
-  split as here and trains with the same loss and optimizer."
+- **Do:** "Open **Code → train.py**. It rebuilds your model in PyTorch and loads Iris with scikit-learn. It uses the
+  same split, loss and optimizer as here. PyTorch draws its own starting weights and batch order, so its curves will
+  be close to yours, not identical."
 - **Target:** `toolbar.code`, then `code.tab:train`.
-- **Predict** `m1.leak` (choice): "train.py scales the features with a mean and a standard deviation. Which flowers
-  are they computed from?" "Only the training split" ✓ · "All 150 flowers" · "Only the validation split".
-  **Reveal:** "Only the training split. Using all flowers leaks information about the validation flowers into
-  training, so the validation score looks better than it really is."
+- **Predict** `m1.leak` (choice): "train.py standardises the features. Which mean and standard deviation does it use
+  for the 30 validation flowers?" "Those of the training split" ✓ · "Their own: the validation split's mean and std"
+  (→ `scaling-leak`) · "None: validation flowers are not scaled" (→ `unscaled-validation`). The earlier question,
+  "which flowers are the statistics computed from?", was answered by the Data tab and the train.py header before the
+  learner chose. **Reveal:** "Those of the training split: `mean = X[train_idx].mean(axis=0)`, then
+  `X = (X - mean) / std` scales every flower with it. The model learned on that scale, so validation flowers need the
+  same one. Statistics fitted on validation flowers would leak information about them."
 - **Check:** `{ all: [{ ui: { codeOpen: true, codeTab: 'train' } }, { answered: 'm1.leak' }] }`
 - **Show me:** `{ do: 'setUi', codeOpen: true, codeTab: 'train' }`, `answer('m1.leak', 'train')`
 
@@ -554,8 +563,8 @@ test: 0}. Trainer: epochs 30, batch 32, seed 1.
   ✓** · "Giving the model more examples to learn from" ("validation examples never update the weights") · "Making
   training faster" ("it does not change training speed").
 - `m1.q3` (lo2) "Your Iris model ends with Output 3. Which loss fits?" **Cross-entropy ✓** ("one score per class;
-  softmax is inside the loss") · BCE ("BCE is for one yes/no output") · MSE ("MSE is for predicting numbers, such
-  as a price").
+  softmax is inside the loss") · BCE ("BCE treats each output as a separate yes/no score, but each flower has exactly
+  one species") · MSE ("MSE is for predicting numbers, such as a price").
 - `m1.q4` (lo2) "Where is the decision boundary of a single neuron with two inputs?" **"On the line where w₁x₁ +
   w₂x₂ + b = 0" ✓** · "Around the training points" ("a neuron cannot bend around points") · "On a circle around the
   data" ("that needs hidden units; Module 2").
@@ -589,8 +598,8 @@ Learning objectives:
 wrong?" **"Validation information leaks into training" ✓** · "Nothing" · "Training becomes slower".
 
 #### s1 · Try first: one neuron on a circle — `predict` · Train & observe
-- **Do:** "The orange dots form a disk and the blue dots a ring around it. Your model is the single neuron from
-  Module 1."
+- **Do:** "Peek at the **Data** tab: the orange triangles form a disk, and the blue circles form a ring around it.
+  Your model is the single neuron from Module 1."
 - **Locks:** gate train. **Embeds:** trainer. **Target:** `trainer.run`.
 - **Predict** `m2.oneNeuron` (choice): "Can one neuron separate the disk from the ring?" Yes · **No ✓**. **Reveal:**
   "No. One neuron draws one straight line, and no line separates a disk from the ring around it. Accuracy stays
@@ -627,12 +636,13 @@ wrong?" **"Validation information leaks into training" ✓** · "Nothing" · "Tr
 
 #### s5 · How many hidden units are enough? — `predict` · Build the model
 - **Locks:** gate train. **Embeds:** trainer. **Target:** `node` `{ id: 'lin1' }`, `field:out_features`.
-- **Do:** "Each hidden ReLU unit can add one straight edge to the boundary. After you answer, set the hidden width to 3
-  and train. Change both blocks: the first Linear's **Output** and the second Linear's **Input**."
+- **Do:** "Each hidden ReLU unit adds one line where the output can bend. After you answer, set the hidden width to
+  the number you chose, and train. Change both blocks: the first Linear's **Output** and the second Linear's
+  **Input**." The body does not name 3, the answer; hint 2 does. Any width up to 3 passes the check.
 - **Predict** `m2.width` (choice): "What is the smallest number of hidden units that can enclose the disk?" 1 · 2 ·
-  **3 ✓** · 8. **Reveal:** "3. A closed region needs at least 3 edges, like a triangle. With 2 units the region stays
-  open and accuracy drops to about 75%. With 3, training sometimes gets stuck: change the training seed and train
-  again."
+  **3 ✓** · 8. **Reveal:** "3. Each unit gives one line where the output can bend. Enclosing the disk takes at least
+  3, like the sides of a triangle. With 2 units the region stays open and accuracy drops to about 75%. With 3,
+  training sometimes gets stuck: change the training seed and train again."
 - **Check:** `{ all: [{ answered: 'm2.width' }, { run: { dataset: 'circle', minEpochs: 50, model: { all: [{ param: { node: { type: 'Linear', nth: 0 }, name: 'out_features', max: 3 } }, { valid: true }] } } }] }`
 - **Misconceptions:** a width mismatch between the two Linear blocks → `mismatched-widths` (via the feedback
   rewrite, §6.4.4).
@@ -674,12 +684,13 @@ wrong?" **"Validation information leaks into training" ✓** · "Nothing" · "Tr
 - `m2.q2` (lo2) "Which of these is not a non-linearity?" ReLU · Tanh · **"Multiplying by 2" ✓** ("scaling is linear
   and cannot bend a boundary") · Sigmoid.
 - `m2.q3` (lo3) "In a 2-layer ReLU network on 2D points, what does each hidden unit add to the boundary?" **"One
-  straight edge" ✓** · "One circle" · "One training point".
+  line where the output can bend" ✓** · "One circle" · "One training point". A unit adds a bend line; the boundary
+  can have more straight segments than there are units.
 - `m2.q4` (lo4) "Linear 2 → 8 feeds Linear 4 → 1. What happens?" **"A shape error: the second block expects 4
   inputs but receives 8" ✓** · "It trains normally" · "DeepFlow adds the missing units".
 
 **Recap.** (1) Without a non-linearity, any stack of Linear blocks is one linear function. (2) A ReLU between
-Linear blocks lets the network bend its boundary, and more hidden units give it more edges. (3) The Output of one
+Linear blocks lets the network bend its boundary; each hidden unit adds one line where it can bend. (3) The Output of one
 Linear must equal the Input of the next.
 
 ### 4.3 Module 3 — Shapes and parameters
@@ -766,6 +777,9 @@ must k be?" **16 ✓** · 3 · 2.
 #### s7 · Export for the full MNIST — `predict` · Export & read the code
 - **Do:** "Switch the dataset back to **MNIST**, fix the first Linear's Input, then open **Code → train.py**. It
   downloads MNIST with torchvision and trains the same MLP."
+- **Reveal** (end): "These constants come from all {mnistTrain} official training images, including the {mnistVal}
+  that train.py holds out for validation. That is a small, common shortcut; Module 1 fitted its scaling on the
+  training split only." Facts `mnistTrain = 60000`, `mnistVal = 5000`.
 - **Predict** `m3.normalize` (choice): "train.py applies `transforms.Normalize((0.1307,), (0.3081,))`. What does it
   do?" **"Subtracts the mean pixel value of the MNIST training images and divides by their standard deviation" ✓** ·
   "Converts the images to black and white" · "Resizes the images to 28 × 28".
@@ -886,8 +900,8 @@ Learning objectives:
 - `m4.q4` (lo3) "How many parameters does Conv2d(8 → 16, kernel 3) have?" **1,168 ✓** · 1,152 ("add the 16 biases") ·
   144.
 
-**Recap.** (1) Conv2d output size is ⌊(n + 2p − k)/s⌋ + 1, and channels = number of filters. (2) Pooling halves
-height and width, never channels. (3) Filters are reused across the image, so CNNs need far fewer parameters than
+**Recap.** (1) Conv2d output size is ⌊(n + 2p − k)/s⌋ + 1, and channels = number of filters. (2) 2 × 2 pooling
+halves height and width and keeps every channel. (3) Filters are reused across the image, so CNNs need far fewer parameters than
 MLPs.
 
 ### 4.5 Module 5 — Training well
@@ -920,8 +934,12 @@ Learning objectives:
   training recipe checks this early, because it catches label and loss bugs before you waste a run."
 - **Predict** `m5.initLoss` (number, tolerance 0.15): "With 3 equally likely classes, what cross-entropy loss do you
   expect before training?" expected 1.10. Diagnose 0 → `zero-initial-loss`, 0.33 or 0.67 → `loss-is-error-rate`, 3
-  → `loss-is-count`. **Reveal (live):** "−ln(1/3) = ln 3 ≈ 1.10. Your untrained network measured {measured}. A first
-  loss far from ln C usually means a bug in the labels, the loss or the initialisation."
+  → `loss-is-count`. **Reveal (live):** "−ln(1/3) = ln 3 ≈ 1.10. That holds when the last layer starts with small
+  weights, as here: every class then gets about the same probability. A first loss far from ln C then usually means
+  a bug in the labels, the loss or the initialisation. Without small weights it can differ: a linear model on
+  informative features can start well away from ln C. Module 1's Iris classifier starts anywhere from about 0.8 to
+  1.8, depending on the seed." Done: "Your untrained network measured {measured}." The in-browser trainer, seeds
+  1–10: spiral3 2-64-3 starts at 1.06–1.17 and digits 64-128-10 at 2.28–2.34, but the Iris Linear 4→3 at 0.76–1.80.
 - **Check:** `{ all: [{ answered: 'm5.initLoss' }, { run: { dataset: 'spiral3', initOnly: true } }] }`
 - **Show me:** `answer(1.1)`, `{ do: 'evaluateInit' }`
 
@@ -950,11 +968,15 @@ Learning objectives:
 
 #### s4 · Read your curves — `predict` · Evaluate
 - **Target:** `trainer.curves`.
-- **Do:** "Look at the run you just made. The ▲ marks the epoch with the lowest validation loss."
-- **Predict** `m5.diagnosis` (choice): "Training accuracy is near 100% and validation loss rises after its best epoch.
-  The model is…" **overfitting ✓** · underfitting · training well. **Reveal:** "Overfitting. Keeping the weights from
-  the ▲ epoch is **early stopping**. Validation *accuracy* barely changed, though: loss also measures confidence,
-  accuracy only counts right and wrong."
+- **Do:** "Look at the run you just made in the Training tab. Read both loss curves and both accuracy curves. The ▲
+  marks the epoch with the lowest validation loss."
+- **Predict** `m5.diagnosis` (choice): "Compare the training and validation curves of your run. The model is…"
+  **overfitting ✓** · underfitting · training well. The prompt no longer states the evidence; the learner reads it
+  off the curves. **Reveal:** "Overfitting: training accuracy is near 100% while validation loss rises after the ▲.
+  **Underfitting** looks different: both losses stay high, because the model cannot even fit its training data.
+  Keeping the weights of the ▲ epoch is **early stopping**; train.py does it for you." **Why?** "Validation accuracy
+  falls only a few points while validation loss climbs. Loss also punishes confident mistakes; accuracy only counts
+  right and wrong."
 - **Check:** `{ answered: 'm5.diagnosis' }`
 
 #### s5 · Add Dropout — `task` · Build the model
@@ -978,9 +1000,10 @@ Learning objectives:
 - **Check:** `{ all: [{ ui: { codeOpen: true, codeTab: 'train' } }, { answered: 'm5.eval' }] }`
 
 **Quiz.**
-- `m5.q1` (lo1) "A 10-class classifier starts training at loss 0.05. What should you suspect?" **"A bug, for
-  example labels leaking into the inputs: an untrained model should start near ln 10 ≈ 2.30" ✓** · "A great
-  initialisation" · "Nothing; the first loss is arbitrary".
+- `m5.q1` (lo1) "A 10-class classifier starts with small weights in its last layer. Its first loss is 0.05. What
+  should you suspect?" **"A bug, for example labels leaking into the inputs: with small last-layer weights every
+  class starts near 1/10, so the first loss should be near ln 10 ≈ 2.30" ✓** · "A great initialisation" · "Nothing;
+  the first loss is arbitrary".
 - `m5.q2` (lo2) "The loss jumps up and down and ends higher than it started. What do you try first?" **"Lower the
   learning rate" ✓** · "Train for more epochs" · "Add more layers".
 - `m5.q3` (lo3) "Which epoch's weights should you keep?" **"The one with the lowest validation loss" ✓** · "The
@@ -989,7 +1012,7 @@ Learning objectives:
   "It drops the same units as in training" · "It drops half of the inputs". (PyTorch scales kept values by
   1/(1−p) during training, so no rescaling is needed at evaluation.)
 
-**Recap.** (1) Check the loss before training: about −ln(1/C) for C balanced classes. (2) Too small a learning rate
+**Recap.** (1) Check the loss before training: with small initial weights it is about −ln(1/C) for C balanced classes. (2) Too small a learning rate
 is slow; too large is unstable. (3) Overfitting shows as validation loss rising while training loss falls. Stop
 early or regularise (Dropout, weight decay), then measure again.
 
@@ -1018,6 +1041,9 @@ AdaptiveAvgPool2d (output 1) → `flat` Flatten → `fc` Linear (32→10) → `o
 #### s1 · CIFAR-10 — `read` · Prepare the data
 - **Do:** "CIFAR-10 has 60,000 colour photos of 32 × 32 pixels in 10 classes, such as airplane, cat and truck. Colour
   means 3 channels: (B, 3, 32, 32). It is too big to train here, so you build the model now and train it in Colab."
+- **Done:** "The model on the canvas is a small CNN for these photos. **BatchNorm2d** normalises each channel over the
+  batch, then applies a learned scale and shift. **AdaptiveAvgPool2d** with output 1 averages each channel's map to
+  one number, so 32 maps become 32 features. Next you give it a skip connection."
 - **Check:** `{ all: [{ visited: 'data' }, { dataset: 'cifar10' }, { inputShape: [null, 3, 32, 32] }] }`
 
 #### s2 · Add a skip connection — `predict` · Build the model
@@ -1069,10 +1095,11 @@ AdaptiveAvgPool2d (output 1) → `flat` Flatten → `fc` Linear (32→10) → `o
 - **Target:** `ribbon.gradients`.
 - **Do:** "Turn on **Gradients** in View. It shows which paths can carry gradients back to each parameter: the
   structure only, not how large the gradients are."
-- **Predict** `m6.residualGrad` (choice): "For y = x + F(x), what does the skip path give the gradient flowing back
-  to x?" **"A direct identity path, so it does not vanish even if F's gradient is tiny" ✓** · "Twice the gradient of
+- **Predict** `m6.residualGrad` (choice): "Your block computes relu(x + F(x)). For the sum y = x + F(x), what does
+  the skip path give the gradient flowing back to x?" **"A direct identity path, so it does not vanish even if F's gradient is tiny" ✓** · "Twice the gradient of
   F" · "Nothing; gradients only flow through F". **Reveal:** "∂y/∂x = I + ∂F/∂x. The identity term passes the
-  gradient straight through, which is why very deep residual networks still train."
+  gradient straight through, even when ∂F/∂x is tiny. The ReLU after Add then passes it on wherever x + F(x) is
+  positive. That is why very deep residual networks still train."
 - **Check:** `{ all: [{ answered: 'm6.residualGrad' }, { ui: { showGradientFlow: true } }] }`
 
 #### s7 · Find the skip connection in the code — `predict` · Export & read the code
@@ -1099,8 +1126,8 @@ identity path, so deep residual networks still train.
 
 ### 4.7 Module 7 — Attention and a tiny Transformer
 
-**Goal line:** "Build a character-level GPT, then open GPT-2." **Dataset:** `tiny-shakespeare` (export). **Requires:**
-M3, M6.
+**Goal line:** "Explore a character-level GPT, then open GPT-2." M7 has no build step: the learner explores and edits
+the storyboard's model, so "Build" overstated it. **Dataset:** `tiny-shakespeare` (export). **Requires:** M3, M6.
 
 Learning objectives:
 - `m7.lo1` Explain tokens and embeddings as learned lookup tables and count their parameters.
@@ -1170,9 +1197,9 @@ explicit causal attention, learned positions, untied `lm_head` without bias) at 
 - **Do:** "Open **Code → train.py**. It downloads Tiny Shakespeare, trains your {tinyParams}-parameter Transformer and
   prints generated text. Try the temperature slider below on a fixed set of 5 scores."
 - **Predict** `m7.initLoss` (number, tolerance 0.2): "Before training, what loss do you expect with 65 equally likely
-  characters?" expected {initLoss65}. Diagnose 65 → `loss-is-count`. **Reveal:** "−ln(1/65) ≈ 4.17. Temperature
-  divides the scores before softmax: below 1 it sharpens the distribution, above 1 it flattens it. It rescales
-  probabilities; it is not a 'creativity' setting."
+  characters?" expected {initLoss65}. Diagnose 65 → `loss-is-count`. **Reveal:** "−ln(1/65) ≈ 4.17. Temperature T
+  divides the scores (logits) before softmax. Below 1 it sharpens the distribution, so samples get safer and more
+  repetitive. Above 1 it flattens it, so samples get more random and varied."
 - **Check:** `{ all: [{ ui: { codeOpen: true, codeTab: 'train' } }, { answered: 'm7.initLoss' }] }`
 
 #### s7 · Same blocks, bigger numbers: GPT-2 — `predict` · Evaluate
@@ -1191,7 +1218,8 @@ explicit causal attention, learned positions, untied `lm_head` without bias) at 
 - `m7.q1` (lo3) "What does the causal mask prevent?" **"Attending to later positions" ✓** · "Attending to the same
   position" · "Using the positional embedding".
 - `m7.q2` (lo4) "Lowering the sampling temperature from 1.0 to 0.5…" **"makes the most likely characters even more
-  likely" ✓** · "makes the model more creative" ("it only rescales the scores") · "changes the model's weights".
+  likely" ✓** · "makes the model more creative" ("lower temperature does the opposite: samples become more
+  predictable; a higher temperature makes them more varied") · "changes the model's weights".
 - `m7.q3` (lo1) "An Embedding with 65 rows and 64 columns has how many parameters?" **4,160 ✓** · 129 · 65.
 - `m7.q4` (lo2) "d_model = 96. Which head count works?" **8 ✓** (96 / 8 = 12) · 5 · 7.
 
@@ -1248,6 +1276,7 @@ draft text.
 | `loss-is-count` | Loss is −ln(probability of the right answer), here −ln(1/C). |
 | `one-prediction-per-sequence` | A language model predicts the next token at every position, not once per sequence. |
 | `ids-not-scores` | The output holds a score for every token in the vocabulary at each position. |
+| `unscaled-validation` | The model learned from scaled features, so every split is scaled the same way, with the training mean and std. (M1 s8) |
 
 ---
 
@@ -2895,4 +2924,5 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-10-30 | Stage E | **Targets** (§6.6): `code.notebook` and `code.colabNote` added; "Where is it?" is not offered inside a level a `nodeOpen` target opened, opens the code panel for code targets and fits the Training canvas for training targets. §11.1 and §11.2 gained the in-browser trainer's measurements. |
 | 2026-10-30 | Stage E | **Spotlight follows the learner** (§6.6): used targets are skipped (`isTargetDone`), targets off screen count as missing, and "Where is it?" also scrolls lists and panels. M3 s7's targets add the MNIST row and Use this dataset. |
 | 2026-10-30 | Stage E | **QA record.** `scripts/edu-walkthrough-browser-check.mjs` walks every module with Hint, Hint, Show me at 1440×900 and 390×844: each step with an unused target rings it at entry or, below the fold on the phone (the drawer's trainer card, the ribbon's edge), offers "Where is it?", which brings it into view; no console errors, no horizontal scroll; a reload resumes the step and Exit restores the sandbox. By hand in Chromium: first run → Learn → M1 by mouse and keyboard → quiz → recap → M2; sandbox and back; reload mid-step; Reset progress; tab switches mid-lesson; Undo of a Show me; 1440×900, 1024×768 and 390×844. Keyboard: Tab reaches every Edu control, Enter submits answers and runs chips, Space chooses options, Esc closes menus and the code panel (never the lesson), focus rings are 2 px #e91e63, focus moves to the step heading and to the reveal. Text contrast: every Edu text element met WCAG AA in the audited states (disabled controls excepted). Trainer timings in Chromium (§6.10.7 budgets): circle 2-8-1 about 30 ms, spiral3 overfit about 3.5–4 s, digits MLP about 1.1–1.5 s; the UI keeps about 40 frames per second while training. |
+| 2026-10-30 | Review fixes (content) | **Lesson copy after the ML-educator and UIST reviews.** Imprecise lines corrected: temperature divides the scores (logits) before softmax and a higher T makes samples more random and varied (M7 s6, `m7.q2`, `mis.temperature-creativity`; no longer "not a creativity setting"); each hidden ReLU unit adds "one line where the output can bend", not "one straight edge" (M2 s5, `m2.q3`, recap, `mis.too-few-edges`, `mis.unit-draws-circle`); M6 s6 names the ReLU after Add, relu(x + F(x)), which passes the identity gradient wherever x + F(x) is positive; BCE scores each output as its own yes/no question (M1 s6, `m1.q3`, `mis.bce-for-multiclass`); "2 × 2 pooling halves height and width" (M4 recap); M3 s6 says "dotted" ln 10 line, as on the card. The initial-loss rule is qualified: about ln C when the last layer starts with small weights (M5 s1 reveal, `m5.q1` prompt and explanations, recap, `mis.initial-loss-arbitrary`, `m3.q4`); a linear model on informative features can start well away from it, Iris at about 0.8–1.8 over seeds. Answer leaks removed: M1 s2's body no longer lists w₁, w₂ and b (the formula moved to the reveal); M2 s5's body no longer says "set the hidden width to 3" (hint 2 does), and its done line no longer claims 3 units; M5 s4's prompt no longer states the evidence ("Compare the training and validation curves of your run"); M1 s8 asks which mean and std scale the validation flowers (training split ✓, their own → `scaling-leak`, none → new `unscaled-validation`) instead of a question the Data tab and the train.py header answered, and says the PyTorch curves will be close, not identical. Explanations no longer begin with "Right", which the panel's "Correct." already says; the content test asserts it. One-line explanations added: σ(z), the update w ← w − lr · ∂loss/∂w and lr (M1 s3), the dotted chance line (M1 s3 done), the Data tab before "each dot" (M1 s1, M2 s1), underfitting (M5 s4 reveal), BatchNorm2d and AdaptiveAvgPool2d (M6 s1 done). M3 s7's reveal says the Normalize constants come from all 60,000 official training images, the 5,000 validation images included (facts `mnistTrain`, `mnistVal`). M7's goal is "Explore a character-level GPT, then open GPT-2." |
 | 2026-10-30 | Stage E | **QA fixes from the browser walk.** Show me keeps the column compact (lower blocks move only as far as the new rows need), so M3 and M4 stay readable after a fit. Check messages use articles ("connect an activation (such as ReLU)") and no "block(s)"; M6 s3's entry status asks to group the blocks (a standard Linear component is no grouping attempt). The code panel closes with Esc and explains an invalid model in plain words ("No code yet: …") instead of a stack trace. Below 900 px the TrainingPalette starts folded to its header. The Training tab's 10-class confusion matrix uses compact cells, and its result toggle wraps. M2 s7's done line no longer says "You built that network yourself", which was untrue after Show me. Dead exports and duplicate CSS in `src/edu` were removed. |
