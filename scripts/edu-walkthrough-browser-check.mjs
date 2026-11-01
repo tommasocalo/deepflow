@@ -3,13 +3,14 @@
 //
 //   npx vite --host 127.0.0.1 --port 5174 --strictPort      (in another terminal)
 //   node scripts/edu-walkthrough-browser-check.mjs [--base http://127.0.0.1:5174] [--out <screenshot dir>]
-//        [--sizes 1440x900,390x844] [--modules m1,m2,…]
+//        [--sizes 1440x900,1280x800,1024x768,390x844] [--modules m1,m2,…]
 //
 // For each viewport on a fresh profile: Learn → each module's Start, Skip warm-up, then per step Hint, Hint, Show me,
 // "✓ Done" and Next; the quiz answered; the recap. It asserts no console errors, no horizontal page scroll, and that
 // every step with an unused target rings it at entry, or, when it is below the fold (a phone's drawer, the ribbon's
-// edge), offers "Where is it?", which brings it into view. After the walk it reloads in the middle of module 2 (the
-// same step must come back) and exits the lesson (the sandbox must show the GPT-2 example).
+// edge), offers "Where is it?", which brings it into view. In M2 s6 it opens Linear 1 first: "Where is it?" must then
+// find Dimensions without leaving the block. After the walk it reloads in the middle of module 2 (the same step must
+// come back) and exits the lesson (the sandbox must show the GPT-2 example).
 // Screenshots of each module start and each step after Show me go to --out.
 import { existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -22,7 +23,7 @@ const argument = (name, fallback) => {
 };
 const base = argument('base', 'http://127.0.0.1:5174');
 const out = argument('out', process.env.EDU_SHOTS ?? join(tmpdir(), 'deepflow-edu-shots'));
-const sizes = argument('sizes', '1440x900,390x844').split(',').map((size) => size.split('x').map(Number));
+const sizes = argument('sizes', '1440x900,1280x800,1024x768,390x844').split(',').map((size) => size.split('x').map(Number));
 const modules = argument('modules', 'm1,m2,m3,m4,m5,m6,m7').split(',');
 const executablePath = argument('chromium', process.env.PLAYWRIGHT_CHROMIUM ?? (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined));
 mkdirSync(out, { recursive: true });
@@ -95,6 +96,25 @@ try {
                     if (step.targets && !used) check(ring === 1, label(`${where}: a spotlight ring at entry`));
                     check(lost === 0, label(`${where}: no "Where is it?" while the target is on screen`));
                 }
+                if (where === 'm2.s6') {
+                    // Review r1: after opening Linear 1, "Where is it?" closed the block instead of finding Dimensions.
+                    await page.evaluate(() => window.__deepflow.edu.engine.runActions([{ do: 'openLevel', path: [{ id: 'lin1' }] }]));
+                    await settle(1600);
+                    const finder = panel.getByRole('button', { name: 'Where is it?' });
+                    if (await finder.count()) {
+                        await finder.click();
+                        await settle(1200);
+                        notes.push(label(`${where}: Dimensions off screen inside Linear 1, found with "Where is it?"`));
+                    }
+                    const inside = await page.evaluate(() => window.__deepflow.architectureStore.getState().currentPath.join('/'));
+                    check(inside === 'lin1', label(`${where}: the opened block stays open (path "${inside}")`));
+                    const ringed = await page.evaluate(() => {
+                        const ring = document.querySelector('[data-edu-spotlight]')?.getBoundingClientRect();
+                        const button = document.querySelector('[aria-label="Show dimensions"]')?.getBoundingClientRect();
+                        return !!ring && !!button && ring.left <= button.left && ring.right >= button.right && ring.top <= button.top && ring.bottom >= button.bottom;
+                    });
+                    check(ringed, label(`${where}: the ring is on Dimensions inside Linear 1`));
+                }
                 for (let level = 0; level < 3; level++) {
                     const button = panel.locator('.edu-hint-button');
                     if (!(await button.count())) break;
@@ -105,6 +125,16 @@ try {
                 }
                 const done = await panel.locator('.edu-status.is-done').first().waitFor({ timeout: 40000 }).then(() => true, () => false);
                 check(done, label(`${where}: ✓ Done after Show me (${await textOf(panel.locator('.edu-status'))})`));
+                // Review r1: "✓ Done" and Next must be on screen without scrolling the panel (the phone drawer keeps Next).
+                const onScreen = await page.evaluate(() => {
+                    const docked = getComputedStyle(document.querySelector('.edu-step-dock')).display !== 'contents';
+                    const wanted = [document.querySelector('.edu-step-dock footer.edu-nav .df-button-primary'), docked ? document.querySelector('.edu-step-dock .edu-status.is-done') : null];
+                    return wanted.filter(Boolean).length === (docked ? 2 : 1) && wanted.filter(Boolean).every((element) => {
+                        const box = element.getBoundingClientRect();
+                        return box.top >= 0 && box.bottom <= window.innerHeight && box.height > 0;
+                    });
+                });
+                check(onScreen, label(`${where}: "✓ Done" and Next are on screen`));
                 check(!(await textOf(panel.locator('.edu-callout-error'))), label(`${where}: no action error`));
                 await shot(`${where}`);
                 await noHorizontalScroll(where);

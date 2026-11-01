@@ -82,6 +82,10 @@ export function isVisible(element) {
         const style = view.getComputedStyle(node);
         if (/auto|scroll|hidden|clip/.test(`${style.overflowX} ${style.overflowY}`) && !inside(node.getBoundingClientRect())) return false;
     }
+    // Covered by something on top (an open menu, the code panel, the panel's sticky dock): not visible, so the ring
+    // does not paint over it and "Where is it?" can bring the target out (review r1: the ring over the Examples menu).
+    const top = element.ownerDocument.elementFromPoint?.(x, y);
+    if (top && !element.contains(top) && !top.contains(element)) return false;
     return true;
 }
 

@@ -9,7 +9,7 @@ import { logEvent } from '../lessons/engine/log.js';
 import { isOutcomePrediction, observePrediction } from '../lessons/engine/observe.js';
 import { predictionOrder } from '../lessons/engine/order.js';
 import { revealValues } from '../lessons/engine/reveal.js';
-import { isTargetDone, isVisible, resolveNodeTargetId, resolveTarget } from '../lessons/engine/targets.js';
+import { isTargetDone, isVisible, reachedOpenTarget, resolveNodeTargetId, resolveTarget } from '../lessons/engine/targets.js';
 import { useLessonSession } from '../lessons/engine/session.js';
 import { useEduUiStore } from '../shell/uiStore.js';
 import { useBridgeSource } from '../useBridgeSource.js';
@@ -26,38 +26,42 @@ const TAB_OF_TARGET = [
     [/^data\./, 'data'],
     [/^training\./, 'training'],
 ];
-const named = (refs, prefix) => refs.some((ref) => typeof ref === 'string' && ref.startsWith(prefix));
 
 /**
- * "Where is it?": bring the step's next target on screen: its tab, the root level where node targets start (centred
- * on the canvas), the code panel, the Training canvas fitted beside its palette, or a list or panel scrolled to it.
+ * "Where is it?": bring the step's next target on screen: the first one not used yet (review r1: a block the step
+ * asked to open counts as used, so the next target is the ribbon button). Its tab, the code panel, the Training canvas
+ * fitted beside its palette, a node target centred on the canvas (inside the opened block when it is there, else at
+ * the root, never leaving a block the step asked to open), or a list, panel or ribbon scrolled to it.
  */
 function revealTarget(step, options) {
     const ui = useEduUiStore.getState();
     const refs = step.target ?? [];
-    const nodeRef = refs.find((ref) => typeof ref === 'object');
+    const pending = refs.filter((ref) => !isTargetDone(ref, globalThis.document, options));
+    const next = pending[0];
+    if (next === undefined) return;
+    const nodeRef = typeof next === 'object' ? next : null;
     if (step.tab) ui.setTab(step.tab);
     else {
-        const first = refs.find((ref) => typeof ref === 'string' && TAB_OF_TARGET.some(([pattern]) => pattern.test(ref)));
-        const tab = nodeRef ? 'architecture' : TAB_OF_TARGET.find(([pattern]) => pattern.test(first ?? ''))?.[1];
+        const tab = nodeRef ? 'architecture' : TAB_OF_TARGET.find(([pattern]) => pattern.test(next))?.[1];
         if (tab) ui.setTab(tab);
     }
     // The notebook button and the Colab note sit on train.py; a tab target keeps the open tab so its ring shows.
-    if (named(refs, 'code.notebook') || named(refs, 'code.colabNote')) ui.openCode('train');
-    else if (named(refs, 'code.tab:')) ui.openCode(ui.codeTab);
-    if (named(refs, 'training.')) setTimeout(requestTrainingFit, 120);
+    if (!nodeRef && (next.startsWith('code.notebook') || next.startsWith('code.colabNote'))) ui.openCode('train');
+    else if (!nodeRef && next.startsWith('code.tab:')) ui.openCode(ui.codeTab);
+    if (!nodeRef && next.startsWith('training.')) setTimeout(requestTrainingFit, 120);
     if (nodeRef) {
         const store = useArchitectureStore.getState();
-        if (store.currentPath.length) store.goToLevel(0);
+        const match = nodeRef.node ?? nodeRef.nodeOpen;
+        const here = !!resolveNodeTargetId(match);
+        if (!here && store.currentPath.length && !reachedOpenTarget(refs)) store.goToLevel(0);
         setTimeout(() => {
-            const id = resolveNodeTargetId(nodeRef.node ?? nodeRef.nodeOpen);
-            if (id) focusNode(id); else requestFit();
+            const id = resolveNodeTargetId(match);
+            if (id) focusNode(id, { stay: useArchitectureStore.getState().currentPath.length > 0 }); else requestFit();
         }, 80);
     }
-    // A target scrolled out of its list or panel (not a canvas node: the canvases above handle those).
+    // A target scrolled out of its list, panel or the ribbon (not a canvas node: the canvases above handle those).
     setTimeout(() => {
-        const element = refs.filter((ref) => !isTargetDone(ref, globalThis.document, options))
-            .map((ref) => resolveTarget(ref, globalThis.document, { rendered: true })).find(Boolean);
+        const element = pending.map((ref) => resolveTarget(ref, globalThis.document, { rendered: true })).find(Boolean);
         if (element && !isVisible(element) && !element.closest('.react-flow')) scrollToElement(element);
     }, 160);
 }

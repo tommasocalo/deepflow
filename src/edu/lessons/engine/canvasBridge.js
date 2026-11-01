@@ -38,11 +38,14 @@ export function selectEdge(id) {
     return dispatch({ command: 'selectEdge', id, result: false }).result === true;
 }
 
-/** Select a root node, open its settings and centre the view on it. */
-export function focusNode(id) {
+/**
+ * Select a root node, open its settings and centre the view on it. With `stay`, the node is in the level the canvas
+ * shows (a block the step asked to open): centre on it there instead of going back to the root.
+ */
+export function focusNode(id, { stay = false } = {}) {
     if (!id) return;
     const store = useArchitectureStore.getState();
-    if (store.currentPath.length) {
+    if (store.currentPath.length && !stay) {
         store.goToLevel(0);
         // Let the canvas render the root level before centring on one of its nodes.
         const frame = globalThis.requestAnimationFrame ?? ((callback) => setTimeout(callback, 16));
