@@ -19,6 +19,8 @@
 .edu-lesson-panel:not(.is-closed) .edu-drawer-chevron { transform: rotate(180deg); }
 
 .edu-panel-header { display: flex; align-items: center; gap: 2px; flex-shrink: 0; padding: 8px 8px 0 16px; }
+.edu-history { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; padding-right: 6px; border-right: 1px solid #00000014; }
+.edu-history .df-icon-button:disabled { opacity: .35; cursor: default; }
 .edu-panel-module { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 800; }
 .edu-panel-progress { flex-shrink: 0; padding: 6px 16px 10px; border-bottom: 1px solid #00000014; }
 .edu-panel-count { margin: 0 0 6px; color: #555; font-size: 11px; font-weight: 700; }
@@ -110,6 +112,25 @@ p.edu-muted { margin: 4px 0 0; }
 .edu-toast > span { flex: 1; }
 
 .edu-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #00000014; }
+/* The status line and the navigation stay at the bottom of the panel (review r1: Next was below the fold). */
+/* Sticky positioning keeps clear of the scroller's padding: a body with a dock has none at the bottom. (A negative
+   offset instead makes focus scrolling shift the phone layout.) */
+.edu-panel-body:has(.edu-step-dock) { padding-bottom: 0; scroll-padding-bottom: 150px; }
+.edu-step-dock { position: sticky; bottom: 0; z-index: 3; margin: 12px -16px 0; padding: 8px 16px 12px; border-top: 1px solid #00000014;
+    background: #fff; box-shadow: 0 -10px 12px -12px #00000059; }
+.edu-step-dock .edu-status { margin: 0; }
+.edu-step-dock .edu-nav { margin-top: 8px; padding-top: 0; border-top: 0; flex-wrap: nowrap; }
+.edu-step-dock .edu-toast { margin: 6px 0 0; }
+.edu-dock-links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0 0; }
+.edu-step-dock .edu-show-on-canvas { margin: 0; }
+.edu-step-dock .edu-nav .df-button { white-space: nowrap; }
+@media (max-width: 1199px) { .edu-step-dock .edu-nav-label { display: none; } }
+/* In the phone drawer only the navigation row stays put: the drawer is too short to also keep the status there. */
+.is-drawer .edu-step-dock { display: contents; }
+.is-drawer .edu-panel-body:has(.edu-step-dock) { scroll-padding-bottom: 70px; }
+.is-drawer .edu-step-dock .edu-status { margin: 12px 0 0; }
+.is-drawer .edu-step-dock > .edu-nav { position: sticky; bottom: 0; z-index: 3; margin: 8px -16px 0; padding: 8px 16px 10px; background: #fff;
+    border-top: 1px solid #00000014; box-shadow: 0 -10px 12px -12px #00000059; }
 .edu-nav .df-button { height: 30px; padding: 0 10px; gap: 4px; }
 .edu-nav-spacer { flex: 1; }
 .edu-nav-stack { flex-direction: column; align-items: stretch; }

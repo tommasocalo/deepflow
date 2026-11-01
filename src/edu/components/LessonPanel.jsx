@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { ChevronUp, Minus, PanelRightOpen, X } from 'lucide-react';
+import { ChevronUp, Minus, PanelRightOpen, Redo2, Undo2, X } from 'lucide-react';
+import { useArchitectureHistory } from '../../stores/architectureHistory.js';
 import { factValues } from '../lessons/engine/context.js';
 import { t } from '../lessons/engine/i18n.js';
 import { isModuleComplete } from '../lessons/engine/progress.js';
@@ -45,6 +46,30 @@ function ProgressSegments({ module, record, stepIndex, phase, onGo }) {
 }
 
 /**
+ * Undo and Redo for the architecture, always in view in a lesson (review r1: the ribbon's History group is cut off in
+ * the narrower canvas column). They act on the same history as the ribbon and Ctrl+Z.
+ */
+function HistoryButtons() {
+    const canUndo = useArchitectureHistory((state) => state.canUndo);
+    const canRedo = useArchitectureHistory((state) => state.canRedo);
+    const undoLabel = useArchitectureHistory((state) => state.undoLabel);
+    const redoLabel = useArchitectureHistory((state) => state.redoLabel);
+    const history = () => useArchitectureHistory.getState();
+    return (
+        <span className="edu-history" role="group" aria-label={t('panel.history')}>
+            <button type="button" className="df-icon-button" onClick={() => history().undo()} disabled={!canUndo} aria-label={t('panel.undoEdit')}
+                aria-keyshortcuts="Control+Z Meta+Z" title={canUndo ? t('panel.undoTitle', { label: undoLabel }) : t('panel.undoEdit')}>
+                <Undo2 size={15} aria-hidden="true" />
+            </button>
+            <button type="button" className="df-icon-button" onClick={() => history().redo()} disabled={!canRedo} aria-label={t('panel.redoEdit')}
+                aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" title={canRedo ? t('panel.redoTitle', { label: redoLabel }) : t('panel.redoEdit')}>
+                <Redo2 size={15} aria-hidden="true" />
+            </button>
+        </span>
+    );
+}
+
+/**
  * The lesson panel (docs/edu/SPEC.md §3.3), docked beside the tab content: 360 px wide at ≥ 1200 px, 320 px
  * between 900 and 1199 px, a bottom drawer below 900 px. It never covers the canvas: the stage shrinks instead.
  */
@@ -59,6 +84,7 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
     const runtime = useLessonSession((state) => state.runtime);
     const progress = useLessonSession((state) => state.progress);
     const drawerOpen = useEduUiStore((state) => state.drawerOpen);
+    const onArchitecture = useEduUiStore((state) => state.activeTab === 'architecture');
     const narrow = useMediaQuery(NARROW);
     const panelRef = useRef(null);
     // Below 900 px the drawer's handle toggles it and, dragged (or with the arrow keys), resizes it.
@@ -166,6 +192,7 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
                         </span>
                         <ChevronUp size={14} aria-hidden="true" className="edu-drawer-chevron" />
                     </button>
+                    {onArchitecture && <HistoryButtons />}
                     <button type="button" className="df-icon-button" onClick={exit} aria-label={t('panel.exit')} title={t('panel.exit')}>
                         <X size={15} aria-hidden="true" />
                     </button>
@@ -176,6 +203,7 @@ export default function LessonPanel({ checkDelay = CHECK_DELAY }) {
                     {!narrow && (
                         <header className="edu-panel-header">
                             <p className="edu-panel-module">{moduleTitle(module)}</p>
+                            {onArchitecture && <HistoryButtons />}
                             <button type="button" className="df-icon-button" onClick={toggle} aria-label={t('panel.collapse')} title={t('panel.collapse')}>
                                 <Minus size={15} aria-hidden="true" />
                             </button>

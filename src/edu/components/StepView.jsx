@@ -97,6 +97,26 @@ function stateHint(result) {
     return null;
 }
 
+/**
+ * Bring `element` into the panel's scrolling area, above the sticky dock: its top when `top` (a reveal to read from
+ * its heading), else its bottom (the done sentence under the trainer card). Only the panel body scrolls.
+ */
+function revealInPanel(element, { top = false } = {}) {
+    const body = element?.closest?.('.edu-panel-body');
+    if (!body?.getBoundingClientRect) return;
+    const box = body.getBoundingClientRect();
+    // The dock, or in the phone drawer only its navigation row, covers the bottom of the body.
+    const dock = body.querySelector('.edu-step-dock')?.getBoundingClientRect().height || body.querySelector('.edu-step-dock > .edu-nav')?.getBoundingClientRect().height || 0;
+    const rect = element.getBoundingClientRect();
+    const visibleTop = box.top + 8;
+    const visibleBottom = box.bottom - dock - 8;
+    if (top || rect.top < visibleTop) {
+        if (rect.top < visibleTop || rect.top > visibleBottom) body.scrollTop += rect.top - visibleTop;
+    } else if (rect.bottom > visibleBottom) {
+        body.scrollTop += Math.min(rect.bottom - visibleBottom, rect.top - visibleTop);
+    }
+}
+
 /** "Show on canvas" for the problem the status names: the wire to delete, or the block. */
 function showProblem(problem) {
     useEduUiStore.getState().setTab('architecture');
@@ -151,6 +171,20 @@ export default function StepView({ module, step, index, total, record, answers, 
         logEvent('predict-observed', { module: module.id, step: step.id, data: { id: step.predict.id, said: answer.value, observed: observedOption, text: observation.text } });
     }, [outcome, observation, observedOption, answer, passing, module.id, step.id, step.predict?.id]);
 
+    // On a pass, show what it says: the reveal of an outcome prediction, otherwise the done sentence.
+    const doneRef = useRef(null);
+    const wasPassing = useRef(passing);
+    useEffect(() => {
+        if (passing && !wasPassing.current) {
+            const reveal = outcome ? doneRef.current?.closest('.edu-step')?.querySelector('.edu-predict.is-revealed') : null;
+            const timer = setTimeout(() => revealInPanel(reveal ?? doneRef.current, { top: !!reveal }), 60);
+            wasPassing.current = passing;
+            return () => clearTimeout(timer);
+        }
+        wasPassing.current = passing;
+        return undefined;
+    }, [passing, outcome]);
+
     const missingTimer = useRef(null);
     useEffect(() => () => clearTimeout(missingTimer.current), []);
     // A target can take a moment to appear (tab switch, canvas mount): only offer "Where is it?" after a second.
@@ -193,26 +227,8 @@ export default function StepView({ module, step, index, total, record, answers, 
                 </button>
             ))}
 
-            <div className={`edu-status${passing || done ? ' is-done' : ''}`} role="status" aria-live="polite">
-                {passing || done ? (
-                    <>
-                        <span className="edu-status-icon" aria-hidden="true">✓</span>
-                        <span><strong>{t('panel.done')}</strong>{passing && <span className="edu-sr-only"> — {t('panel.stepComplete')}</span>}</span>
-                    </>
-                ) : (
-                    <>
-                        <span className="edu-status-icon" aria-hidden="true">○</span>
-                        <span><strong>{t('panel.notYet')}: </strong><RichText inline text={statusText(result, busy)} /></span>
-                    </>
-                )}
-            </div>
-            {!passing && problem?.nodeId && (
-                <button type="button" className="edu-link-button edu-show-on-canvas" onClick={() => showProblem(problem)}>
-                    <Crosshair size={12} strokeWidth={2.5} aria-hidden="true" />{t(problem.edgeId ? 'panel.showWire' : 'panel.showOnCanvas')}
-                </button>
-            )}
             {done && !passing && !runtime?.passedHere && <p className="edu-muted">{t('panel.reviewing')}</p>}
-            {(passing || done) && hasText(`${prefix}.done`) && <RichText className="edu-done" text={t(`${prefix}.done`)} params={params} />}
+            <div ref={doneRef}>{(passing || done) && hasText(`${prefix}.done`) && <RichText className="edu-done" text={t(`${prefix}.done`)} params={params} />}</div>
             {(passing || answer) && live.variant && hasText(`${prefix}.reveal.${live.variant}`) && (
                 <RichText className="edu-callout edu-callout-info" text={t(`${prefix}.reveal.${live.variant}`)} params={params} />
             )}
@@ -221,37 +237,62 @@ export default function StepView({ module, step, index, total, record, answers, 
             )}
             {runtime?.error && <p className="edu-callout edu-callout-error" role="alert">{t('panel.actionFailed', { error: runtime.error })}</p>}
             {runtime?.skippedAhead > 0 && !done && <p className="edu-muted">{t('panel.skippedAhead')}</p>}
-            {targetMissing && !passing && (step.target ?? []).some((ref) => !isTargetDone(ref, globalThis.document, targetOptions)) && (
-                <button type="button" className="edu-link-button" onClick={() => revealTarget(step, targetOptions)}>
-                    <MapPin size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.whereIsIt')}
-                </button>
-            )}
-            {toastAt && toastAt === showMeAt && (
-                <div className="edu-toast" role="status">
-                    <span>{t('panel.showMeDone')}</span>
-                    <button type="button" className="edu-link-button" disabled={!canUndo} onClick={() => { session.undoShowMe(); setToastAt(null); }}>
-                        <Undo2 size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.undo')}
-                    </button>
-                    <button type="button" className="df-icon-button" aria-label={t('panel.dismiss')} onClick={() => setToastAt(null)}><X size={12} /></button>
-                </div>
-            )}
 
             <HintLadder textPrefix={prefix} level={record?.hintLevel ?? 0} passed={passing} busy={busy} facts={params} onHint={() => session.useHint()}
                 now={stateHint(result)} />
 
-            <footer className="edu-nav">
-                <button type="button" className="df-button" onClick={() => session.back()} disabled={busy || index === 0} aria-label={t('nav.back')}>
-                    <ChevronLeft size={13} strokeWidth={2.5} aria-hidden="true" />{t('nav.back')}
-                </button>
-                <button type="button" className="df-button" onClick={() => session.resetStep()} disabled={busy} aria-label={t('nav.reset')}>
-                    <RotateCcw size={12} strokeWidth={2.5} aria-hidden="true" />{t('nav.reset')}
-                </button>
-                <span className="edu-nav-spacer" />
-                {!canAdvance && <button type="button" className="edu-link-button" onClick={() => session.skip()} disabled={busy}>{t('nav.skip')}</button>}
-                <button type="button" className={`df-button${canAdvance ? ' df-button-primary edu-hard' : ''}`} onClick={() => session.next()} disabled={busy || !canAdvance}>
-                    {nextLabel}<ChevronRight size={13} strokeWidth={2.5} aria-hidden="true" />
-                </button>
-            </footer>
+            {/* The status and the way on stay at the bottom of the panel however long the step is (review r1). */}
+            <div className="edu-step-dock">
+                <div className={`edu-status${passing || done ? ' is-done' : ''}`} role="status" aria-live="polite">
+                    {passing || done ? (
+                        <>
+                            <span className="edu-status-icon" aria-hidden="true">✓</span>
+                            <span><strong>{t('panel.done')}</strong>{passing && <span className="edu-sr-only"> — {t('panel.stepComplete')}</span>}</span>
+                        </>
+                    ) : (
+                        <>
+                            <span className="edu-status-icon" aria-hidden="true">○</span>
+                            <span><strong>{t('panel.notYet')}: </strong><RichText inline text={statusText(result, busy)} /></span>
+                        </>
+                    )}
+                </div>
+                {((!passing && problem?.nodeId) || (targetMissing && !passing && (step.target ?? []).some((ref) => !isTargetDone(ref, globalThis.document, targetOptions)))) && (
+                    <p className="edu-dock-links">
+                        {!passing && problem?.nodeId && (
+                            <button type="button" className="edu-link-button edu-show-on-canvas" onClick={() => showProblem(problem)}>
+                                <Crosshair size={12} strokeWidth={2.5} aria-hidden="true" />{t(problem.edgeId ? 'panel.showWire' : 'panel.showOnCanvas')}
+                            </button>
+                        )}
+                        {targetMissing && !passing && (step.target ?? []).some((ref) => !isTargetDone(ref, globalThis.document, targetOptions)) && (
+                            <button type="button" className="edu-link-button" onClick={() => revealTarget(step, targetOptions)}>
+                                <MapPin size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.whereIsIt')}
+                            </button>
+                        )}
+                    </p>
+                )}
+                {toastAt && toastAt === showMeAt && (
+                    <div className="edu-toast" role="status">
+                        <span>{t('panel.showMeDone')}</span>
+                        <button type="button" className="edu-link-button" disabled={!canUndo} onClick={() => { session.undoShowMe(); setToastAt(null); }}>
+                            <Undo2 size={12} strokeWidth={2.5} aria-hidden="true" />{t('panel.undo')}
+                        </button>
+                        <button type="button" className="df-icon-button" aria-label={t('panel.dismiss')} onClick={() => setToastAt(null)}><X size={12} /></button>
+                    </div>
+                )}
+                <footer className="edu-nav">
+                    <button type="button" className="df-button" onClick={() => session.back()} disabled={busy || index === 0} aria-label={t('nav.back')}>
+                        <ChevronLeft size={13} strokeWidth={2.5} aria-hidden="true" />{t('nav.back')}
+                    </button>
+                    <button type="button" className="df-button" onClick={() => session.resetStep()} disabled={busy} aria-label={t('nav.reset')}>
+                        <RotateCcw size={12} strokeWidth={2.5} aria-hidden="true" /><span className="edu-nav-label">{t('nav.reset')}</span>
+                    </button>
+                    <span className="edu-nav-spacer" />
+                    {!canAdvance && <button type="button" className="edu-link-button" onClick={() => session.skip()} disabled={busy}>{t('nav.skip')}</button>}
+                    <button type="button" className={`df-button${canAdvance ? ' df-button-primary edu-hard' : ''}`} onClick={() => session.next()} disabled={busy || !canAdvance}>
+                        {nextLabel}<ChevronRight size={13} strokeWidth={2.5} aria-hidden="true" />
+                    </button>
+                </footer>
+            </div>
             <p className="edu-sr-only">{t('panel.step', { index: index + 1, total })}</p>
             <Spotlight targets={step.target ?? []} active={!passing && !done} onResolve={onResolve} options={targetOptions} />
         </article>

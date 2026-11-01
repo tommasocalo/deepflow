@@ -66,15 +66,17 @@ export default function QuizView({ kind, items, index, records = {}, facts, onAn
                     </div>
                 )}
             </div>
-            <footer className="edu-nav">
-                <button type="button" className="df-button" onClick={onBack} disabled={!onBack}>
-                    <ChevronLeft size={13} strokeWidth={2.5} aria-hidden="true" />{t('nav.back')}
-                </button>
-                {onSkip && <button type="button" className="edu-link-button" onClick={onSkip}>{t('warmup.skip')}</button>}
-                <button type="button" className={`df-button${checked ? ' df-button-primary' : ''}`} onClick={onNext} disabled={!checked && kind !== 'warmup'}>
-                    {nextLabel}<ChevronRight size={13} strokeWidth={2.5} aria-hidden="true" />
-                </button>
-            </footer>
+            <div className="edu-step-dock">
+                <footer className="edu-nav">
+                    <button type="button" className="df-button" onClick={onBack} disabled={!onBack}>
+                        <ChevronLeft size={13} strokeWidth={2.5} aria-hidden="true" />{t('nav.back')}
+                    </button>
+                    {onSkip && <button type="button" className="edu-link-button" onClick={onSkip}>{t('warmup.skip')}</button>}
+                    <button type="button" className={`df-button${checked ? ' df-button-primary' : ''}`} onClick={onNext} disabled={!checked && kind !== 'warmup'}>
+                        {nextLabel}<ChevronRight size={13} strokeWidth={2.5} aria-hidden="true" />
+                    </button>
+                </footer>
+            </div>
         </section>
     );
 }
