@@ -26,7 +26,7 @@ import { isValidTargetRef } from './targets.js';
  * @property {Object<string, (ctx: object) => ({ pass: boolean }|boolean)>} [checks]   custom checks for { custom: name }
  * @property {QuizItem[]} warmup           0–3 items
  * @property {LessonStep[]} steps          4–8 items
- * @property {QuizItem[]} quiz             3–4 items
+ * @property {QuizItem[]} quiz             3–5 items
  * @property {string[]} objectives         LO ids, e.g. ['m1.lo1', …]; text key `<lo>` holds the sentence
  *
  * @typedef {Object} LessonStep
@@ -110,6 +110,12 @@ function checkNodeMatch(match, where, errors) {
     for (const key of Object.keys(match)) if (!KNOWN_MATCH_KEYS.includes(key)) errors.push(`${where}: unknown node match key "${key}"`);
 }
 
+/** `in`: a non-empty path of node matches from the root to a component whose definition holds the block. */
+function checkComponentPath(path, where, errors) {
+    if (!Array.isArray(path) || !path.length) { errors.push(`${where}: needs a non-empty list of component matches`); return; }
+    path.forEach((match, index) => checkNodeMatch(match, `${where}[${index}]`, errors));
+}
+
 /** Structural validation of a CheckSpec tree. Returns the misconception-free list of problems. */
 export function validateCheckSpec(spec, where = 'check', errors = []) {
     if (!spec || typeof spec !== 'object' || Array.isArray(spec)) { errors.push(`${where}: a check must be an object`); return errors; }
@@ -131,6 +137,7 @@ export function validateCheckSpec(spec, where = 'check', errors = []) {
     } else if (['param', 'shapeAt'].includes(name)) {
         checkNodeMatch(value?.node, `${where}.${name}.node`, errors);
         if (name === 'param' && typeof value?.name !== 'string') errors.push(`${where}.param: needs a parameter name`);
+        if (name === 'param' && value?.in !== undefined) checkComponentPath(value.in, `${where}.param.in`, errors);
     } else if (name === 'chain') {
         if (!Array.isArray(value) || value.length < 2) errors.push(`${where}.chain: needs at least two node matches`);
         else value.forEach((item, index) => checkNodeMatch(item, `${where}.chain[${index}]`, errors));
@@ -166,6 +173,7 @@ export function validateActions(actions, where, errors = [], { module } = {}) {
             for (const item of action.blocks ?? []) if (!isValidBlockRef(item.block)) errors.push(`${at}: unknown block ${item.block}`);
         }
         if (action.do === 'loadFixture' && module && !module.fixtures?.[action.id]) errors.push(`${at}: unknown fixture ${action.id}`);
+        if (action.do === 'setParam' && action.in !== undefined) checkComponentPath(action.in, `${at}.in`, errors);
         if (action.do === 'setUi' && action.tab && !TABS.includes(action.tab)) errors.push(`${at}: unknown tab ${action.tab}`);
     });
     return errors;
@@ -214,7 +222,7 @@ function hasVisited(spec, tab) {
 
 /**
  * Validate a module definition and its text bundle (`text` is the flat key → string map of one locale).
- * Options: `datasetIds` (registry ids, checked when given), `limits: false` to skip the 4–8 / 3–4 size rules.
+ * Options: `datasetIds` (registry ids, checked when given), `limits: false` to skip the 4–8 / 3–5 size rules.
  * @returns {string[]} problems; empty means valid
  */
 export function validateModule(module, text = {}, { datasetIds, limits = true } = {}) {
@@ -245,7 +253,7 @@ export function validateModule(module, text = {}, { datasetIds, limits = true } 
     const warmup = module.warmup ?? [];
     if (limits) {
         if (steps.length < 4 || steps.length > 8) errors.push(`${m}: needs 4–8 steps (has ${steps.length})`);
-        if (quiz.length < 3 || quiz.length > 4) errors.push(`${m}: needs 3–4 quiz items (has ${quiz.length})`);
+        if (quiz.length < 3 || quiz.length > 5) errors.push(`${m}: needs 3–5 quiz items (has ${quiz.length})`);
         if (warmup.length > 3) errors.push(`${m}: at most 3 warm-up items (has ${warmup.length})`);
     }
     if (!Array.isArray(module.objectives)) errors.push(`${m}: objectives must be a list`);

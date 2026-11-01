@@ -290,11 +290,15 @@ const handlers = {
         return fail('has', 'check.has', { type: matchName(match), actual: nodes, expected: describeCondition(wanted) });
     },
     param(spec, ctx) {
-        const nodes = matchNodes(ctx.graph, spec.node ?? {}, matchOptions(ctx));
+        // `in`: a block inside a shared component definition, as the setParam action's `in` addresses it.
+        const definition = spec.in ? definitionGraph(spec.in, ctx) : null;
+        if (spec.in && !definition) return fail('param', 'check.nodeMissing', { type: matchName(spec.in.at(-1)), a: articleOf(spec.in.at(-1)) });
+        const options = definition ? { templates: ctx.templates, scope: {}, graph: definition } : matchOptions(ctx);
+        const nodes = matchNodes(definition ?? ctx.graph, spec.node ?? {}, options);
         if (!nodes.length) return fail('param', 'check.nodeMissing', { type: matchName(spec.node), a: articleOf(spec.node) });
         const wanted = condition(spec);
         for (const node of spec.every ? nodes : nodes.slice(0, 1)) {
-            const value = paramValue(node, spec.name, matchOptions(ctx));
+            const value = paramValue(node, spec.name, options);
             if (!satisfies(value, wanted)) {
                 return fail('param', spec.every ? 'check.param.every' : 'check.param', {
                     label: node.label ?? nodeType(node, ctx.templates), type: matchName(spec.node), name: paramLabel(spec.name),
@@ -456,6 +460,18 @@ const handlers = {
 
 function lossName(type) {
     return hasText(`loss.${type}`) ? t(`loss.${type}`) : String(type);
+}
+
+/** The graph of the shared definition a path of components names from the root ([{ name: 'ResBlock' }]), or null. */
+function definitionGraph(path, ctx) {
+    let graph = ctx.graph;
+    for (const [index, match] of (Array.isArray(path) ? path : []).entries()) {
+        const options = index === 0 ? matchOptions(ctx) : { templates: ctx.templates, scope: {}, graph };
+        const node = matchNodes(graph, match, options).find((item) => ['supernode', 'repeat'].includes(item.kind));
+        graph = node ? ctx.templates[node.templateId]?.graph ?? null : null;
+        if (!graph) return null;
+    }
+    return Array.isArray(path) && path.length ? graph : null;
 }
 
 function answerFor(ctx, id) {

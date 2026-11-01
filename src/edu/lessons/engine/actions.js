@@ -56,6 +56,35 @@ function goRoot() {
     if (architecture().currentPath.length) architecture().goToLevel(0);
 }
 
+/**
+ * The shared definition (template) a path of components leads to from the root, e.g. [{ name: 'ResBlock' }]: editing
+ * it changes every instance and every copy of a repeat at once (M6: the three ResBlock copies follow one definition).
+ */
+export function resolveDefinition(path = []) {
+    if (!Array.isArray(path) || !path.length) throw new ActionError('A component path is required');
+    let graph = rootGraph();
+    let template = null;
+    for (const match of path) {
+        const options = { templates: templates(), scope: template ? {} : withGlobalParameters(graph), graph };
+        const node = matchNodes(graph, match, options).find((item) => ['supernode', 'repeat'].includes(item.kind));
+        if (!node) throw new ActionError(`No component matches ${describeMatch(match)}`);
+        template = templates()[node.templateId];
+        if (!template?.graph) throw new ActionError(`The definition of ${describeMatch(match)} is missing`);
+        graph = template.graph;
+    }
+    return template;
+}
+
+/** setParam on a block inside a shared definition (`in`): the template changes, so all its instances do. */
+function setDefinitionParam({ in: path, node: match, name, value }) {
+    const template = resolveDefinition(path);
+    const node = matchNodes(template.graph, match ?? {}, { templates: templates(), scope: {}, graph: template.graph })[0];
+    if (!node) throw new ActionError(`No block matches ${describeMatch(match ?? {})} in ${template.name ?? 'the component'}`);
+    const store = useTemplatesStore.getState();
+    if (node.kind === 'layer') store.patchTemplateLayerParameters(template.id, node.id, { [name]: value });
+    else store.patchTemplateNode(template.id, node.id, { parameterValues: { ...node.parameterValues, [name]: value } });
+}
+
 const isComponentRef = (block) => typeof block === 'string' && block.startsWith('component:');
 
 function applyBlockSettings(id, block, { params, label } = {}) {
@@ -184,7 +213,9 @@ const SYNC = {
         if (action.split) callSource('data', 'setSplit', action.split);
         return undefined;
     },
-    setParam({ node: match, name, value }) {
+    setParam(action) {
+        const { node: match, name, value } = action;
+        if (action.in) return setDefinitionParam(action);
         goRoot();
         const node = resolveRootNode(match);
         if (node.kind === 'layer') architecture().patchLayerParameters(node.id, { [name]: value });
