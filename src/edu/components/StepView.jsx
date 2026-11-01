@@ -190,6 +190,38 @@ function revealRunInPanel(result, line) {
     body.scrollTop += bottom - top <= visibleBottom - visibleTop ? top - visibleTop : bottom - visibleBottom;
 }
 
+const LEARNER_SCROLLS = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+
+/**
+ * Run `align` now and again whenever the step or the dock changes size in the next 2.5 s (the trainer card draws its
+ * matrix, boundary and run list, the Show me toast joins the dock), until the learner scrolls or clicks the panel.
+ * Returns the function that stops following.
+ */
+function followLayout(article, align) {
+    const body = article?.closest?.('.edu-panel-body');
+    const first = setTimeout(align, 60);
+    if (!body || typeof ResizeObserver !== 'function') return () => clearTimeout(first);
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(align);
+    });
+    observer.observe(article);
+    const dock = body.querySelector('.edu-step-dock');
+    if (dock) observer.observe(dock);
+    let timer = 0;
+    const stop = () => {
+        clearTimeout(first);
+        clearTimeout(timer);
+        cancelAnimationFrame(frame);
+        observer.disconnect();
+        for (const type of LEARNER_SCROLLS) body.removeEventListener(type, stop);
+    };
+    timer = setTimeout(stop, 2500);
+    for (const type of LEARNER_SCROLLS) body.addEventListener(type, stop, { passive: true });
+    return stop;
+}
+
 /** "Show on canvas" for the problem the status names: the wire to delete, or the block. */
 function showProblem(problem) {
     useEduUiStore.getState().setTab('architecture');
@@ -253,17 +285,16 @@ export default function StepView({ module, step, index, total, record, answers, 
     const wasPassing = useRef(passing);
     useEffect(() => {
         if (passing && !wasPassing.current) {
+            wasPassing.current = passing;
             const article = doneRef.current?.closest('.edu-step');
-            const reveal = outcome ? article?.querySelector('.edu-predict.is-revealed') : null;
-            const card = article?.querySelector('.edu-embed-trainer');
             const align = () => {
+                // Looked up each time: the card draws its matrix or boundary a moment after the run.
+                const reveal = outcome ? article?.querySelector('.edu-predict.is-revealed') : null;
+                const card = article?.querySelector('.edu-embed-trainer');
                 if (reveal && card) revealRunInPanel(card.querySelector('.edu-tr-confusion') ?? card.querySelector('.edu-tr-card-body'), reveal.querySelector('.edu-reveal-compare') ?? reveal);
                 else revealInPanel(reveal ?? doneRef.current, { top: !!reveal });
             };
-            // Once now, and again when the card has drawn its result (its boundary and run list arrive a little later).
-            const timers = [setTimeout(align, 60), setTimeout(align, 450)];
-            wasPassing.current = passing;
-            return () => timers.forEach(clearTimeout);
+            return followLayout(article, align);
         }
         wasPassing.current = passing;
         return undefined;
