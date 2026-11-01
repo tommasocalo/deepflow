@@ -44,7 +44,7 @@ export default {
     'm1.s3.predict.opt.circle': 'A circle',
     'm1.s3.predict.opt.curve': 'A wiggly curve',
     'm1.s3.predict.reveal': 'A straight line. The neuron predicts orange where w₁x₁ + w₂x₂ + b > 0, so the boundary is the line where that sum is 0.',
-    'm1.s3.done': 'Validation accuracy is {measured}: the share of held-out dots on the correct side of the line. The dotted chance line, ln 2 ≈ 0.693, is the loss of always answering 50%.',
+    'm1.s3.done': 'Validation accuracy is {measured}: the share of held-out dots on the correct side of the line. The dotted chance line, ln 2 ≈ {chanceBce}, is the loss of always answering 50%.',
 
     'm1.s4.title': 'A real dataset: Iris',
     'm1.s4.body': '**Iris** has 150 flowers of 3 species. For each flower a botanist measured four lengths in cm: sepal length, sepal width, petal length and petal width. The species is the label. Answer, then select **Iris** and press **Use this dataset**.',

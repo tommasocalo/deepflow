@@ -31,11 +31,11 @@ Open the address Vite prints, http://localhost:5173/ by default (`npm run dev --
 | 2 | Going non-linear | Watch one neuron and two stacked Linear blocks fail on a circle, add ReLU, find the smallest hidden width, open Linear down to MatMul, then build an XOR network yourself | Circle, XOR | 20 |
 | 3 | Shapes and parameters | Read (B, C, H, W) shapes, Flatten MNIST, build and hand-count an MLP, fix a planted shape bug, train a small version on Digits 8×8 and export it for MNIST | MNIST, Digits 8×8 | 25 |
 | 4 | Convolutions | Predict Conv2d and pooling output shapes with and without padding, build two convolution blocks, connect them to a classifier and count their shared weights | Fashion-MNIST | 20 |
-| 5 | Training well | Check the initial loss against ln C, sweep the learning rate, overfit on purpose, read the curves (early stopping), add Dropout and compare honestly, find `model.eval()` | Spiral (3 classes) | 25 |
+| 5 | Training well | Check the initial loss against ln C, sweep the learning rate, overfit on purpose, read the curves (early stopping, and why the final score needs a test split), add Dropout and compare honestly, find `model.eval()` | Spiral (3 classes) | 25 |
 | 6 | Reusable blocks and residual connections | Add a skip connection, group it into a component, repeat it three times, see shared structure with separate weights and the gradient paths | CIFAR-10 | 20 |
 | 7 | Attention and a tiny Transformer | Predict a character-level GPT's output shape, open its embedding table, positions, causal attention heads and head width, sample with a temperature, then scale the same blocks to GPT-2 small | Tiny Shakespeare | 25 |
 
-Every module has 6–8 steps (50 in all) ordered read and predict, then modify, then a build of your own; modules 2–7 open with two retrieval questions on earlier modules, and every module ends by reading the exported code. Numbers in the copy come from a facts ledger: the tests recompute each one from the fixtures, except four marked with their source: two results quoted from the Fashion-MNIST README, CIFAR-10's download size, and the Dropout comparison measured with the trainer (SPEC §11.2).
+Every module has 6–8 steps (50 in all) ordered read and predict, then modify, then a build of your own; modules 2–7 open with two retrieval questions on earlier modules, and every module ends by reading the exported code. Numbers in the copy come from a facts ledger: the tests recompute each one from the fixtures, except five marked with their source: two results quoted from the Fashion-MNIST README, CIFAR-10's download size, and two measured with the trainer, the Dropout comparison (SPEC §11.2) and the range of Iris's initial loss (§11.1).
 
 ## Datasets
 

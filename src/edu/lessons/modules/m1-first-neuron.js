@@ -38,6 +38,8 @@ export default {
         irisTrain: { value: 120, at: 's4', compute: async (h) => (await h.prepared()).train.n },
         irisVal: { value: 30, at: 's4', compute: async (h) => (await h.prepared()).val.n },
         irisParams: { value: 15, at: 's5', compute: (h) => h.total() },
+        // The card's dotted chance line for BCE, as the trainer formats it (formatLoss: three decimals below 1).
+        chanceBce: { value: '0.693', at: 'start', compute: () => Math.log(2).toFixed(3) },
     },
     warmup: [
         { id: 'm1.w1', objective: 'm1.lo1', options: ['true', 'false'], correct: 'false' },

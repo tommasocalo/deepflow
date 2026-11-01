@@ -50,6 +50,11 @@ export default {
     start: 'start',
     facts: {
         initLoss3: { value: '1.10', at: 'start', compute: (h) => h.lnText(3) },
+        irisInitLoss: {
+            value: '0.8 to 1.8', source: 'simulation',
+            note: 'Check initial loss with the in-browser trainer on M1 s7\'s model (Iris, Linear 4→3, cross-entropy), training seeds 1–10: '
+                + 'validation loss 0.76–1.80 (seed 1, the fixture: 0.76). spiral3 2-64-3 gives 1.06–1.17 and digits 64-128-10 2.28–2.34 (SPEC §11.1).',
+        },
         trainPoints: { value: 75, at: 's3', compute: async (h) => (await h.prepared()).train.n },
         bigEpochs: { value: 300, at: 's3', compute: (h) => h.trainer().settings.epochs },
         dropoutSeeds: {

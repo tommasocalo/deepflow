@@ -30,7 +30,7 @@ export default {
     'm5.s1.hint1': 'An untrained model gives each class about the same probability.',
     'm5.s1.hint2': 'With probability 1/3 for the right class, the loss is −ln(1/3).',
     'm5.s1.predict.prompt': 'With 3 equally likely classes, what cross-entropy loss do you expect before training?',
-    'm5.s1.predict.reveal': '−ln(1/3) = ln 3 ≈ {initLoss3}. That holds when the last layer starts with small weights, as here: every class then gets about the same probability. A first loss far from ln C then usually means a bug in the labels, the loss or the initialisation. Without small weights it can differ: a linear model on informative features can start well away from ln C. Module 1\'s Iris classifier starts anywhere from about 0.8 to 1.8, depending on the seed.',
+    'm5.s1.predict.reveal': '−ln(1/3) = ln 3 ≈ {initLoss3}. That holds when the last layer starts with small weights, as here: every class then gets about the same probability. A first loss far from ln C then usually means a bug in the labels, the loss or the initialisation. Without small weights it can differ: a linear model on informative features can start well away from ln C. Module 1\'s Iris classifier starts anywhere from about {irisInitLoss}, depending on the seed.',
     'm5.s1.done': 'Your untrained network measured {measured}.',
 
     'm5.s2.title': 'Too small, just right, too large',

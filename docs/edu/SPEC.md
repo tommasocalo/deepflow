@@ -467,7 +467,7 @@ component (label "neuron", in 2, out 1, bias on) → `out` Output (label "logit"
 `loss` BCE bound to `out`, wired loss → optimizer. Data: `blobs` {n: 200, noise: 0.1, seed: 1}, split {val: 0.2,
 test: 0}. Trainer: epochs 30, batch 32, seed 1.
 
-**Facts:** `neuronParams = 3`, `irisParams = 15`.
+**Facts:** `neuronParams = 3`, `irisParams = 15`, `chanceBce = 0.693` (ln 2 as the trainer card prints it).
 
 **Warm-up (myths).**
 - `m1.w1` "True or false: you need advanced maths or a PhD to start building neural networks." **False ✓**: "You
@@ -945,7 +945,7 @@ Learning objectives:
   Trainer epochs 300, batch 16.
 
 **Facts:** `initLoss3 = 1.10`, `trainPoints = 75`, `dropoutSeeds = "8 of 8"` (measured with the in-browser trainer,
-§11.2; not recomputed by tests, marked `source: 'simulation'`).
+§11.2; not recomputed by tests, marked `source: 'simulation'`), `irisInitLoss = "0.8 to 1.8"` (likewise, §11.1).
 
 **Warm-up.** `m5.w1` (m4.lo1) "Conv2d(1 → 4, kernel 5, padding 0) on a 28 × 28 image gives height…" **24 ✓** · 28 ·
 23. `m5.w2` (m3.lo4) "What is the initial loss for 10 equally likely classes?" **≈ 2.30 ✓** · 10 · 0.1.
@@ -2862,6 +2862,12 @@ are the values learners see:
 The NumPy rows above for one neuron and for two stacked Linears are lower (0.477 and 0.447): both sit near chance,
 the browser runs a little above it.
 
+**Initial loss with the in-browser trainer** (review fixes; **Check initial loss** on each lesson model, training
+seeds 1–10, validation loss): Iris Linear 4→3 (M1 s7) 0.76–1.80 (seed 1, the fixture: 0.76); spiral3 2-64-3 (M5 s1)
+1.06–1.17; digits 64-128-10 (M3 s6) 2.28–2.34. ln 3 = 1.10 and ln 10 = 2.30: the rule "about ln C before training"
+holds when the last layer starts with small weights, as in the two MLPs, and not for a linear model on standardised
+informative features. M5 s1 quotes "about 0.8 to 1.8" (`irisInitLoss`).
+
 **The in-browser trainer on the M5 fixtures** (Stage E, `stageE/m5-claims.mjs`). s2, `m5.start`, 60 epochs, training
 seeds 5 (the fixture), 1, 2, 3: lr 0.0001 moves the validation loss only from 1.10 to 0.97–0.99; lr 0.01 ends at
 0.117–0.122 (accuracy 0.967); lr 1.0 jumps up by more than 1.2 between epochs and ends at 0.45–0.75. s3, `m5.big`,
@@ -2996,3 +3002,4 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-11-01 | Review fixes (content) | **A bridge to everyday PyTorch** (§3.6). model.py, and the model in a dataset's train.py, comment each standard Linear component with the layer it equals, `# Linear 1 = nn.Linear(2, 8)`, because the export writes it out as weight, transpose, matmul and add and no lesson named `nn.Linear`. `generateArchitectureModule` takes `annotate` (default true); the legacy train.py passes false and stays byte-identical. M2 s8's reveal points at the comment. The torchvision loaders' docstring says the Normalize constants come from all official training images, the validation images included, as M3 s7's reveal does. |
 | 2026-11-01 | Review fixes (content) | **Positioning and evaluation plan** (§0, §9). §0 now positions the work against in-application tutorial systems (Stencils-based tutorials, DocWizards, ToolClips, Pause-and-Play, MixT) and visual ML teaching tools (Orange, KNIME), described only at that level, and states the delta: checks on the model, validation and training state of a full NN editor rather than screen state or a click script, misconception-tied diagnosis with graded help, and browser-to-PyTorch parity of data, split, loss and optimizer; the README mirrors it. §9 lists what must be built before the study (the static baseline view, the lesson-hidden transfer mode, the Penguins dataset in the app, a log with misconception ids and shown status messages) and replaces the power analysis: d = 0.8 with 26 per arm was optimistic; the plan assumes d ≈ 0.5, 64 per arm for a two-sample test (α = .05, power .8), with a counterbalanced crossover (about 34 participants at r ≈ .5) as the fallback. |
 | 2026-11-01 | Review fixes (content) | **More independent practice.** M4 s4 is faded: block 1 keeps its recipe, block 2 gives only its goal (16 filters of 3 × 3, a ReLU and a pool, ending at (B, 16, 7, 7)) and the check, with a new diagnosis for a conv2 without padding (`padding-no-effect`). M6's objective `m6.lo1` no longer claims "edit its shared definition", which no step exercises: the lesson actions cannot edit inside a component (§6.5), so a step that edits the ResBlock definition and watches all three copies follow waits for an engine action. M7's goal says "Explore" (above). |
+| 2026-11-01 | Review fixes (content) | **Two new numbers are ledger facts** (§6.3.6): `chanceBce` (0.693, M1 s3's dotted chance line, recomputed) and `irisInitLoss` ("0.8 to 1.8", M5 s1, `source: 'simulation'`, measured with Check initial loss over training seeds 1–10, §11.1). |
