@@ -126,7 +126,12 @@ export default {
         },
         {
             id: 's6', kind: 'predict', subgoal: 'shapes', tab: 'architecture', target: [{ nodeOpen: { id: 'lin1' } }, 'ribbon.dimensions'],
-            setup: [{ do: 'setUi', showDimensions: false }],
+            // s5 passes with any width up to 3, but this step's numbers are for 3 hidden units: set them, and say so.
+            setup: [
+                { do: 'setUi', showDimensions: false },
+                { do: 'setParam', node: { id: 'lin1' }, name: 'out_features', value: 3 },
+                { do: 'setParam', node: { id: 'lin2' }, name: 'in_features', value: 3 },
+            ],
             predict: {
                 id: 'm2.matmul', kind: 'choice', options: ['B3', 'B2', '32'], correct: 'B3',
                 diagnose: [{ equals: 'B2', misconception: 'matmul-keeps-width' }, { equals: '32', misconception: 'missing-batch-axis' }],

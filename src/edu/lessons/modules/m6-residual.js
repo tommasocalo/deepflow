@@ -99,14 +99,14 @@ export default {
         {
             id: 's2', kind: 'predict', subgoal: 'model', tab: 'architecture', target: ['lesson.palette', 'ribbon.operations'],
             palette: [{ block: 'deepflow.op.Add', count: 1 }],
-            predict: { id: 'm6.addShapes', kind: 'choice', options: ['yes', 'no'], correct: 'no', diagnose: [{ equals: 'yes', misconception: 'add-shapes' }] },
+            predict: { id: 'm6.addShapes', kind: 'choice', options: ['yes', 'no'], correct: 'yes', diagnose: [{ equals: 'no', misconception: 'add-shapes' }] },
             check: { all: [{ answered: 'm6.addShapes' }, { custom: 'residualAdd' }, { valid: true }] },
             diagnose: [{
                 when: { custom: 'addShapesDiffer' }, misconception: 'add-shapes',
                 example: [{ do: 'insertBetween', block: 'deepflow.op.Add', from: { id: 'b2' }, to: { id: 'r2' } }, { do: 'connect', from: { id: 'in' }, to: { type: 'Add' } }],
             }],
             solution: [
-                answer('m6.addShapes', 'no'),
+                answer('m6.addShapes', 'yes'),
                 { do: 'insertBetween', block: 'deepflow.op.Add', from: { id: 'b2' }, to: { id: 'r2' } },
                 { do: 'connect', from: { id: 'relu0' }, to: { type: 'Add' } },
             ],
@@ -138,11 +138,11 @@ export default {
         {
             id: 's5', kind: 'predict', subgoal: 'model', tab: 'architecture', target: [{ nodeOpen: { type: 'Component' } }, 'ribbon.instances'],
             predict: {
-                id: 'm6.sharedWeights', kind: 'choice', options: ['yes', 'no'], correct: 'no',
-                diagnose: [{ equals: 'yes', misconception: 'shared-structure-shared-weights' }],
+                id: 'm6.sharedWeights', kind: 'choice', options: ['yes', 'no'], correct: 'yes',
+                diagnose: [{ equals: 'no', misconception: 'shared-structure-shared-weights' }],
             },
             check: { all: [{ answered: 'm6.sharedWeights' }, { level: { open: { type: 'Component' } } }] },
-            solution: [{ do: 'openLevel', path: [{ type: 'Component' }] }, answer('m6.sharedWeights', 'no')],
+            solution: [{ do: 'openLevel', path: [{ type: 'Component' }] }, answer('m6.sharedWeights', 'yes')],
         },
         {
             // One edit inside the shared definition (setParam `in`) reaches all three repeat copies; each copy gains its

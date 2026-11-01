@@ -510,9 +510,10 @@ test: 0}. Trainer: epochs 30, batch 32, seed 1.
 **Facts:** `neuronParams = 3`, `irisParams = 15`, `chanceBce = 0.693` (ln 2 as the trainer card prints it).
 
 **Warm-up (myths).**
-- `m1.w1` "True or false: you need advanced maths or a PhD to start building neural networks." **False ✓**: "You
-  need arithmetic and a little algebra to start. Each formula in this course is explained when you need it." True:
-  "Many practitioners started without advanced maths; it can come later."
+- `m1.w1` "True or false: arithmetic and a little algebra are enough to start building neural networks." **True ✓**:
+  "Each formula in this course is explained when you need it, and more maths can come later." False: "You do not
+  need advanced maths or a PhD to start. Many practitioners learned it later." (It asked the myth the other way
+  round, with False correct; see §12.)
 - `m1.w2` "True or false: training a neural network always needs a huge dataset and an expensive GPU." **False ✓**:
   "In this module you train on 200 points in about a second, in your browser. Big models need big hardware;
   learning the ideas does not." True: same explanation.
@@ -572,6 +573,9 @@ test: 0}. Trainer: epochs 30, batch 32, seed 1.
 - **Check:** `{ all: [{ param: { node: { type: 'Linear' }, name: 'in_features', equals: 4 } }, { param: { node: { type: 'Linear' }, name: 'out_features', equals: 3 } }, { valid: true }, { outputShape: [null, 3] }] }`
 - **Misconceptions (diagnostics):** `out_features = 1` → `one-output-multiclass`; `in_features = 5` →
   `target-in-input`.
+- **Done:** "The model now has {irisParams} parameters: 4 × 3 weights and 3 biases. It is still labelled **neuron**,
+  but it now holds 3 neurons, one per species." model.py then reads `# neuron = nn.Linear(4, 3)`; no lesson action
+  renames a block, so the done line explains the name.
 - **Hints:** (1) "Click the Linear block to open its settings." (2) "Input = 4, Output = 3."
 - **Show me:** `{ do: 'setParam', node: { id: 'neuron' }, name: 'in_features', value: 4 }`, the same for
   `out_features: 3`
@@ -609,13 +613,16 @@ test: 0}. Trainer: epochs 30, batch 32, seed 1.
   learner chose. **Reveal:** "Those of the training split: `mean = X[train_idx].mean(axis=0)`, then
   `X = (X - mean) / std` scales every flower with it. The model learned on that scale, so validation flowers need the
   same one. Statistics fitted on validation flowers would leak information about them."
-- **Check:** `{ all: [{ ui: { codeOpen: true, codeTab: 'train' } }, { answered: 'm1.leak' }] }`
-- **Show me:** `{ do: 'setUi', codeOpen: true, codeTab: 'train' }`, `answer('m1.leak', 'train')`
+- The body opens with "Answer first, then press **Code** in the top bar and **train.py** to check": the file's
+  header and its loader say how the features are scaled, so the prediction comes before the file.
+- **Check:** `{ all: [{ answered: 'm1.leak' }, { ui: { codeOpen: true, codeTab: 'train' } }] }` (the answer first, so
+  the status line asks for it before it asks for the code panel)
+- **Show me:** `answer('m1.leak', 'train')`, `{ do: 'setUi', codeOpen: true, codeTab: 'train' }`
 
 **Quiz.**
-- `m1.q1` (lo1) "A Linear block with 4 inputs and 3 outputs has how many parameters?" 7 ("that adds inputs and
-  outputs; each output has one weight per input") · 12 ("right number of weights, 4 × 3, but add the 3 biases") ·
-  **15 ✓** ("4 × 3 weights + 3 biases").
+- `m1.q1` (lo1) "A Linear block with 5 inputs and 2 outputs has how many parameters?" 7 ("that adds the inputs and
+  the outputs") · 10 ("the 5 × 2 = 10 weights are right, but the 2 biases are missing") · **12 ✓** ("5 × 2 weights +
+  2 biases"). (It used the lesson's own 4 → 3 = 15.)
 - `m1.q2` (lo3) "What is the validation set for?" **"Measuring performance on examples the model never trained on"
   ✓** · "Giving the model more examples to learn from" ("validation examples never update the weights") · "Making
   training faster" ("it does not change training speed").
@@ -702,7 +709,8 @@ wrong?" **"Validation information leaks into training" ✓** · "Nothing" · "Tr
   **Input**." The body does not name 3, the answer; hint 2 does. Any width up to 3 passes the check.
 - **Predict** `m2.width` (choice): "What is the smallest number of hidden units that can enclose the disk?" 1 · 2 ·
   **3 ✓** · 8. **Reveal:** "3. Each unit gives one line where the output can bend. Enclosing the disk takes at least
-  3, like the sides of a triangle. With 2 units the region stays open and accuracy drops to about 75%. With 3,
+  3, like the sides of a triangle. With 2 units the region stays open: accuracy reaches only about 63–82%, depending
+  on the seed (the in-browser trainer, seeds 1–10, §11.1; it said "about 75%", next to a run showing 63.3%). With 3,
   training sometimes gets stuck: change the training seed and train again."
 - **Check:** `{ all: [{ answered: 'm2.width' }, { param: { node: { type: 'Linear', nth: 0 }, name: 'out_features', max: 3 } }, { valid: true }, { run: { dataset: 'circle', minEpochs: 50, model: { all: [{ param: { node: { type: 'Linear', nth: 0 }, name: 'out_features', max: 3 } }, { valid: true }] } } }] }`.
   The widths come before the run, so the status asks for them instead of "Press Train"; the body says "(3 or fewer)".
@@ -712,8 +720,12 @@ wrong?" **"Validation information leaks into training" ✓** · "Nothing" · "Tr
 
 #### s6 · Open the box — `predict` · Check shapes & size
 - **Target:** `nodeOpen` `{ id: 'lin1' }`.
-- **Do:** "Linear is a component built from simpler operations. Open the first Linear with the arrow on the block.
-  Inside are a **weight** table, **Transpose**, **MatMul** and **Add bias**."
+- **Setup:** `setUi(showDimensions false)`, `setParam(lin1.out_features = 3)`, `setParam(lin2.in_features = 3)`.
+  s5 passes with any width up to 3, but this step's numbers are for 3 hidden units; with 2 it showed "(B, 3)" next to
+  a canvas of width 2.
+- **Do:** "The lesson sets Linear 1 to 3 hidden units, the smallest width that encloses the disk. Linear is a
+  component built from simpler operations. Open the first Linear with the arrow on the block. Inside are a **weight**
+  table, **Transpose**, **MatMul** and **Add bias**."
 - **Predict** `m2.matmul` (choice): "A batch of B points enters as (B, 2) and the weight table is (3, 2). What does
   MatMul output?" **(B, 3) ✓** · (B, 2) · (3, 2). **Reveal:** "Transpose turns the (3, 2) table into (2, 3), and (B, 2)
   × (2, 3) = (B, 3): one value per hidden unit for every point."
@@ -749,9 +761,9 @@ wrong?" **"Validation information leaks into training" ✓** · "Nothing" · "Tr
   together they can only form a linear map") · "They share weights" ("they have separate weights").
 - `m2.q2` (lo2) "Which of these is not a non-linearity?" ReLU · Tanh · **"Multiplying by 2" ✓** ("scaling is linear
   and cannot bend a boundary") · Sigmoid.
-- `m2.q3` (lo3) "In a 2-layer ReLU network on 2D points, what does each hidden unit add to the boundary?" **"One
-  line where the output can bend" ✓** · "One circle" · "One training point". A unit adds a bend line; the boundary
-  can have more straight segments than there are units.
+- `m2.q3` (lo3) "In a 2-layer ReLU network on 2D points, what does each hidden unit add to the boundary?" **"A line
+  along which the output changes slope" ✓** · "One circle" · "One training point". A unit adds a bend line; the
+  boundary can have more straight segments than there are units. (The option no longer repeats s5's sentence.)
 - `m2.q4` (lo4) "Linear 2 → 8 feeds Linear 4 → 1. What happens?" **"A shape error: the second block expects 4
   inputs but receives 8" ✓** · "It trains normally" · "DeepFlow adds the missing units".
 
@@ -1135,9 +1147,9 @@ moved to s7 and s8 (§6.8.2 keeps records by step id).
 - **Do:** "A **residual block** adds its input to its output: y = relu(x + F(x)), where F is conv → BN → ReLU → conv
   → BN. Insert **Add** (Operations ▾ → Math) between the second BatchNorm and the last ReLU. Then also wire the
   block's input, the first ReLU, into Add."
-- **Predict** `m6.addShapes` (choice): "Can Add combine (B, 32, 32, 32) with (B, 16, 32, 32)?" Yes · **No ✓**.
-  **Reveal:** "No: Add works element by element, so both inputs need the same shape. That is why every conv in this
-  block keeps 32 channels and padding 1."
+- **Predict** `m6.addShapes` (choice): "Must the two inputs of Add have the same shape?" **Yes ✓** · No (→
+  `add-shapes`). **Reveal:** "Yes: Add works element by element, so (B, 32, 32, 32) cannot meet (B, 16, 32, 32). That
+  is why every conv in this block keeps 32 channels and padding 1."
 - **Check:** `{ all: [{ answered: 'm6.addShapes' }, { custom: 'residualAdd' }, { valid: true }] }`.
   `residualAdd`: a root Add node has exactly two inputs, one from `relu0` and one from the BatchNorm2d at the end of
   the chain `c1 → b1 → r1 → c2 → b2`, and Add feeds `r2`.
@@ -1170,9 +1182,9 @@ moved to s7 and s8 (§6.8.2 keeps records by step id).
 - **Target:** `nodeOpen` `{ type: 'Component' }`.
 - **Do:** "Open the repeated ResBlock. Its definition is shared: change a block inside and all 3 copies change. The
   **Instances** button in Structure shows each copy."
-- **Predict** `m6.sharedWeights` (choice): "Do the three copies share the same weights?" Yes · **No ✓**. **Reveal:**
-  "No. The structure is shared, but every copy has its own weights. model.py creates separate layers (Conv2d_2,
-  Conv2d_3, …) for each copy."
+- **Predict** `m6.sharedWeights` (choice): "Does each of the three copies have its own weights?" **Yes ✓** · No (→
+  `shared-structure-shared-weights`). **Reveal:** "Yes. The structure is shared, but every copy has its own weights.
+  model.py creates separate layers for each copy: `conv1`, `conv1_2`, `conv1_3`."
 - **Check:** `{ all: [{ answered: 'm6.sharedWeights' }, { level: { open: { type: 'Component' } } }] }`
 
 #### s6 · Edit the shared definition — `predict` · Build the model
@@ -1245,7 +1257,8 @@ explicit causal attention, learned positions, untied `lm_head` without bias) at 
 **Facts:** `tinyParams = 112512`, `embParams = 4160`, `dHead4 = 16`, `initLoss65 = 4.17`, `gpt2Params = 163037184`,
 `gpt2TiedParams = 124439808`, `gpt2Heads = 12`.
 
-**Warm-up.** `m7.w1` (m6.lo2) "A block is repeated 3 times. Do the copies share weights?" Yes · **No ✓**. `m7.w2`
+**Warm-up.** `m7.w1` (m6.lo2) "A block is repeated 3 times. Does each copy have its own weights?" **Yes ✓** · No.
+`m7.w2`
 (m3.lo4) "What is the initial loss with 65 equally likely characters?" **≈ 4.17 ✓** · 65 · 0.
 
 #### s1 · Text as numbers — `predict` · Prepare the data · tab Data
@@ -3142,3 +3155,4 @@ With these definitions, the Iris split for data seed 1 and val 0.2 gives 120 tra
 | 2026-11-01 | Review fixes (engine and UI; recorded with the content) | **Lesson panel** (§3.3, §6.7). The shape field's help example is "B, 5, 7", a shape no lesson expects (it was M4 s2's answer). Jumping ahead by a progress segment, a deep link or Skip fills in the steps passed over: their setup and the workspace edits of their Show me, without answers, runs or navigation (`skip-ahead`). A pass is saved at once. An outcome prediction (its step's check needs a training run) shows "Locked: you said X" and reveals "You said X · Your run shows Y" once the run passes, Y read by an observer (`predict.observe`); counts and shapes still reveal at once. Choice options show in a shuffle seeded per learner (`deepflow-edu:learner:v1`; numbers ascend, yes/no keeps its order), logged with the seed. Quiz and warm-up answers commit with Check. Misconception callouts wait for 6 s without edits, or a Train or a hint. The status line and the navigation stick to the bottom of the panel, Undo and Redo sit in its header, the progress segments are one tab stop, and the canvas fits after a step's setup. |
 | 2026-11-01 | Review fixes (engine and UI; recorded with the content) | **Checks, actions, feedback and the log** (§6.3.1, §6.4, §6.5, §6.6, §6.8). `validateModule` allows 3–5 quiz items. `setParam` and the `param` check take `in`, a path of components whose shared definition holds the block (M6 s6). Palette items take `into` (the chip splices its block into that wire, M2 s3) and `params` (starting parameters; a Linear chip starts at the open end's width, M2 s7). Wiring mistakes get friendly rules and a "Show the wire" link, and a second wire into a ReLU or the Output fails `valid`. A failing `run` check first asks to change the model, names the trainer's reason, or says "press Train again". "Where is it?" works on the first unused target without leaving a block the step opened, and treats a covered target as hidden. The log records `misconception-shown`, `status-shown`, `predict-observed`, `palette-insert` and the option orders, and the download carries the learner seed, so §9's prerequisite 4 is built. |
 | 2026-11-01 | Review fixes (engine and UI; recorded with the content) | **Trainer and editor** (§3.5, §6.10.7). A shown run whose model or dataset differs from the live workspace is dimmed, labelled "last run", and the card and the Training tab say "This run used a different model: press Train to see results for this one". With a test split, a run keeps its best epoch's weights and scores the test split once with them ("Test accuracy … (best epoch …, used once)"; record field `test`). "Recent runs" names the block types two runs differ in ("no ReLU · 33 params"). The loss block's default name follows its type and its select reads "Cross-Entropy (cross_entropy)"; in a lesson a component's Delete × sits away from its › arrow. M2 follows (§4.2): s2 is Train & observe, s3's chip splices ReLU into the wire, s5 checks the widths before the run, s7's Linear chips take the open end's width as their Input (2, then 8) and output 8, and s1, s2 and s5 hold outcome predictions. |
+| 2026-11-01 | Review fixes (round 2, content) | **M2 s6 matches M2 s5, and fewer answer cues.** M2 s6's setup sets Linear 1 to 3 hidden units (Linear 2's Input to 3) and its body says so, because s5 passes with any width up to 3 while s6 asks about a (3, 2) table; Show me and deep links reach the same state. M2 s5's reveal gives the measured range for 2 units, "about 63–82%, depending on the seed" (it said "about 75%"). The yes/no and true/false items had No or False as every correct answer: `m1.w1` (True), `m6.addShapes` ("Must the two inputs of Add have the same shape?" Yes), `m6.sharedWeights` ("Does each of the three copies have its own weights?" Yes) and `m7.w1` (Yes) now have the opposite, 4 of the 8. `m1.q1` asks about 5 → 2 (12) instead of the lesson's own 4 → 3 (15); `m2.q3`'s correct option no longer repeats s5's sentence. M1 s8 asks for the answer before the code panel (body, check order and Show me), since train.py's header states it. M1 s5's done line explains why the 4 → 3 block is still labelled neuron, which model.py shows as `# neuron = nn.Linear(4, 3)`. |

@@ -54,7 +54,7 @@ export default {
         gpt2TiedParams: { value: 124439808, at: 's7', compute: (h) => h.total() - h.global('vocab_size') * h.global('d_model') },
     },
     warmup: [
-        { id: 'm7.w1', objective: 'm6.lo2', options: ['yes', 'no'], correct: 'no', misconceptions: { yes: 'shared-structure-shared-weights' } },
+        { id: 'm7.w1', objective: 'm6.lo2', options: ['yes', 'no'], correct: 'yes', misconceptions: { no: 'shared-structure-shared-weights' } },
         { id: 'm7.w2', objective: 'm3.lo4', options: ['right', 'count', 'zero'], correct: 'right', misconceptions: { count: 'loss-is-count', zero: 'zero-initial-loss' } },
     ],
     steps: [

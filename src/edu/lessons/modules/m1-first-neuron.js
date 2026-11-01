@@ -42,7 +42,7 @@ export default {
         chanceBce: { value: '0.693', at: 'start', compute: () => Math.log(2).toFixed(3) },
     },
     warmup: [
-        { id: 'm1.w1', objective: 'm1.lo1', options: ['true', 'false'], correct: 'false' },
+        { id: 'm1.w1', objective: 'm1.lo1', options: ['true', 'false'], correct: 'true' },
         { id: 'm1.w2', objective: 'm1.lo4', options: ['true', 'false'], correct: 'false' },
     ],
     steps: [
@@ -135,12 +135,13 @@ export default {
                 id: 'm1.leak', kind: 'choice', options: ['train', 'own', 'none'], correct: 'train',
                 diagnose: [{ equals: 'own', misconception: 'scaling-leak' }, { equals: 'none', misconception: 'unscaled-validation' }],
             },
-            check: { all: [{ ui: { codeOpen: true, codeTab: 'train' } }, { answered: 'm1.leak' }] },
-            solution: [{ do: 'setUi', codeOpen: true, codeTab: 'train' }, answer('m1.leak', 'train')],
+            // Answer first, then open the file: its header and its loader say how the features are scaled.
+            check: { all: [{ answered: 'm1.leak' }, { ui: { codeOpen: true, codeTab: 'train' } }] },
+            solution: [answer('m1.leak', 'train'), { do: 'setUi', codeOpen: true, codeTab: 'train' }],
         },
     ],
     quiz: [
-        { id: 'm1.q1', objective: 'm1.lo1', options: ['seven', 'twelve', 'fifteen'], correct: 'fifteen', misconceptions: { seven: 'added-not-multiplied', twelve: 'forgot-bias' } },
+        { id: 'm1.q1', objective: 'm1.lo1', options: ['seven', 'ten', 'twelve'], correct: 'twelve', misconceptions: { seven: 'added-not-multiplied', ten: 'forgot-bias' } },
         { id: 'm1.q2', objective: 'm1.lo3', options: ['measure', 'more', 'faster'], correct: 'measure', misconceptions: { more: 'validation-trains', faster: 'validation-for-speed' } },
         { id: 'm1.q3', objective: 'm1.lo2', options: ['ce', 'bce', 'mse'], correct: 'ce', misconceptions: { bce: 'bce-for-multiclass', mse: 'mse-for-classes' } },
         { id: 'm1.q4', objective: 'm1.lo4', options: ['diagonal', 'row', 'column'], correct: 'diagonal', misconceptions: { row: 'confusion-axes', column: 'confusion-axes' } },
