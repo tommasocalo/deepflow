@@ -8,7 +8,8 @@
 // For each viewport on a fresh profile: Learn → each module's Start, Skip warm-up, then per step Hint, Hint, Show me,
 // "✓ Done" and Next; the quiz answered; the recap. It asserts no console errors, no horizontal page scroll, and that
 // every step with an unused target rings it at entry, or, when it is below the fold (a phone's drawer, the ribbon's
-// edge), offers "Where is it?", which brings it into view. In M2 s6 it opens Linear 1 first: "Where is it?" must then
+// edge), offers "Where is it?", which brings it into view. After a run (1024 px and wider) the trainer card's result and
+// the reveal's "Your run shows" line must be in view together. In M2 s6 it opens Linear 1 first: "Where is it?" must then
 // find Dimensions without leaving the block. After the walk it reloads in the middle of module 2 (the same step must
 // come back) and exits the lesson (the sandbox must show the GPT-2 example).
 // Screenshots of each module start and each step after Show me go to --out.
@@ -135,6 +136,20 @@ try {
                     });
                 });
                 check(onScreen, label(`${where}: "✓ Done" and Next are on screen`));
+                // Review r2: after a run, the card's result (thumbnail or matrix) and "Your run shows…" are read together.
+                const together = await page.evaluate(() => {
+                    const card = document.querySelector('.edu-embed-trainer');
+                    const line = document.querySelector('.edu-predict.is-revealed .edu-reveal-compare');
+                    if (!card || !line || !(card.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING)) return null;
+                    const body = line.closest('.edu-panel-body')?.getBoundingClientRect();
+                    const dock = document.querySelector('.edu-step-dock')?.getBoundingClientRect();
+                    const result = (card.querySelector('.edu-tr-confusion') ?? card.querySelector('.edu-tr-card-body'))?.getBoundingClientRect();
+                    if (!body || !result) return null;
+                    const bottom = Math.min(body.bottom, dock?.top ?? body.bottom);
+                    const inside = (box) => box.top >= body.top - 1 && box.bottom <= bottom + 1;
+                    return inside(result) && inside(line.getBoundingClientRect());
+                });
+                if (together !== null && width >= 1024) check(together, label(`${where}: the run's result and "Your run shows" are in view together`));
                 check(!(await textOf(panel.locator('.edu-callout-error'))), label(`${where}: no action error`));
                 await shot(`${where}`);
                 await noHorizontalScroll(where);

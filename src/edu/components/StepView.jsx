@@ -173,6 +173,23 @@ function revealInPanel(element, { top = false } = {}) {
     }
 }
 
+/**
+ * After a run: bring the trainer card's result (its confusion matrix, else its curve and boundary thumbnail) and the
+ * reveal's "Your run shows" line below it into view together (review r2: the reveal grew above the card and pushed
+ * the result behind the dock). When both do not fit, the line is kept in view with as much of the result as fits.
+ */
+function revealRunInPanel(result, line) {
+    const body = line?.closest?.('.edu-panel-body');
+    if (!body?.getBoundingClientRect) return;
+    const box = body.getBoundingClientRect();
+    const dock = body.querySelector('.edu-step-dock')?.getBoundingClientRect().height || body.querySelector('.edu-step-dock > .edu-nav')?.getBoundingClientRect().height || 0;
+    const visibleTop = box.top + 8;
+    const visibleBottom = box.bottom - dock - 8;
+    const top = (result ?? line).getBoundingClientRect().top;
+    const bottom = line.getBoundingClientRect().bottom;
+    body.scrollTop += bottom - top <= visibleBottom - visibleTop ? top - visibleTop : bottom - visibleBottom;
+}
+
 /** "Show on canvas" for the problem the status names: the wire to delete, or the block. */
 function showProblem(problem) {
     useEduUiStore.getState().setTab('architecture');
@@ -236,10 +253,17 @@ export default function StepView({ module, step, index, total, record, answers, 
     const wasPassing = useRef(passing);
     useEffect(() => {
         if (passing && !wasPassing.current) {
-            const reveal = outcome ? doneRef.current?.closest('.edu-step')?.querySelector('.edu-predict.is-revealed') : null;
-            const timer = setTimeout(() => revealInPanel(reveal ?? doneRef.current, { top: !!reveal }), 60);
+            const article = doneRef.current?.closest('.edu-step');
+            const reveal = outcome ? article?.querySelector('.edu-predict.is-revealed') : null;
+            const card = article?.querySelector('.edu-embed-trainer');
+            const align = () => {
+                if (reveal && card) revealRunInPanel(card.querySelector('.edu-tr-confusion') ?? card.querySelector('.edu-tr-card-body'), reveal.querySelector('.edu-reveal-compare') ?? reveal);
+                else revealInPanel(reveal ?? doneRef.current, { top: !!reveal });
+            };
+            // Once now, and again when the card has drawn its result (its boundary and run list arrive a little later).
+            const timers = [setTimeout(align, 60), setTimeout(align, 450)];
             wasPassing.current = passing;
-            return () => clearTimeout(timer);
+            return () => timers.forEach(clearTimeout);
         }
         wasPassing.current = passing;
         return undefined;
@@ -269,6 +293,14 @@ export default function StepView({ module, step, index, total, record, answers, 
     const spotlightTargets = targetsUsed && problem?.nodeId ? [{ node: { id: problem.nodeId } }] : targets;
     useStudyLog(module.id, step.id, { misconception: firm ? diagnosed : misconception, status: passing || (done && !drift) ? null : result?.issue ?? result?.detail ?? null });
     const embeds = step.embeds ?? [];
+    // An outcome prediction is answered above the trainer card and revealed below it, next to the run's result.
+    const revealBelow = outcome && observed && !!answer && embeds.includes('trainer');
+    const gate = step.predict && (
+        <PredictGate key={`${prefix}-${answer ? 'answered' : 'open'}`} predict={step.predict} textPrefix={prefix} answer={answer} params={params}
+            disabled={busy} focusReveal={!!runtime?.revealShown && !revealBelow} onSubmit={(predictId, value) => session.submitPrediction(predictId, value)}
+            outcome={outcome} observed={observed} observation={observation}
+            order={step.predict.kind === 'choice' ? predictionOrder(step.predict, prefix) : null} />
+    );
     const nextLabel = isLast ? (module.quiz?.length ? t('nav.toQuiz') : t('nav.next')) : t('nav.next');
     const canAdvance = passing || done;
 
@@ -285,13 +317,9 @@ export default function StepView({ module, step, index, total, record, answers, 
             )}
 
             {step.palette?.length > 0 && !passing && <PaletteChips items={step.palette} moduleId={module.id} stepId={step.id} entryNodeIds={entryNodeIds} />}
-            {step.predict && (
-                <PredictGate key={`${prefix}-${answer ? 'answered' : 'open'}`} predict={step.predict} textPrefix={prefix} answer={answer} params={params}
-                    disabled={busy} focusReveal={!!runtime?.revealShown} onSubmit={(predictId, value) => session.submitPrediction(predictId, value)}
-                    outcome={outcome} observed={observed} observation={observation}
-                    order={step.predict.kind === 'choice' ? predictionOrder(step.predict, prefix) : null} />
-            )}
+            {step.predict && !revealBelow && gate}
             {embeds.includes('trainer') && <div className="edu-embed edu-embed-trainer"><TrainerCard locked={locked} lockedReason={locked ? t('panel.trainLocked') : ''} /></div>}
+            {revealBelow && gate}
             {embeds.includes('paramCount') && (!step.predict || answer ? <ParamCountReadout /> : <p className="edu-embed edu-muted">{t('paramCount.hidden')}</p>)}
             {embeds.includes('softmaxTemperature') && <SoftmaxTemperature />}
             {(step.buttons ?? []).map((button) => (
