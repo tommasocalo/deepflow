@@ -92,6 +92,8 @@ export const TRAINER_TEXT = {
         'card.final': 'val acc {accuracy} · val loss {loss}',
         'card.finalRegression': 'val loss {loss}',
         'card.chance': 'dotted line: chance {chance}',
+        'test.accuracy': 'Test accuracy {accuracy} (best epoch {epoch}, used once)',
+        'test.loss': 'Test loss {loss} (best epoch {epoch}, used once)',
         'card.initial': 'initial loss {loss} · chance {chance}',
         'card.openTraining': 'Open Training',
         'card.recent': 'Recent runs',

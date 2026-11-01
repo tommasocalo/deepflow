@@ -5,6 +5,9 @@
  *
  * Epoch 0 evaluates the untrained model. After every epoch all metrics are computed in evaluation mode (dropout off)
  * over the full training and validation splits. Streams: 'init', 'batches' and 'dropout' of the training seed.
+ *
+ * A test split is held out of every choice: the weights of the best epoch (lowest validation loss, the ▲ marker) are
+ * kept, and the test split is evaluated once, with them, when the run ends (`run.test`), as train.py does.
  */
 import { stream, shuffleInPlace } from '../data/rng.js';
 import { computeBoundary } from './boundary.js';
@@ -52,11 +55,34 @@ export function createRun({ program, dataset, objective, settings }) {
         dropout: stream(seed, 'dropout'),
         history: [],
         best: null,
+        bestWeights: null,
+        test: null,
         confusion: null,
         boundary: null,
         epoch: 0,
         done: false,
     };
+}
+
+const hasTestSplit = (run) => (run.dataset.test?.n ?? 0) > 0;
+
+/** Copy the weights when this epoch is the best so far (only runs with a test split need them). */
+function keepBestWeights(run, epoch) {
+    if (!hasTestSplit(run) || run.best?.epoch !== epoch) return;
+    run.bestWeights = new Map([...run.model.params].map(([id, tensor]) => [id, Float64Array.from(tensor.data)]));
+}
+
+/** The test split, evaluated once with the best epoch's weights; the final weights are put back afterwards. */
+function* evaluateTest(run) {
+    if (!hasTestSplit(run) || !run.bestWeights || !run.best) return;
+    const final = new Map([...run.model.params].map(([id, tensor]) => [id, tensor.data]));
+    for (const [id, tensor] of run.model.params) tensor.data = Float64Array.from(run.bestWeights.get(id) ?? tensor.data);
+    try {
+        const result = yield* evaluateSplit(run.model, run.dataset, run.dataset.test, run.objective);
+        run.test = { epoch: run.best.epoch, loss: result.loss, accuracy: result.accuracy, count: result.count };
+    } finally {
+        for (const [id, tensor] of run.model.params) tensor.data = final.get(id);
+    }
 }
 
 /** One optimizer step on the given training rows. Returns the training-mode batch loss. */
@@ -86,9 +112,13 @@ function* evaluateEpoch(run, epoch) {
     };
 }
 
-/** Confusion matrix (validation split, or training split when there is none) and the final boundary. */
+/**
+ * Confusion matrix (validation split, or training split when there is none), the final boundary, and the test split
+ * once with the best epoch's weights.
+ */
 export function* finishRun(run) {
     const { dataset } = run;
+    yield* evaluateTest(run);
     if (dataset.numClasses !== null) {
         const split = dataset.val.n ? dataset.val : dataset.train;
         const result = yield* evaluateSplit(run.model, dataset, split, run.objective, { keepPredictions: true });
@@ -105,6 +135,7 @@ export function* finishRun(run) {
 export function* runSteps(run, { initOnly = false } = {}) {
     run.history.push({ ...(yield* evaluateEpoch(run, 0)) });
     run.best = bestEpoch(run.history);
+    keepBestWeights(run, 0);
     yield 'epoch';
     const n = run.dataset.train.n;
     const epochs = initOnly ? 0 : run.settings.epochs;
@@ -122,6 +153,7 @@ export function* runSteps(run, { initOnly = false } = {}) {
         run.history.push({ ...metrics, ms: trainMs + metrics.ms });
         run.epoch = epoch;
         run.best = bestEpoch(run.history);
+        keepBestWeights(run, epoch);
         yield 'epoch';
     }
     yield* finishRun(run);

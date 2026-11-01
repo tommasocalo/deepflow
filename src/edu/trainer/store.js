@@ -108,6 +108,7 @@ function newRecord(inputs, seq, initOnly) {
         epoch: 0,
         best: null,
         confusion: null,
+        test: null,
         classNames: classes ? [...spec.target.classes] : null,
         numClasses: classes ? spec.target.size : null,
         chance: null,
@@ -124,6 +125,7 @@ function snapshotRecord(record, run, extra = {}) {
         best: run.best ? { ...run.best } : null,
         confusion: run.confusion ? run.confusion.map((row) => [...row]) : record.confusion,
         boundary: run.boundary ?? record.boundary,
+        test: run.test ? { ...run.test } : record.test ?? null,
         ...extra,
     };
 }

@@ -32,6 +32,15 @@ export function runAnnouncement(record) {
         : tr('run.finishedAnnounceRegression', { loss: formatLoss(last.valLoss ?? last.trainLoss) });
 }
 
+/** "Test accuracy 93.3% (best epoch 41, used once)": the held-out test split, evaluated once at the end of a run. */
+export function testLine(record) {
+    const test = record?.test;
+    if (!test || !Number.isFinite(test.epoch)) return '';
+    return Number.isFinite(test.accuracy)
+        ? tr('test.accuracy', { accuracy: formatAccuracy(test.accuracy), epoch: test.epoch })
+        : tr('test.loss', { loss: formatLoss(test.loss), epoch: test.epoch });
+}
+
 /** The run whose results are shown: the current one, or the last good run when the latest attempt failed. */
 export function shownRecord(current, runs) {
     if (current && current.status !== 'failed') return current;

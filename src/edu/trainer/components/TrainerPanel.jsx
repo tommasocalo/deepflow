@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { formatAccuracy, formatLoss } from '../charts.js';
-import { shownRecord } from '../describe.js';
+import { shownRecord, testLine } from '../describe.js';
 import { getDataset } from '../../data/registry.js';
 import { useEduDataStore } from '../../data/store.js';
 import { useTrainerStore } from '../store.js';
@@ -89,6 +89,7 @@ export default function TrainerPanel() {
                         {last && Number.isFinite(last.valAccuracy) && <span className="edu-tr-head-value">{tr('loss.val')} {formatAccuracy(last.valAccuracy)}</span>}
                     </div>
                     <AccuracyChart record={record} />
+                    {record?.test && <p className="edu-tr-test">{testLine(record)}</p>}
                 </div>
                 <ResultColumn record={record} dim={dim} />
             </div>

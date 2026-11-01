@@ -1,6 +1,6 @@
 import { useEduUiStore } from '../../shell/uiStore.js';
 import { formatAccuracy, formatLoss, previousRuns, runDifference } from '../charts.js';
-import { groupIssues, shownRecord } from '../describe.js';
+import { groupIssues, shownRecord, testLine } from '../describe.js';
 import { useTrainerStore } from '../store.js';
 import { tr } from '../text.js';
 import BoundaryView from './BoundaryView.jsx';
@@ -57,6 +57,7 @@ export default function TrainerCard({ locked = false, lockedReason = '' }) {
                 <div className="edu-tr-card-curve" data-edu-target="trainer-curves">
                     <LossChart record={record} runs={runs} compact height={64} ghostCount={3} />
                     {record?.history?.length > 0 && <p className="edu-tr-card-final">{finalLine(record)}</p>}
+                    {record?.test && <p className="edu-tr-card-test">{testLine(record)}</p>}
                     {record?.history?.length > 0 && !record.initOnly && Number.isFinite(record.chance) && (
                         <p className="edu-tr-card-chance">{tr('card.chance', { chance: formatLoss(record.chance) })}</p>
                     )}
