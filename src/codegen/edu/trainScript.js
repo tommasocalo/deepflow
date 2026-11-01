@@ -394,10 +394,11 @@ export function generateEduTrainingScript(archGraph, trainGraph, { templates = {
     // 3–4. Imports and constants.
     const initial = initialLine({ task: plan.task, lossType, spec, accuracy: plan.accuracy });
     const imports = importBlock([initial.usesMath ? ['import math'] : [], loader.imports]);
+    const withTest = Number(data.split?.test ?? 0) > 0;
     const seedNote = spec.kind === 'toy2d'
-        ? "the dataset's seed: the generated points and the train/validation split, as in the browser"
+        ? `the dataset's seed: the generated points and the train/validation${withTest ? '/test' : ''} split, as in the browser`
         : spec.training === 'browser'
-            ? "the dataset's seed: which examples go to training and which to validation, as in the browser"
+            ? `the dataset's seed: which examples go to training${withTest ? ', validation and test' : ' and which to validation'}, as in the browser`
             : "the seed of the train/validation split";
     // Browser datasets take EPOCHS and BATCH_SIZE from the Training tab as they are; export datasets use presets.
     const tab = tabSettings(data, settings);

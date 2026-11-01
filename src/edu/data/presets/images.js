@@ -42,8 +42,8 @@ def build_dataloaders(batch_size, data_seed, train_seed):
     The official ${grouped(spec.size.train)} training images are split into ${grouped(spec.size.train - valSize)} for training and ${grouped(valSize)} for
     validation (seeded with data_seed). The official ${grouped(spec.size.test)} test images are used once, at the end.
     The Normalize constants are the usual ones, computed over all ${grouped(spec.size.train)} official training images,
-    the ${grouped(valSize)} validation images included: a small, common shortcut. Iris and the toy datasets fit
-    their scaling on the training split only."""
+    the ${grouped(valSize)} validation images included: a small, common shortcut. Iris fits its scaling on the
+    training split only; the toy datasets are not scaled."""
     transform = transforms.Compose([
         transforms.ToTensor(),  # image -> float tensor (${channels}, ${height}, ${width}) with values in [0, 1]
         # Subtract ${what}:
@@ -73,8 +73,9 @@ def build_dataloaders(batch_size, data_seed, train_seed):
 
 /**
  * `normalization` holds the usual torchvision constants. They are computed over all official training images,
- * including the `valSize` images train.py holds out for validation: a small, common shortcut, unlike the training-
- * split-only scaling of Iris and the toy sets (M1). M3 s7's reveal and the loader's docstring say so.
+ * including the `valSize` images train.py holds out for validation: a small, common shortcut, unlike Iris's scaling,
+ * which is fitted on the training split only (M1; the toy sets are not scaled). M3 s7's reveal and the loader's
+ * docstring say so.
  */
 function imageSpec({ id, name, torchvisionName, description, schematic, dims, classes, train, test, normalization, licence, attribution, citation, exportDefaults, downloadNote }) {
     const spec = {

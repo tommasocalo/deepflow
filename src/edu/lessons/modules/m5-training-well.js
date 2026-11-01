@@ -156,7 +156,14 @@ export default {
         },
         {
             id: 's7', kind: 'predict', subgoal: 'export', target: ['toolbar.code', 'code.tab:train'],
-            codeQuotes: { tab: 'train', text: ['model.eval()', 'torch.no_grad()', 'model.train()'] },
+            codeQuotes: {
+                tab: 'train',
+                text: [
+                    'model.eval()', 'torch.no_grad()', 'model.train()',
+                    // The overfitting run's export keeps its test split (s3, s5).
+                    "the generated points and the train/validation/test split, as in the browser", 'test_loss, test_acc = evaluate(model, test_loader)',
+                ],
+            },
             predict: {
                 id: 'm5.eval', kind: 'choice', options: ['dropoutOff', 'freeze', 'smaller'], correct: 'dropoutOff',
                 diagnose: [{ equals: 'freeze', misconception: 'eval-freezes-weights' }, { equals: 'smaller', misconception: 'eval-shrinks-model' }],

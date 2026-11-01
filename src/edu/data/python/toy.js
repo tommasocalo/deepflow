@@ -111,8 +111,10 @@ export function toyPythonLoader(spec, { options = {}, split = {} } = {}) {
     const regression = spec.target.kind === 'regression';
     const { val, test } = pySplit(split);
     const sizeText = spec.id === 'spiral3' ? `${options.perClass} points per class` : `${options.n} points`;
+    // M5's overfitting fixture also holds out a test split (val 0.3, test 0.2).
+    const splitText = Number(split.test ?? 0) > 0 ? 'train/validation/test split' : 'train/validation split';
     const comment = `${spec.name}: ${sizeText}, noise ${options.noise ?? 0}. ${spec.attribution}. `
-        + 'The same points and train/validation split as in the browser.';
+        + `The same points and ${splitText} as in the browser.`;
     const y = regression ? 'y.astype(np.float32).reshape(-1, 1)' : 'y';
     const build = `def build_dataloaders(batch_size, data_seed, train_seed):
     """${spec.name}: regenerate the browser's points from data_seed, then make the same split."""
